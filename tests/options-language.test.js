@@ -30,8 +30,8 @@ function createLocalStorage() {
 }
 
 test("Settings copy covers English and Simplified Chinese", () => {
-  assert.equal(options.translate("en", "pageTitle"), "YouTube Digest Settings");
-  assert.equal(options.translate("zh-CN", "pageTitle"), "YouTube Digest 设置");
+  assert.equal(options.translate("en", "pageTitle"), "Blueprint Settings");
+  assert.equal(options.translate("zh-CN", "pageTitle"), "Blueprint 设置");
   assert.equal(options.translate("en", "saveSettings"), "Save settings");
   assert.equal(options.translate("zh-CN", "saveSettings"), "保存设置");
   assert.equal(

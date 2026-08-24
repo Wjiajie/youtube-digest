@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>YouTube Digest Settings</title>
+    <title>Blueprint Settings</title>
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
     <main class="settings-shell">
       <header>
         <div class="settings-heading-row">
-          <div class="eyebrow">YouTube Digest</div>
+          <div class="eyebrow">Blueprint</div>
           <div
             class="language-switch"
             role="group"
@@ -35,11 +35,10 @@
             </button>
           </div>
         </div>
-        <h1 data-i18n="heading">Bring your own API keys</h1>
+        <h1 data-i18n="heading">Configure Blueprint</h1>
         <p class="lede" data-i18n="lede">
-          Keys stay in this Chrome profile and are sent only to Supadata and
-          DeepSeek. This open-source extension has no developer server or
-          analytics.
+          Keys stay in this Chrome profile. Blueprint uses Supadata for
+          captions and sends AI requests through the local Agent service.
         </p>
       </header>
 
@@ -99,7 +98,7 @@
           />
           <p class="help">
             <span data-i18n="deepseekHelp"
-              >YouTube Digest uses DeepSeek V4 Flash for overviews,
+              >Blueprint uses DeepSeek V4 Flash for overviews,
               explanations, translation, and note polishing.</span
             >
             <a
@@ -111,10 +110,29 @@
             ><span data-i18n="deepseekHelpSuffix">.</span>
           </p>
           <div class="privacy-note" data-i18n="privacyNote">
-            When you use AI features, DeepSeek receives the video transcript
-            and relevant video context. Review DeepSeek's terms and pricing
-            before saving.
+            The extension sends the key and requested learning context to the
+            local Blueprint Agent Host. The host keeps the key only in memory
+            while it calls DeepSeek.
           </div>
+          <div class="agent-service-row">
+            <div>
+              <strong data-i18n="agentService">Local Agent service</strong>
+              <p id="agentServiceStatus" class="help" role="status" aria-live="polite" data-i18n="agentStatusChecking">Checking connection…</p>
+            </div>
+            <button id="checkAgentButton" class="secondary" type="button" data-i18n="checkAgent">Check connection</button>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2 data-i18n="appearance">Blueprint appearance</h2>
+          <label for="blueprintTheme" data-i18n="themeLabel">Theme</label>
+          <select id="blueprintTheme" name="blueprintTheme">
+            <option value="sci-fi" data-i18n="themeSciFi">Sci-fi</option>
+            <option value="cyberpunk" data-i18n="themeCyberpunk">Cyberpunk</option>
+            <option value="wuxia" data-i18n="themeWuxia">Wuxia</option>
+            <option value="urban" data-i18n="themeUrban">Modern urban</option>
+          </select>
+          <p class="help" data-i18n="themeHelp">Themes change presentation, not your blueprint structure.</p>
         </section>
 
         <div class="form-actions">
@@ -222,6 +240,7 @@
     </main>
 
     <script src="settings.js"></script>
+    <script src="blueprint-domain.js"></script>
     <script src="options.js"></script>
   </body>
 </html>

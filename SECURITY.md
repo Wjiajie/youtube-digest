@@ -1,44 +1,36 @@
-# Security Policy
+# Blueprint Security
 
-## Supported versions
+## Supported version
 
-YouTube Digest is a small GitHub-only project. Security fixes are made on the latest code on `main` and, when releases are published, the latest GitHub release. Older snapshots are not supported.
+Security fixes target the latest code on `main` and the latest published release when releases exist. Older snapshots are not supported.
 
-## Report a vulnerability privately
+## Trust boundaries
 
-Do not publish vulnerability details, exposed credentials, private video information, or transcript data through a public issue or pull request. This repository does not accept public security reports.
+Blueprint has two local components separated by Chrome Native Messaging:
 
-Use GitHub's private vulnerability reporting flow from this repository's **Security** tab when it is available. If the private reporting link is not visible, contact the repository owner through their GitHub profile and ask for a private reporting channel without including vulnerability details in the public message. Include the following only in the private report:
+1. The Chrome extension owns user interaction, Chrome local extension storage, the Blueprint document, and direct Supadata transcript calls.
+2. The local Blueprint Agent Host owns Pi Agent execution and DeepSeek transport. It accepts a versioned, length-framed JSON protocol only from the exact extension origin registered in its native-host manifest.
 
-- the affected version or commit;
-- the minimum steps needed to reproduce the problem;
-- the expected and observed behavior;
-- the security and privacy impact; and
-- a suggested fix, if you have one.
+The extension has no direct LLM provider transport. The host keeps the DeepSeek key in session memory, redacts key-shaped values from errors, writes protocol frames only to stdout, and sends operational diagnostics to stderr. Closing the native session or process clears its in-memory session map.
 
-Remove real API keys, access tokens, private URLs, transcripts, notes, and personal information. Use redacted values and public test content.
+## Agent controls
 
-There is no guaranteed response time or bug-bounty program. Please allow a reasonable period for investigation and remediation before public disclosure.
+- Five explicit capabilities are allowlisted; unknown capabilities fail closed.
+- Learning capabilities receive no Agent tools.
+- The planner receives only `read_blueprint` and `propose_blueprint_revision`.
+- Proposals do not write extension storage. The extension validates the complete Markdown and requires user confirmation before applying it.
+- Input sizes, node counts, link origins, protocol frame sizes, event order, idle time, and hard execution time are bounded.
+- Requests can be cancelled. Timeouts and disconnects return structured, retryable errors without silently repeating a completed external call.
+- The Agent has no shell, file, browser-control, arbitrary HTTP, secret-reading, or extension-storage tool.
 
-## High-priority issues
+## Installation integrity
 
-Examples include:
+The host packager performs a clean lockfile install, downloads the pinned Node.js runtime over HTTPS, verifies its hard-coded upstream SHA-256, and writes the runtime version, archive hash, lockfile hash, and fixed extension ID to `BUILD-PROVENANCE.json`. The Windows package includes `SHA256SUMS` for the executable, installer, uninstaller, example manifest, and provenance record. `install.ps1` refuses to install when the executable does not match that checksum and always registers the one published extension ID.
 
-- API keys or private content included in source, logs, screenshots, or release ZIPs;
-- requests to network origins outside the documented YouTube, Supadata, and DeepSeek hosts;
-- script or HTML injection through transcript, metadata, service errors, or model output;
-- access to browsing data outside the documented YouTube scope;
-- unintended transmission of notes, transcripts, or credentials;
-- a dependency or release-workflow compromise; and
-- bypasses of local data deletion or DeepSeek configuration controls.
+These local development artifacts are not Authenticode-signed. The co-located checksum detects accidental corruption and tampering after package creation, but it does not establish publisher identity if the entire package is replaced. Obtain releases from a trusted channel, compare an independently published checksum when one exists, and run `install.ps1` only from a release you trust. Installation is per user and registers `com.blueprint.agent` under the Chrome native messaging registry key. `uninstall.ps1` removes that registration and installed host files.
 
-## User security guidance
+Never put provider keys in source files, commits, logs, screenshots, issue reports, planner messages, or customization prompts. Enter them only in Blueprint Settings and rotate a key if exposure is suspected.
 
-- Install only from a GitHub source or release you trust.
-- Review changes and the packaged file list before loading an update.
-- Use dedicated, scoped API keys where possible and set provider spending limits.
-- Do not reuse keys from production systems.
-- Revoke keys immediately if a device, browser profile, ZIP, log, or screenshot exposes them.
-- Remember that Chrome local extension storage is not an encrypted password vault.
+## Report a vulnerability
 
-The release tooling uses an explicit file allowlist and scans public files for common credential patterns, but automated checks cannot detect every secret.
+Do not publish credentials, private transcripts, or an exploitable proof in a public issue. Contact the repository maintainer privately with the affected version, reproduction steps, impact, and the smallest safe evidence. Useful reports include native-message validation bypasses, unexpected data disclosure, unauthorized tool use, unsafe proposal application, secret persistence, or release-package tampering.

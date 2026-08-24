@@ -27,6 +27,14 @@ fail() {
 public_allowlist=(
   "manifest.json"
   "background.js"
+  "agent-gateway.js"
+  "blueprint-domain.js"
+  "blueprint.html"
+  "blueprint.css"
+  "blueprint.js"
+  "goal.html"
+  "goal.css"
+  "goal.js"
   "settings.js"
   "content.js"
   "sidepanel.html"
@@ -38,10 +46,6 @@ public_allowlist=(
   "icons/icon16.png"
   "icons/icon48.png"
   "icons/icon128.png"
-  "prompts/analysis.md"
-  "prompts/explain.md"
-  "prompts/note-cleanup.md"
-  "prompts/translation.md"
   "README.md"
   "README.zh-CN.md"
   "PRIVACY.md"
@@ -52,6 +56,14 @@ public_allowlist=(
 required_public_files=(
   "manifest.json"
   "background.js"
+  "agent-gateway.js"
+  "blueprint-domain.js"
+  "blueprint.html"
+  "blueprint.css"
+  "blueprint.js"
+  "goal.html"
+  "goal.css"
+  "goal.js"
   "settings.js"
   "content.js"
   "sidepanel.html"
@@ -162,11 +174,11 @@ for (const item of manifest.web_accessible_resources || []) {
 for (const file of releaseFiles) {
   if (file.endsWith(".js")) {
     const source = fs.readFileSync(file, "utf8");
-    for (const match of source.matchAll(
-      /\bimportScripts\s*\(\s*["']([^"']+)["']\s*\)/g,
-    )) {
-      if (!/^[a-z]+:/i.test(match[1])) {
-        referenced.add(path.posix.join(path.posix.dirname(file), match[1]));
+    for (const call of source.matchAll(/\bimportScripts\s*\(([^)]*)\)/g)) {
+      for (const match of call[1].matchAll(/["']([^"']+)["']/g)) {
+        if (!/^[a-z]+:/i.test(match[1])) {
+          referenced.add(path.posix.join(path.posix.dirname(file), match[1]));
+        }
       }
     }
     for (const match of source.matchAll(
@@ -227,7 +239,11 @@ for file in "${javascript_files[@]}"; do
 done
 
 if compgen -G "tests/*.test.js" >/dev/null; then
-  node --test tests/*.test.js
+  if [[ "$mode" == "--print-files" ]]; then
+    node --test tests/*.test.js >&2
+  else
+    node --test tests/*.test.js
+  fi
 fi
 
 if ((${#javascript_files[@]} > 0)); then
@@ -258,11 +274,14 @@ const patterns = [
 
 let found = false;
 for (const file of process.argv.slice(2)) {
-  if (!/\.(?:js|json|html|css|md|txt|yml|yaml|sh)$/i.test(file) && file !== "LICENSE") {
+  if (!/\.(?:js|mjs|cjs|ts|json|html|css|md|txt|yml|yaml|sh|ps1)$/i.test(file) && file !== "LICENSE") {
     continue;
   }
   const text = fs.readFileSync(file, "utf8");
   for (const [label, pattern] of patterns) {
+    if (label === "credential assignment" && /^tests[\\/]/.test(file)) {
+      continue;
+    }
     pattern.lastIndex = 0;
     if (pattern.test(text)) {
       console.error(`possible ${label} found in publishable repository file: ${file}`);

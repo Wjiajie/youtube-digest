@@ -5,11 +5,11 @@ const YTD_OPTIONS = (() => {
 
   const COPY = {
     en: {
-      pageTitle: "YouTube Digest Settings",
+      pageTitle: "Blueprint Settings",
       languageGroupLabel: "Interface language",
-      heading: "Bring your own API keys",
+      heading: "Configure Blueprint",
       lede:
-        "Keys stay in this Chrome profile and are sent only to Supadata and DeepSeek. This open-source extension has no developer server or analytics.",
+        "Keys stay in this Chrome profile. Blueprint uses Supadata for captions and sends AI requests through the local Agent service.",
       transcriptProvider: "Transcript provider",
       supadataApiKeyLabel: "Supadata API key",
       supadataHelp: "Used to fetch timestamped YouTube subtitles. ",
@@ -21,11 +21,25 @@ const YTD_OPTIONS = (() => {
       providerBadge: "Supported in this version",
       deepseekApiKeyLabel: "DeepSeek API key",
       deepseekHelp:
-        "YouTube Digest uses DeepSeek V4 Flash for overviews, explanations, translation, and note polishing. ",
+        "Blueprint uses DeepSeek V4 Flash through the local Agent service for planning, overviews, explanations, translation, and note polishing. ",
       deepseekLink: "Create a DeepSeek API key",
       deepseekHelpSuffix: ".",
       privacyNote:
-        "When you use AI features, DeepSeek receives the video transcript and relevant video context. Review DeepSeek's terms and pricing before saving.",
+        "The extension sends the key and requested learning context to the local Blueprint Agent Host. The host keeps the key only in memory while it calls DeepSeek.",
+      agentService: "Local Agent service",
+      agentStatusChecking: "Checking connection…",
+      agentConnected: "Connected. AI features are ready.",
+      agentMissing: "Agent service not found. Install the Windows host, then check again.",
+      agentUnavailable: "Unable to connect. Check the Windows host installation and try again.",
+      agentNeedsKey: "Add and save a DeepSeek API key before checking the Agent service.",
+      checkAgent: "Check connection",
+      appearance: "Blueprint appearance",
+      themeLabel: "Theme",
+      themeSciFi: "Sci-fi",
+      themeCyberpunk: "Cyberpunk",
+      themeWuxia: "Wuxia",
+      themeUrban: "Modern urban",
+      themeHelp: "Themes change presentation, not your blueprint structure.",
       saveSettings: "Save settings",
       localRemix: "Local remix",
       customizationTitle: "Want to use another AI model?",
@@ -59,7 +73,7 @@ const YTD_OPTIONS = (() => {
       saving: "Saving…",
       addSupadataKey: "Add a Supadata API key.",
       addDeepseekKey: "Add a DeepSeek API key.",
-      saved: "Saved. Reopen YouTube Digest to use these settings.",
+      saved: "Settings saved. Reopen Blueprint or the learning panel to use them.",
       saveFailed: "Could not save settings. Please try again.",
       copying: "Copying…",
       promptCopied: "Edited prompt copied.",
@@ -75,11 +89,11 @@ const YTD_OPTIONS = (() => {
         "Could not load saved settings. You can still preview this page.",
     },
     "zh-CN": {
-      pageTitle: "YouTube Digest 设置",
+      pageTitle: "Blueprint 设置",
       languageGroupLabel: "界面语言",
-      heading: "使用你自己的 API 密钥",
+      heading: "配置 Blueprint",
       lede:
-        "密钥仅保存在当前 Chrome 个人资料中，只会发送给 Supadata 和 DeepSeek。本开源扩展没有开发者服务器，也不使用分析服务。",
+        "密钥仅保存在当前 Chrome 个人资料中。Blueprint 使用 Supadata 获取字幕，并通过本地 Agent 服务处理全部 AI 请求。",
       transcriptProvider: "字幕服务",
       supadataApiKeyLabel: "Supadata API 密钥",
       supadataHelp: "用于获取带时间戳的 YouTube 字幕。",
@@ -90,11 +104,25 @@ const YTD_OPTIONS = (() => {
       providerBadge: "当前版本支持",
       deepseekApiKeyLabel: "DeepSeek API 密钥",
       deepseekHelp:
-        "YouTube Digest 使用 DeepSeek V4 Flash 生成概览、解释内容、翻译字幕和润色笔记。",
+        "Blueprint 通过本地 Agent 服务使用 DeepSeek V4 Flash，完成蓝图规划、概览、讲解、翻译和笔记润色。",
       deepseekLink: "创建 DeepSeek API 密钥",
       deepseekHelpSuffix: "。",
       privacyNote:
-        "使用 AI 功能时，DeepSeek 会收到视频字幕及相关视频上下文。保存前请查看 DeepSeek 的服务条款和价格。",
+        "扩展会把密钥和当前请求所需的学习内容发送给本机 Blueprint Agent Host。宿主仅在调用 DeepSeek 时把密钥保存在内存中。",
+      agentService: "本地 Agent 服务",
+      agentStatusChecking: "正在检查连接…",
+      agentConnected: "已连接，可以使用 AI 功能。",
+      agentMissing: "未找到 Agent 服务。请安装 Windows 宿主后重新检查。",
+      agentUnavailable: "无法连接。请检查 Windows 宿主安装状态后重试。",
+      agentNeedsKey: "请先填写并保存 DeepSeek API 密钥，再检查 Agent 服务。",
+      checkAgent: "检查连接",
+      appearance: "蓝图外观",
+      themeLabel: "主题",
+      themeSciFi: "科幻",
+      themeCyberpunk: "赛博朋克",
+      themeWuxia: "武侠",
+      themeUrban: "现代都市",
+      themeHelp: "主题只改变表现效果，不会改变蓝图结构。",
       saveSettings: "保存设置",
       localRemix: "本地改造",
       customizationTitle: "想使用其他 AI 模型？",
@@ -127,7 +155,7 @@ const YTD_OPTIONS = (() => {
       saving: "正在保存…",
       addSupadataKey: "请添加 Supadata API 密钥。",
       addDeepseekKey: "请添加 DeepSeek API 密钥。",
-      saved: "已保存。请重新打开 YouTube Digest 以使用这些设置。",
+      saved: "设置已保存。重新打开 Blueprint 或学习面板后生效。",
       saveFailed: "无法保存设置，请重试。",
       copying: "正在复制…",
       promptCopied: "已复制编辑后的提示词。",
@@ -350,6 +378,16 @@ const YTD_OPTIONS = (() => {
     const form = doc.getElementById("settingsForm");
     const aiApiKeyInput = doc.getElementById("aiApiKey");
     const supadataApiKeyInput = doc.getElementById("supadataApiKey");
+    const blueprintTheme = doc.getElementById("blueprintTheme");
+    const agentServiceStatus = doc.getElementById("agentServiceStatus");
+    const checkAgentButton = doc.getElementById("checkAgentButton");
+    const blueprintDomain = root.BlueprintDomain;
+    const agentGateway = root.chrome?.runtime?.sendMessage
+      ? {
+          getStatus: () =>
+            root.chrome.runtime.sendMessage({ action: "getAgentStatus" }),
+        }
+      : null;
     const customizationPrompt = doc.getElementById("customizationPrompt");
     const copyCustomizationPromptBtn = doc.getElementById(
       "copyCustomizationPromptBtn",
@@ -414,7 +452,9 @@ const YTD_OPTIONS = (() => {
 
     async function loadSettings() {
       try {
-        const stored = await storage.get(settingsApi.STORAGE_KEY);
+        const keys = [settingsApi.STORAGE_KEY];
+        if (blueprintDomain) keys.push(blueprintDomain.STORAGE_KEY);
+        const stored = await storage.get(keys);
         const migration = settingsApi.migrateLegacyCustom(
           stored[settingsApi.STORAGE_KEY],
         );
@@ -422,6 +462,11 @@ const YTD_OPTIONS = (() => {
 
         aiApiKeyInput.value = settings.aiApiKey;
         supadataApiKeyInput.value = settings.supadataApiKey;
+        if (blueprintTheme && blueprintDomain) {
+          blueprintTheme.value = blueprintDomain.normalizeState(
+            stored[blueprintDomain.STORAGE_KEY] || {},
+          ).theme;
+        }
         if (migration.migrated) {
           await storage.set({ [settingsApi.STORAGE_KEY]: settings });
           setStatus(saveStatus, "migrationWarning");
@@ -438,6 +483,26 @@ const YTD_OPTIONS = (() => {
         applyLanguage("en");
       }
       await loadSettings();
+      await checkAgentStatus();
+    }
+
+    async function checkAgentStatus() {
+      if (!agentServiceStatus) return;
+      if (!aiApiKeyInput.value.trim()) {
+        setStatus(agentServiceStatus, "agentNeedsKey");
+        return;
+      }
+      setStatus(agentServiceStatus, "agentStatusChecking");
+      try {
+        if (!agentGateway) throw new Error("Agent gateway is unavailable");
+        const status = await agentGateway.getStatus();
+        if (status?.connected) setStatus(agentServiceStatus, "agentConnected");
+        else if (status?.error?.code === "HOST_NOT_FOUND") {
+          setStatus(agentServiceStatus, "agentMissing");
+        } else setStatus(agentServiceStatus, "agentUnavailable");
+      } catch (_error) {
+        setStatus(agentServiceStatus, "agentUnavailable");
+      }
     }
 
     async function saveSettings(event) {
@@ -459,8 +524,21 @@ const YTD_OPTIONS = (() => {
       }
 
       try {
-        await storage.set({ [settingsApi.STORAGE_KEY]: settings });
+        const values = { [settingsApi.STORAGE_KEY]: settings };
+        if (blueprintTheme && blueprintDomain) {
+          const stored = await storage.get(blueprintDomain.STORAGE_KEY);
+          const current = blueprintDomain.normalizeState(
+            stored[blueprintDomain.STORAGE_KEY] || {},
+          );
+          values[blueprintDomain.STORAGE_KEY] = {
+            ...current,
+            theme: blueprintTheme.value,
+            updatedAt: Date.now(),
+          };
+        }
+        await storage.set(values);
         setStatus(saveStatus, "saved");
+        await checkAgentStatus();
       } catch (_error) {
         setStatus(saveStatus, "saveFailed");
       }
@@ -504,6 +582,7 @@ const YTD_OPTIONS = (() => {
     }
 
     form.addEventListener("submit", saveSettings);
+    checkAgentButton?.addEventListener("click", checkAgentStatus);
     copyCustomizationPromptBtn.addEventListener(
       "click",
       copyCustomizationPrompt,

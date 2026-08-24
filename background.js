@@ -4,7 +4,7 @@
  * This is the "brain" of the extension. It runs in the background and handles:
  * 1. Opening the side panel when the user clicks the extension icon
  * 2. Fetching YouTube transcripts via Supadata API
- * 3. Calling DeepSeek to analyze the transcript
+ * 3. Calling the local Blueprint Agent service for every LLM capability
  * 4. Sending results back to the side panel
  *
  * Think of it like a backend server — it does the heavy lifting
@@ -13,12 +13,9 @@
 
 // Import safe defaults and validation helpers. Secret keys live in
 // chrome.storage.local and are never part of the extension source.
-importScripts("settings.js");
+importScripts("settings.js", "agent-gateway.js", "blueprint-domain.js");
 
 const DEBUG = false;
-const AI_PROVIDER_IDLE_TIMEOUT_MS = 50_000;
-const AI_PROVIDER_HARD_TIMEOUT_MS = 120_000;
-const AI_PROVIDER_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const debugLog = (...args) => {
   if (DEBUG) console.log(...args);
 };
@@ -36,194 +33,21 @@ async function getSettings() {
   return YTD_SETTINGS.normalize(stored[YTD_SETTINGS.STORAGE_KEY]);
 }
 
-const promptFileCache = new Map();
+const agentGateway = new BlueprintAgent.AgentGateway({
+  getSessionConfig: async () => {
+    const settings = await getSettings();
+    return {
+      apiKey: settings.aiApiKey,
+      modelId: settings.aiModel,
+    };
+  },
+});
 
-async function loadPromptSection(fileName, heading, variables = {}) {
-  let markdown = promptFileCache.get(fileName);
-  if (!markdown) {
-    const response = await fetch(chrome.runtime.getURL(`prompts/${fileName}`));
-    if (!response.ok) {
-      throw new Error(`Could not load prompt file: ${fileName}`);
-    }
-    markdown = await response.text();
-    promptFileCache.set(fileName, markdown);
+chrome.storage.onChanged?.addListener((changes, areaName) => {
+  if (areaName === "local" && changes[YTD_SETTINGS.STORAGE_KEY]) {
+    agentGateway.close();
   }
-
-  const marker = `## ${heading}`;
-  const markerIndex = markdown.indexOf(marker);
-  if (markerIndex === -1) {
-    throw new Error(`Prompt section not found: ${fileName}#${heading}`);
-  }
-  const sectionStart = markerIndex + marker.length;
-  const nextSection = markdown.indexOf("\n## ", sectionStart);
-  const section = markdown.slice(
-    sectionStart,
-    nextSection === -1 ? markdown.length : nextSection,
-  );
-  const fenceMatch = section.match(/```(?:[A-Za-z0-9_-]+)?\n([\s\S]*?)\n```/);
-  if (!fenceMatch) {
-    throw new Error(`Prompt section not found: ${fileName}#${heading}`);
-  }
-
-  let prompt = fenceMatch[1];
-  for (const [key, value] of Object.entries(variables)) {
-    prompt = prompt.split(`{${key}}`).join(String(value ?? ""));
-  }
-  return prompt;
-}
-
-async function requestAiCompletion({
-  messages,
-  maxTokens,
-  temperature,
-  responseFormat,
-}) {
-  const settings = await getSettings();
-  if (!settings.aiApiKey) {
-    const error = new Error(
-      "DeepSeek API key not configured. Open YouTube Digest Settings.",
-    );
-    error.code = "NO_AI_KEY";
-    throw error;
-  }
-  const body = {
-    model: settings.aiModel,
-    max_tokens: maxTokens,
-    messages,
-  };
-  if (typeof temperature === "number") body.temperature = temperature;
-  if (responseFormat) {
-    body.response_format = responseFormat;
-  }
-  // Product features need bounded, predictable latency rather than reasoning traces.
-  body.thinking = { type: "disabled" };
-
-  const controller = new AbortController();
-  let timeoutKind = "";
-  let idleTimeoutId;
-  let hardTimeoutId;
-  const abortForTimeout = (kind) => {
-    if (controller.signal.aborted) return;
-    timeoutKind = kind;
-    controller.abort();
-  };
-  const resetIdleTimeout = () => {
-    clearTimeout(idleTimeoutId);
-    idleTimeoutId = setTimeout(
-      () => abortForTimeout("idle"),
-      AI_PROVIDER_IDLE_TIMEOUT_MS,
-    );
-  };
-
-  hardTimeoutId = setTimeout(
-    () => abortForTimeout("hard"),
-    AI_PROVIDER_HARD_TIMEOUT_MS,
-  );
-  resetIdleTimeout();
-  try {
-    const response = await fetch(
-      YTD_SETTINGS.chatCompletionsUrl(),
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${settings.aiApiKey}`,
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      },
-    );
-    // Receiving headers proves DeepSeek is still making progress. DeepSeek
-    // may then send blank-line body chunks while a non-streaming request queues.
-    resetIdleTimeout();
-
-    const data = await readBoundedAiResponse(response, resetIdleTimeout);
-    if (!response.ok) {
-      const errorData = data && typeof data === "object" ? data : {};
-      const error = new Error(
-        errorData.error?.message ||
-          errorData.message ||
-          `DeepSeek error: ${response.status}`,
-      );
-      error.status = response.status;
-      throw error;
-    }
-
-    const text = data.choices?.[0]?.message?.content;
-    if (typeof text !== "string" || !text.trim()) {
-      const error = new Error("DeepSeek returned an empty response.");
-      error.code = "EMPTY_AI_RESPONSE";
-      throw error;
-    }
-
-    return { text, settings };
-  } catch (error) {
-    if (timeoutKind === "idle") {
-      const timeoutError = new Error(
-        "DeepSeek request was inactive for 50 seconds. Please Retry.",
-      );
-      timeoutError.code = "AI_IDLE_TIMEOUT";
-      throw timeoutError;
-    }
-    if (timeoutKind === "hard") {
-      const timeoutError = new Error(
-        "DeepSeek request exceeded the 120-second limit. Please Retry.",
-      );
-      timeoutError.code = "AI_HARD_TIMEOUT";
-      throw timeoutError;
-    }
-    throw error;
-  } finally {
-    clearTimeout(idleTimeoutId);
-    clearTimeout(hardTimeoutId);
-  }
-}
-
-async function readBoundedAiResponse(response, onActivity) {
-  const reader = response.body?.getReader?.();
-  if (reader) {
-    const decoder = new TextDecoder();
-    let responseText = "";
-    let responseBytes = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      // Every received chunk is activity, including DeepSeek's blank lines.
-      onActivity();
-      const byteLength = value?.byteLength ?? 0;
-      responseBytes += byteLength;
-      if (responseBytes > AI_PROVIDER_MAX_RESPONSE_BYTES) {
-        await reader.cancel?.().catch(() => {});
-        const error = new Error("DeepSeek response exceeded the 2 MiB limit.");
-        error.code = "AI_RESPONSE_TOO_LARGE";
-        throw error;
-      }
-      responseText += decoder.decode(value, { stream: true });
-    }
-    responseText += decoder.decode();
-    return JSON.parse(responseText.trimStart());
-  }
-
-  // Some fetch implementations do not expose a readable stream. Preserve a
-  // bounded body read for that case.
-  if (typeof response.text === "function") {
-    const responseText = await response.text();
-    onActivity();
-    const byteLength = new TextEncoder().encode(responseText).byteLength;
-    if (byteLength > AI_PROVIDER_MAX_RESPONSE_BYTES) {
-      const error = new Error("DeepSeek response exceeded the 2 MiB limit.");
-      error.code = "AI_RESPONSE_TOO_LARGE";
-      throw error;
-    }
-    return JSON.parse(responseText.trimStart());
-  }
-
-  // Legacy/test fetch shims may expose only json(). The hard and idle timers
-  // still bound this fallback even though chunk-level activity is unavailable.
-  const data = await response.json();
-  onActivity();
-  return data;
-}
+});
 
 // ============================================================
 // SIDE PANEL SETUP
@@ -234,19 +58,13 @@ async function readBoundedAiResponse(response, onActivity) {
  * Chrome's Side Panel API lets us show a persistent panel alongside the page.
  */
 chrome.action.onClicked.addListener((tab) => {
-  // Re-enable + open without awaiting — preserves user gesture context
-  chrome.sidePanel.setOptions({
-    tabId: tab.id,
-    path: "sidepanel.html",
-    enabled: true,
-  });
-  chrome.sidePanel.open({ tabId: tab.id });
+  chrome.tabs.create({ url: chrome.runtime.getURL("blueprint.html") });
 });
 
 /**
  * Allow the side panel to open on any page, but it's designed for YouTube.
  */
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") chrome.runtime.openOptionsPage();
@@ -323,7 +141,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.action === "explainSelection") {
-    // Explain selected text using DeepSeek.
+    // Explain selected text through the local Agent service.
     handleExplainSelection(
       message.selectedText,
       message.transcriptContext,
@@ -370,7 +188,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Translation: send content to DeepSeek.
+  // Translation: send content to the local Agent service.
   if (message.action === "translateContent") {
     handleTranslateContent(
       message.content,
@@ -395,8 +213,73 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.action === "getAgentStatus") {
+    agentGateway
+      .getStatus()
+      .then(sendResponse)
+      .catch((error) =>
+        sendResponse({
+          installed: false,
+          connected: false,
+          error: { code: error.code || "HOST_UNAVAILABLE", message: error.message },
+        }),
+      );
+    return true;
+  }
+
+  if (message.action === "applyBlueprintProposal") {
+    queueBlueprintProposal(message.proposal, message.baseVersion)
+      .then(sendResponse)
+      .catch((error) =>
+        sendResponse({
+          success: false,
+          error: error.code || "INVALID_BLUEPRINT",
+          message: error.message,
+        }),
+      );
+    return true;
+  }
+
   if (message.action === "openOptions") {
     chrome.runtime.openOptionsPage();
+    sendResponse({ success: true });
+    return false;
+  }
+
+  if (message.action === "openLearningNode") {
+    const tabId = sender.tab?.id;
+    let target;
+    try {
+      target = new URL(String(message.url || ""));
+    } catch {
+      sendResponse({ success: false, error: "INVALID_VIDEO_URL" });
+      return false;
+    }
+    const videoId = target.searchParams.get("v") || "";
+    const valid =
+      !!tabId &&
+      target.protocol === "https:" &&
+      target.hostname === "www.youtube.com" &&
+      !target.port &&
+      !target.username &&
+      !target.password &&
+      target.pathname === "/watch" &&
+      !target.hash &&
+      [...target.searchParams.keys()].length === 1 &&
+      /^[A-Za-z0-9_-]{6,20}$/.test(videoId);
+    if (!valid) {
+      sendResponse({ success: false, error: "INVALID_VIDEO_URL" });
+      return false;
+    }
+
+    const canonicalUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    chrome.sidePanel.setOptions({ tabId, path: "sidepanel.html", enabled: true });
+    chrome.sidePanel.open({ tabId }).catch((error) => {
+      console.error("[Blueprint] Unable to open learning panel:", error);
+    });
+    chrome.tabs.update(tabId, { url: canonicalUrl }).catch((error) => {
+      console.error("[Blueprint] Unable to open YouTube node:", error);
+    });
     sendResponse({ success: true });
     return false;
   }
@@ -532,6 +415,132 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })();
     return true; // Keep channel open for async response
   }
+});
+
+let blueprintApplyTail = Promise.resolve();
+
+function queueBlueprintProposal(proposal, baseVersion) {
+  const operation = blueprintApplyTail.then(() =>
+    applyBlueprintProposal(proposal, baseVersion),
+  );
+  blueprintApplyTail = operation.catch(() => {});
+  return operation;
+}
+
+async function applyBlueprintProposal(proposal, baseVersion) {
+  if (!proposal || typeof proposal !== "object") {
+    throw new Error("规划师没有返回可应用的蓝图修改。");
+  }
+  const markdown = String(proposal.markdown || "");
+  const parsed = BlueprintDomain.parseBlueprint(markdown);
+  if (!parsed.goals.length) {
+    throw new Error("蓝图至少需要一个顶层目标。");
+  }
+  const stored = await chrome.storage.local.get(BlueprintDomain.STORAGE_KEY);
+  const current = BlueprintDomain.normalizeState(
+    stored[BlueprintDomain.STORAGE_KEY] || {},
+  );
+  if (Number(baseVersion) !== current.version) {
+    const error = new Error("蓝图已在其他页面更新。请重新生成修改。");
+    error.code = "BLUEPRINT_VERSION_CONFLICT";
+    throw error;
+  }
+  const next = {
+    version: current.version + 1,
+    markdown,
+    parsed,
+    theme: current.theme,
+    updatedAt: Date.now(),
+  };
+  await chrome.storage.local.set({ [BlueprintDomain.STORAGE_KEY]: next });
+  return { success: true, state: next };
+}
+
+async function appendPlannerMessages(messages) {
+  const stored = await chrome.storage.local.get(BlueprintDomain.CONVERSATION_KEY);
+  const current = Array.isArray(stored[BlueprintDomain.CONVERSATION_KEY])
+    ? stored[BlueprintDomain.CONVERSATION_KEY]
+    : [];
+  const next = [...current, ...messages]
+    .filter(
+      (message) =>
+        (message.role === "user" || message.role === "agent") &&
+        typeof message.text === "string",
+    )
+    .slice(-100);
+  await chrome.storage.local.set({ [BlueprintDomain.CONVERSATION_KEY]: next });
+}
+
+chrome.runtime.onConnect?.addListener((port) => {
+  if (port.name !== "blueprint-planner") return;
+  let activeStream = null;
+  let disconnected = false;
+
+  port.onDisconnect.addListener(() => {
+    disconnected = true;
+    activeStream?.abort?.().catch(() => {});
+    activeStream = null;
+  });
+
+  port.onMessage.addListener((message) => {
+    if (message?.type === "planner.abort") {
+      if (activeStream) activeStream.abort?.().catch(() => {});
+      else if (!disconnected) port.postMessage({ type: "planner.aborted" });
+      return;
+    }
+    if (message?.type !== "planner.prompt" || activeStream) return;
+
+    const userText = String(message.text || "").trim();
+    if (!userText || userText.length > 20_000) {
+      port.postMessage({ type: "planner.error", message: "请输入有效的目标描述。" });
+      return;
+    }
+    const stream = agentGateway.planBlueprint({
+      text: userText,
+      blueprint: String(message.blueprint || "").slice(0, 512_000),
+      blueprintVersion: Number(message.blueprintVersion) || 0,
+    });
+    activeStream = stream;
+    (async () => {
+      let proposal = null;
+      try {
+        for await (const event of stream) {
+          if (disconnected) return;
+          if (event.kind === "agent.text_delta") {
+            port.postMessage({ type: "planner.delta", text: event.text });
+          } else if (event.kind === "agent.proposal") {
+            proposal = event.proposal;
+            port.postMessage({ type: "planner.proposal", proposal });
+          } else if (event.kind === "agent.result" && event.result?.proposal) {
+            proposal = event.result.proposal;
+            port.postMessage({ type: "planner.proposal", proposal });
+          }
+        }
+        if (!disconnected) {
+          if (!proposal) throw new Error("规划师没有返回蓝图修改。");
+          await appendPlannerMessages([
+            { role: "user", text: userText, createdAt: Date.now() },
+            {
+              role: "agent",
+              text: String(proposal.summary || "已生成蓝图修改。"),
+              createdAt: Date.now(),
+            },
+          ]);
+          port.postMessage({ type: "planner.completed" });
+        }
+      } catch (error) {
+        if (!disconnected) {
+          port.postMessage({
+            type: error.code === "AGENT_ABORTED" ? "planner.aborted" : "planner.error",
+            code: error.code || "AGENT_ERROR",
+            message: error.message || "无法生成蓝图。",
+          });
+        }
+      } finally {
+        if (activeStream === stream) activeStream = null;
+      }
+    })();
+  });
 });
 
 /**
@@ -695,7 +704,7 @@ async function handleFetchTranscript(videoId) {
           // Plain text without timestamps (for display/export)
           transcriptTextPlain += cleanText + " ";
 
-          // Timestamped text for DeepSeek (format: [MM:SS] text)
+          // Timestamped text for the local Agent service (format: [MM:SS] text)
           // This allows the model to reference actual transcript positions.
           transcriptTextTimestamped += `[${timestamp}] ${cleanText}\n`;
         }
@@ -818,37 +827,12 @@ async function pollTranscriptJob(jobId, supadataApiKey) {
  * @param {string} text - The raw text from the model
  * @returns {Object} - The parsed object (throws if still unparseable)
  */
-function parseLooseJson(text) {
-  let cleaned = (text || "").trim();
-
-  // Strip ```json ... ``` style code fences
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
-  }
-
-  // Isolate the outermost { ... } in case the model added a sentence around it
-  const firstBrace = cleaned.indexOf("{");
-  const lastBrace = cleaned.lastIndexOf("}");
-  if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
-  }
-
-  try {
-    return JSON.parse(cleaned);
-  } catch (firstError) {
-    // Most common LLM slip: a trailing comma right before a } or ].
-    // e.g. ["a", "b", ]  ->  ["a", "b" ]
-    const repaired = cleaned.replace(/,(\s*[}\]])/g, "$1");
-    return JSON.parse(repaired);
-  }
-}
-
 // ============================================================
-// DEEPSEEK ANALYSIS
+// LOCAL AGENT ANALYSIS
 // ============================================================
 
 /**
- * Sends the transcript to DeepSeek for analysis.
+ * Sends the transcript to the local Agent service for analysis.
  *
  * The prompt asks the model to produce chapters covering the whole video
  * and 3-5 key quotes with timestamps.
@@ -866,20 +850,6 @@ async function handleAnalyzeTranscript(
   videoDuration,
 ) {
   try {
-    const settings = await getSettings();
-    if (!settings.aiApiKey) {
-      return {
-        success: false,
-        error: "NO_AI_KEY",
-        message: "DeepSeek API key not configured. Open YouTube Digest Settings.",
-      };
-    }
-
-    // Convert duration to MM:SS format for context
-    // The transcript text is already prefixed with [M:SS] markers. Its LAST
-    // marker is the most reliable signal of where the content actually ends —
-    // more trustworthy than the duration metadata, which is sometimes missing
-    // or wrong. We use the larger of (metadata duration, last transcript stamp).
     let lastTranscriptSeconds = 0;
     const stampMatches = transcriptText.match(/\[(\d+):(\d{2})\]/g) || [];
     if (stampMatches.length) {
@@ -892,79 +862,30 @@ async function handleAnalyzeTranscript(
       Math.floor(videoDuration || 0),
       lastTranscriptSeconds,
     );
-    const durationMinutes = Math.floor(effectiveSeconds / 60);
-    const durationSeconds = Math.floor(effectiveSeconds % 60);
-    const durationFormatted = `${durationMinutes}:${String(durationSeconds).padStart(2, "0")}`;
     const maxTimestampSeconds = effectiveSeconds;
 
-    // The "last chapter must be after" threshold (75% in) forces the model to
-    // cover the WHOLE video instead of front-loading chapters near the start.
-    // We do NOT prescribe a chapter count — the model picks the natural splits.
-    const lateThresholdSeconds = Math.floor(effectiveSeconds * 0.75);
-    const lateThreshold = `${Math.floor(lateThresholdSeconds / 60)}:${String(
-      lateThresholdSeconds % 60,
-    ).padStart(2, "0")}`;
-
-    const promptVariables = {
-      durationFormatted,
-      lateThreshold,
-      maxTimestampSeconds,
+    const result = await agentGateway.analyzeVideo({
+      transcriptText,
       videoTitle: videoTitle || "Unknown",
       channelName: channelName || "Unknown",
       videoDescription: videoDescription || "No description available",
-      transcriptText,
-    };
-    const systemPrompt = await loadPromptSection(
-      "analysis.md",
-      "System prompt",
-      promptVariables,
-    );
-    const userPrompt = await loadPromptSection(
-      "analysis.md",
-      "User prompt",
-      promptVariables,
-    );
-
-    debugLog("[YouTube Digest] Requesting video analysis", settings.aiModel);
-    const { text: responseText } = await requestAiCompletion({
-      maxTokens: 8192,
-      responseFormat: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
+      videoDuration: effectiveSeconds,
     });
-
-    // Parse the JSON, tolerating trailing commas / stray prose
-    let analysis = parseLooseJson(responseText);
-
-    // Treat every model response as untrusted data. Rebuild the supported
-    // schema and derive display timestamps from validated numeric seconds.
-    analysis = validateAndFixTimestamps(analysis, maxTimestampSeconds);
+    const analysis = validateAndFixTimestamps(
+      result?.analysis || result,
+      maxTimestampSeconds,
+    );
 
     return {
       success: true,
-      analysis: analysis,
+      analysis,
     };
   } catch (error) {
     console.error("Analysis error:", error);
-    if (error.status === 401) {
-      return {
-        success: false,
-        error: "INVALID_AI_KEY",
-        message: "DeepSeek rejected the API key.",
-      };
-    }
-    if (error.status === 429) {
-      return {
-        success: false,
-        error: "RATE_LIMITED",
-        message: "DeepSeek rate-limited this request. Try again shortly.",
-      };
-    }
     return {
       success: false,
-      error: error.message || "Failed to analyze transcript",
+      error: error.code || "AGENT_ERROR",
+      message: error.message || "Unable to analyze this video.",
     };
   }
 }
@@ -973,7 +894,7 @@ async function handleAnalyzeTranscript(
  * Validates all timestamps in the analysis and fixes any that exceed video duration.
  * This is a safety net to prevent hallucinated timestamps from reaching the UI.
  *
- * @param {Object} analysis - The parsed analysis from DeepSeek
+ * @param {Object} analysis - The untrusted analysis returned by the Agent host
  * @param {number} maxSeconds - Maximum valid timestamp in seconds
  * @returns {Object} - Analysis with validated timestamps
  */
@@ -1067,7 +988,7 @@ async function handleGetVideoInfo(tabId) {
 // ============================================================
 
 /**
- * Explains selected text using DeepSeek.
+ * Explains selected text through the local Agent service.
  * Provides context, definitions, and clarification for complex terms.
  *
  * @param {string} selectedText - The text the user selected
@@ -1183,14 +1104,15 @@ async function handleSaveNote(
       }
     }
 
-    // Clean up the text with DeepSeek.
-    const cleanedText = await cleanupNoteText(
+    // Ask the local Agent service to polish the note without blocking saving.
+    const polishResult = await cleanupNoteText(
       matchedLine.text,
       beforeLine,
       afterLine,
       contextLines.join(" "),
       videoTitle,
     );
+    const cleanedText = polishResult.text;
 
     // Format timestamp as MM:SS
     const minutes = Math.floor(safeTimestamp / 60);
@@ -1215,6 +1137,8 @@ async function handleSaveNote(
       timestampedUrl: timestampedUrl,
       text: cleanedText,
       rawText: matchedLine.text,
+      polishStatus: polishResult.completed ? "completed" : "unavailable",
+      polishCompleted: polishResult.completed,
       createdAt: Date.now(),
     };
 
@@ -1232,7 +1156,7 @@ async function handleSaveNote(
 }
 
 /**
- * Cleans up transcript lines using DeepSeek.
+ * Cleans up transcript lines through the local Agent service.
  * Takes the target line plus buffer sentences (1 before, 1 after).
  * Uses JSON output to prevent any preambles from appearing.
  */
@@ -1243,72 +1167,22 @@ async function cleanupNoteText(
   fullContext,
   videoTitle,
 ) {
-  const settings = await getSettings();
-  if (!settings.aiApiKey) {
-    return [beforeText, targetText, afterText].filter(Boolean).join(" ");
-  }
-
   try {
-    debugLog("[YouTube Digest] Requesting note cleanup");
-    const variables = {
+    const result = await agentGateway.polishNote({
       videoTitle: videoTitle || "Unknown",
       fullContext,
       beforeText: beforeText || "(none)",
       targetText,
       afterText: afterText || "(none)",
-    };
-    const systemPrompt = await loadPromptSection(
-      "note-cleanup.md",
-      "System prompt",
-      variables,
-    );
-    const userPrompt = await loadPromptSection(
-      "note-cleanup.md",
-      "User prompt",
-      variables,
-    );
-    const { text: resultText } = await requestAiCompletion({
-      maxTokens: 512,
-      responseFormat: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
     });
-
-    let result = resultText.trim() || targetText;
-
-    // Parse the JSON response (tolerating trailing commas / fences).
-    try {
-      const parsed = parseLooseJson(result);
-      if (typeof parsed.quote === "string" && parsed.quote.trim()) {
-        return parsed.quote.trim().slice(0, 3000);
-      }
-    } catch (parseError) {
-      console.warn(
-        "[YouTube Digest] JSON parse failed for note, stripping preambles:",
-        parseError,
-      );
-      result = result.replace(
-        /^(Here'?s?( the)?( cleaned)?( version)?:?\s*)/i,
-        "",
-      );
-      result = result.replace(
-        /^(The cleaned (quote|text|version)( is)?:?\s*)/i,
-        "",
-      );
-      result = result.replace(/^(I will.*?:?\s*)/i, "");
-      result = result.replace(/^(Cleaned:?\s*)/i, "");
-      result = result.replace(/^["']|["']$/g, "");
+    const polished = String(result?.quote || result?.text || "").trim();
+    if (polished) {
+      return { text: polished.slice(0, 3000), completed: true };
     }
-
-    return result.slice(0, 3000);
   } catch (e) {
-    console.error("[YouTube Digest] Cleanup error:", e);
+    console.warn("[YouTube Digest] Agent note polish unavailable:", e.message);
   }
-
-  // Return combined raw text if cleanup fails
-  return [beforeText, targetText, afterText].filter(Boolean).join(" ");
+  return { text: targetText, completed: false };
 }
 
 /**
@@ -1366,49 +1240,22 @@ async function handleExplainSelection(
   videoTitle,
 ) {
   try {
-    const settings = await getSettings();
-    if (!settings.aiApiKey) {
-      return {
-        success: false,
-        error: "NO_AI_KEY",
-        message: "DeepSeek API key not configured.",
-      };
-    }
-
-    const variables = {
+    const result = await agentGateway.explainSelection({
       videoTitle: videoTitle || "Unknown",
       selectedText,
       transcriptContext: transcriptContext || "None",
-    };
-    const systemPrompt = await loadPromptSection(
-      "explain.md",
-      "System prompt",
-      variables,
-    );
-    const userPrompt = await loadPromptSection(
-      "explain.md",
-      "User prompt",
-      variables,
-    );
-
-    debugLog("[YouTube Digest] Requesting selection explanation");
-    const { text: explanation } = await requestAiCompletion({
-      maxTokens: 1024,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
     });
 
     return {
       success: true,
-      explanation: explanation.trim(),
+      explanation: String(result?.explanation || result?.text || "").trim(),
     };
   } catch (error) {
     console.error("Explain selection error:", error);
     return {
       success: false,
-      error: error.message || "Failed to explain selection",
+      error: error.code || "AGENT_ERROR",
+      message: error.message || "Unable to explain this selection.",
     };
   }
 }
@@ -1425,21 +1272,6 @@ async function handleExplainSelection(
  * @param {string} targetLanguage - Must be 'zh'
  * @returns {Promise<string>} - The base translation rules
  */
-async function getTranslationBaseRules(targetLanguage) {
-  if (targetLanguage !== "zh") {
-    throw new Error(`Unsupported translation target: ${targetLanguage}`);
-  }
-  const langName = "Simplified Chinese";
-  const langSpecific = await loadPromptSection(
-    "translation.md",
-    "Chinese rules",
-  );
-  return loadPromptSection("translation.md", "Shared base rules", {
-    langName,
-    langSpecific,
-  });
-}
-
 function validateTranscriptBatchRequest(content) {
   const segments = content?.segments;
   if (!Array.isArray(segments) || segments.length < 1 || segments.length > 4) {
@@ -1510,7 +1342,7 @@ function normalizeTranslatedSegmentBatch(parsed, sourceSegments) {
 }
 
 /**
- * Translates content using DeepSeek.
+ * Translates content through the local Agent service.
  * @param {Object} content - JSON object containing semantic transcript segments
  * @param {string} contentType - Must be 'transcriptBatch'
  * @param {string} targetLanguage - 'zh' for Simplified Chinese
@@ -1537,47 +1369,16 @@ async function handleTranslateContent(
       };
     }
 
-    const settings = await getSettings();
-    if (!settings.aiApiKey) {
-      return { success: false, error: "DeepSeek API key not configured" };
-    }
-
     const sourceSegments = validateTranscriptBatchRequest(content);
-    const langName = "Simplified Chinese";
-    const baseRules = await getTranslationBaseRules(targetLanguage);
-    const systemPrompt = await loadPromptSection(
-      "translation.md",
-      "Transcript batch translation",
-      {
-        langName,
-        videoTitle: videoTitle || "Unknown",
-        baseRules,
-      },
+    const result = await agentGateway.translateTranscriptBatch({
+      segments: sourceSegments,
+      targetLanguage,
+      videoTitle: videoTitle || "Unknown",
+    });
+    const aligned = normalizeTranslatedSegmentBatch(
+      result?.translatedContent || result,
+      sourceSegments,
     );
-    const userContent = JSON.stringify({ segments: sourceSegments });
-    const translationOptions = {
-      temperature: 0.2,
-      maxTokens: 1536,
-      responseFormat: { type: "json_object" },
-    };
-    let result = await callAiTranslation(
-      systemPrompt,
-      userContent,
-      translationOptions,
-    );
-
-    // DeepSeek JSON mode can rarely return an empty content string. The prompt
-    // already requires JSON, so retry once without response_format.
-    if (!result.success && result.code === "EMPTY_AI_RESPONSE") {
-      result = await callAiTranslation(systemPrompt, userContent, {
-        temperature: translationOptions.temperature,
-        maxTokens: translationOptions.maxTokens,
-      });
-    }
-    if (!result.success) return result;
-
-    const parsed = parseLooseJson(result.text);
-    const aligned = normalizeTranslatedSegmentBatch(parsed, sourceSegments);
     if (!aligned.segments.some((segment) => segment.text)) {
       return {
         success: false,
@@ -1587,51 +1388,16 @@ async function handleTranslateContent(
     return { success: true, translatedContent: aligned };
   } catch (error) {
     console.error("[YouTube Digest] Translation error:", error);
-    return { success: false, error: error.message || "Translation failed" };
-  }
-}
-
-/**
- * Makes a single DeepSeek call for translation.
- * Uses temperature 0.3 for consistent, predictable translations.
- *
- * @param {string} systemPrompt - The system-level instructions
- * @param {string} userContent - The user message (content to translate)
- * @returns {Object} - { success, text } or { success: false, error }
- */
-async function callAiTranslation(
-  systemPrompt,
-  userContent,
-  { temperature = 0.3, maxTokens = 8192, responseFormat } = {},
-) {
-  try {
-    const { text } = await requestAiCompletion({
-      temperature,
-      maxTokens,
-      responseFormat,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-    });
-
-    return { success: true, text };
-  } catch (error) {
-    if (error.status === 429) {
-      return {
-        success: false,
-        error: "Rate limited — try again in a moment",
-        code: "RATE_LIMITED",
-      };
-    }
-    return { success: false, error: error.message, code: error.code };
+    return {
+      success: false,
+      error: error.message || "Translation failed",
+      code: error.code || "AGENT_ERROR",
+    };
   }
 }
 
 // Pure validators are exposed for the repository's Node tests only.
 globalThis.__YTD_TRANSLATION_TESTING__ = {
-  requestAiCompletion,
-  callAiTranslation,
   validateTranscriptBatchRequest,
   normalizeTranslatedSegmentBatch,
   handleTranslateContent,

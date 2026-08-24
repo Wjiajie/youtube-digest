@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 
 const settings = require("../settings.js");
 
-test("DeepSeek defaults use V4 Flash", () => {
+test("Agent session defaults use V4 Flash without exposing a provider URL", () => {
   const normalized = settings.normalize({
     provider: "unexpected",
     aiApiKey: "  example-key  ",
@@ -13,14 +13,11 @@ test("DeepSeek defaults use V4 Flash", () => {
   });
 
   assert.equal(normalized.provider, "deepseek");
-  assert.equal(normalized.aiBaseUrl, "https://api.deepseek.com");
   assert.equal(normalized.aiModel, "deepseek-v4-flash");
   assert.equal(normalized.aiApiKey, "example-key");
   assert.equal(normalized.supadataApiKey, "example-supadata");
-  assert.equal(
-    settings.chatCompletionsUrl(),
-    "https://api.deepseek.com/chat/completions",
-  );
+  assert.equal(Object.hasOwn(normalized, "aiBaseUrl"), false);
+  assert.equal(Object.hasOwn(settings, "chatCompletionsUrl"), false);
 });
 
 test("legacy custom migration clears only the AI key and is idempotent", () => {
@@ -35,10 +32,10 @@ test("legacy custom migration clears only the AI key and is idempotent", () => {
 
   assert.equal(first.migrated, true);
   assert.equal(first.settings.provider, "deepseek");
-  assert.equal(first.settings.aiBaseUrl, settings.DEFAULTS.aiBaseUrl);
   assert.equal(first.settings.aiModel, settings.DEFAULTS.aiModel);
   assert.equal(first.settings.aiApiKey, "");
   assert.equal(first.settings.supadataApiKey, "supadata-secret");
+  assert.equal(Object.hasOwn(first.settings, "aiBaseUrl"), false);
 
   const second = settings.migrateLegacyCustom(first.settings);
   assert.equal(second.migrated, false);

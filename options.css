@@ -122,12 +122,14 @@ label {
 
 input,
 textarea,
+select,
 button {
   font: inherit;
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   padding: 11px 12px;
   border: 1px solid var(--border);
@@ -137,7 +139,8 @@ textarea {
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   border-color: var(--accent);
   outline: 3px solid rgba(200, 103, 79, 0.14);
 }
@@ -166,6 +169,19 @@ a {
   background: #f8eee9;
   color: #60483f;
   font-size: 13px;
+}
+
+.agent-service-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 18px;
+  padding-top: 18px;
+}
+
+.agent-service-row .help {
+  max-width: 52ch;
 }
 
 .provider-summary,

@@ -1,0 +1,7 @@
+{
+  "main": "dist/blueprint-agent-host.cjs",
+  "output": "dist/blueprint-agent-host.blob",
+  "disableExperimentalSEAWarning": true,
+  "useSnapshot": false,
+  "useCodeCache": false
+}

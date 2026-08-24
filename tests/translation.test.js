@@ -62,12 +62,11 @@ function loadBackgroundHelpers({
   settings = {
     provider: "deepseek",
     aiApiKey: "test-key",
-    aiBaseUrl: "https://api.deepseek.com",
     aiModel: "deepseek-v4-flash",
   },
-  fetchImpl = fetch,
-  setTimeoutImpl = () => 0,
-  clearTimeoutImpl = () => {},
+  agentGateway = {
+    translateTranscriptBatch: async () => ({ translatedContent: { segments: [] } }),
+  },
 } = {}) {
   const listeners = { addListener() {} };
   const sandbox = {
@@ -75,10 +74,9 @@ function loadBackgroundHelpers({
     URL,
     TextDecoder,
     TextEncoder,
-    fetch: fetchImpl,
     AbortController,
-    setTimeout: setTimeoutImpl,
-    clearTimeout: clearTimeoutImpl,
+    setTimeout,
+    clearTimeout,
     importScripts() {},
     chrome: {
       storage: {
@@ -98,72 +96,29 @@ function loadBackgroundHelpers({
         openOptionsPage() {},
         getURL: (resourcePath) => `chrome-extension://test/${resourcePath}`,
       },
-      tabs: { onUpdated: listeners, onActivated: listeners },
+      tabs: {
+        onUpdated: listeners,
+        onActivated: listeners,
+        create: () => Promise.resolve(),
+      },
     },
+    BlueprintAgent: {
+      AgentGateway: class {
+        constructor() {
+          return agentGateway;
+        }
+      },
+    },
+    BlueprintDomain: {},
     YTD_SETTINGS: {
       STORAGE_KEY: "ytd_settings",
       normalize: (value) => value,
-      chatCompletionsUrl: (baseUrl) => `${baseUrl}/chat/completions`,
     },
   };
   sandbox.globalThis = sandbox;
   vm.runInNewContext(read("background.js"), sandbox);
   return sandbox.__YTD_TRANSLATION_TESTING__;
 }
-
-function createFakeTimers() {
-  let nextId = 1;
-  const timers = new Map();
-  return {
-    setTimeout(callback, delay) {
-      const id = nextId++;
-      timers.set(id, { callback, delay, active: true });
-      return id;
-    },
-    clearTimeout(id) {
-      const timer = timers.get(id);
-      if (timer) timer.active = false;
-    },
-    fireActive(delay) {
-      const match = [...timers.entries()].find(
-        ([, timer]) => timer.active && timer.delay === delay,
-      );
-      assert.ok(match, `Expected an active ${delay}ms timer`);
-      match[1].active = false;
-      match[1].callback();
-    },
-    activeCount(delay) {
-      return [...timers.values()].filter(
-        (timer) => timer.active && timer.delay === delay,
-      ).length;
-    },
-    createdCount(delay) {
-      return [...timers.values()].filter((timer) => timer.delay === delay).length;
-    },
-  };
-}
-
-function streamingResponse(chunks, { ok = true, status = 200 } = {}) {
-  let index = 0;
-  return {
-    ok,
-    status,
-    body: {
-      getReader() {
-        return {
-          async read() {
-            if (index >= chunks.length) return { done: true };
-            return { done: false, value: chunks[index++] };
-          },
-          async cancel() {},
-        };
-      },
-    },
-  };
-}
-
-const encode = (value) => new TextEncoder().encode(value);
-const nextTurn = () => new Promise((resolve) => setImmediate(resolve));
 
 test("Transcript header exposes and wires Original, Chinese, and bilingual modes", () => {
   const html = read("sidepanel.html");
@@ -329,192 +284,18 @@ test("background rejects unsupported language fallthrough and malformed batches"
   );
 });
 
-test("all AI product requests use DeepSeek non-thinking and JSON behavior", async () => {
-  const deepSeekRequests = [];
-  const successfulFetch = (requests) => async (_url, options) => {
-    requests.push(JSON.parse(options.body));
-    return {
-      ok: true,
-      json: async () => ({
-        choices: [{ message: { content: "translated" } }],
-      }),
-    };
-  };
-
-  const deepSeek = loadBackgroundHelpers({
-    fetchImpl: successfulFetch(deepSeekRequests),
-  });
-  const deepSeekResult = await deepSeek.requestAiCompletion({
-    maxTokens: 128,
-    responseFormat: { type: "json_object" },
-    messages: [{ role: "user", content: "Hello." }],
-  });
-  assert.equal(deepSeekResult.text, "translated");
-  assert.deepEqual(deepSeekRequests[0].thinking, { type: "disabled" });
-  assert.deepEqual(deepSeekRequests[0].response_format, {
-    type: "json_object",
-  });
-
-  const backgroundSource = read("background.js");
-  assert.equal(
-    (backgroundSource.match(/await requestAiCompletion\(\{/g) || []).length,
-    4,
-  );
-  assert.doesNotMatch(backgroundSource, /disableThinking/);
-  for (const callPath of [
-    "handleAnalyzeTranscript",
-    "cleanupNoteText",
-    "handleExplainSelection",
-    "callAiTranslation",
-  ]) {
-    assert.match(
-      backgroundSource,
-      new RegExp(`async function ${callPath}\\([\\s\\S]*?requestAiCompletion\\(\\{`),
-    );
-  }
-});
-
-test("blank-line chunks reset provider idle timeout and valid JSON succeeds", async () => {
-  const timers = createFakeTimers();
-  const helpers = loadBackgroundHelpers({
-    setTimeoutImpl: timers.setTimeout,
-    clearTimeoutImpl: timers.clearTimeout,
-    fetchImpl: async () =>
-      streamingResponse([
-        encode("\n"),
-        encode("\n"),
-        encode('{"choices":[{"message":{"content":"translated"}}]}'),
-      ]),
-  });
-
-  const result = await helpers.callAiTranslation("Translate.", "Hello.");
-  assert.equal(result.success, true);
-  assert.equal(result.text, "translated");
-  assert.equal(timers.createdCount(50_000), 5);
-  assert.equal(timers.activeCount(50_000), 0);
-  assert.equal(timers.activeCount(120_000), 0);
-});
-
-test("provider idle silence aborts with a distinct Retry-able error", async () => {
-  const timers = createFakeTimers();
-  const helpers = loadBackgroundHelpers({
-    setTimeoutImpl: timers.setTimeout,
-    clearTimeoutImpl: timers.clearTimeout,
-    fetchImpl: async (_url, { signal }) => ({
-      ok: true,
-      status: 200,
-      body: {
-        getReader: () => ({
-          read: () =>
-            new Promise((_resolve, reject) => {
-              signal.addEventListener("abort", () => {
-                const error = new Error("aborted");
-                error.name = "AbortError";
-                reject(error);
-              });
-            }),
-        }),
-      },
-    }),
-  });
-
-  const request = helpers.callAiTranslation("Translate.", "Hello.");
-  await nextTurn();
-  timers.fireActive(50_000);
-  const result = await request;
-  assert.equal(result.success, false);
-  assert.equal(result.code, "AI_IDLE_TIMEOUT");
-  assert.match(result.error, /inactive for 50 seconds.*Retry/i);
-  assert.equal(timers.activeCount(120_000), 0);
-});
-
-test("blank-line keepalives cannot evade the provider hard cap", async () => {
-  const timers = createFakeTimers();
-  let releaseRead;
-  let signal;
-  const helpers = loadBackgroundHelpers({
-    setTimeoutImpl: timers.setTimeout,
-    clearTimeoutImpl: timers.clearTimeout,
-    fetchImpl: async (_url, options) => {
-      signal = options.signal;
-      return {
-        ok: true,
-        status: 200,
-        body: {
-          getReader: () => ({
-            read: () =>
-              new Promise((resolve, reject) => {
-                releaseRead = () => resolve({ done: false, value: encode("\n") });
-                signal.addEventListener("abort", () => {
-                  const error = new Error("aborted");
-                  error.name = "AbortError";
-                  reject(error);
-                }, { once: true });
-              }),
-          }),
-        },
-      };
-    },
-  });
-
-  const request = helpers.callAiTranslation("Translate.", "Hello.");
-  await nextTurn();
-  releaseRead();
-  await nextTurn();
-  releaseRead();
-  await nextTurn();
-  assert.equal(timers.activeCount(50_000), 1);
-  timers.fireActive(120_000);
-  const result = await request;
-  assert.equal(result.success, false);
-  assert.equal(result.code, "AI_HARD_TIMEOUT");
-  assert.match(result.error, /120-second limit.*Retry/i);
-  assert.equal(timers.activeCount(50_000), 0);
-});
-
-test("provider response reader accepts leading whitespace before JSON", async () => {
-  const helpers = loadBackgroundHelpers({
-    fetchImpl: async () =>
-      streamingResponse([
-        encode('  \n\t{"choices":[{"message":{"content":"ok"}}]}'),
-      ]),
-  });
-  const result = await helpers.callAiTranslation("Translate.", "Hello.");
-  assert.equal(result.success, true);
-  assert.equal(result.text, "ok");
-});
-
-test("provider response reader rejects bodies over 2 MiB", async () => {
-  const helpers = loadBackgroundHelpers({
-    fetchImpl: async () =>
-      streamingResponse([new Uint8Array(2 * 1024 * 1024 + 1)]),
-  });
-  const result = await helpers.callAiTranslation("Translate.", "Hello.");
-  assert.equal(result.success, false);
-  assert.equal(result.code, "AI_RESPONSE_TOO_LARGE");
-  assert.match(result.error, /2 MiB limit/);
-});
-
-test("DeepSeek retries one empty transcript JSON response without response_format", async () => {
+test("translation routes a validated batch through the local AgentGateway", async () => {
   const requests = [];
   const helpers = loadBackgroundHelpers({
-    fetchImpl: async (url, options) => {
-      if (url.startsWith("chrome-extension://")) {
-        return { ok: true, text: async () => read("prompts/translation.md") };
-      }
-      requests.push(JSON.parse(options.body));
-      return {
-        ok: true,
-        json: async () => ({
-          choices: [{
-            message: {
-              content: requests.length === 1
-                ? ""
-                : '{"segments":[{"id":"segment-0-0","text":"\u4e2d\u6587\u8bd1\u6587\u3002"}]}',
-            },
-          }],
-        }),
-      };
+    agentGateway: {
+      async translateTranscriptBatch(input) {
+        requests.push(input);
+        return {
+          translatedContent: {
+            segments: [{ id: "segment-0-0", text: "\u4e2d\u6587\u8bd1\u6587\u3002" }],
+          },
+        };
+      },
     },
   });
   const result = await helpers.handleTranslateContent(
@@ -524,10 +305,17 @@ test("DeepSeek retries one empty transcript JSON response without response_forma
     "Video",
   );
   assert.equal(result.success, true);
-  assert.equal(requests.length, 2);
-  assert.deepEqual(requests[0].response_format, { type: "json_object" });
-  assert.equal(Object.hasOwn(requests[1], "response_format"), false);
-  assert.equal(requests[0].max_tokens, 1536);
+  assert.deepEqual(JSON.parse(JSON.stringify(requests)), [
+    {
+      segments: [{ id: "segment-0-0", text: "English source sentence." }],
+      targetLanguage: "zh",
+      videoTitle: "Video",
+    },
+  ]);
+  assert.equal(
+    result.translatedContent.segments[0].text,
+    "\u4e2d\u6587\u8bd1\u6587\u3002",
+  );
 });
 
 test("translation message watchdog rejects, clears its timer, and ignores late replies", async () => {

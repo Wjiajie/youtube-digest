@@ -22,9 +22,21 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Build extension and Native Agent Host
+        run: |
+          npm run build:extension
+          npm run build:host
+
+      - name: Test Native Agent Host
+        run: npm run test:host
 
       - name: Build allowlisted ZIP
         run: npm run package
 
       - name: Show packaged files
-        run: unzip -Z1 dist/youtube-digest-v*.zip
+        run: unzip -Z1 dist/blueprint-v*.zip

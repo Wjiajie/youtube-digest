@@ -1,17 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "YouTube Digest",
-  "version": "1.1.5",
+  "name": "Blueprint",
+  "version": "2.0.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwossMlznCpyCm30nQuuuJvB47rFS14hHUr93dicJ6stkCBLBf2H4yWogmMDOUGBphWbuLB4tImLi1x4EdVJx1MpeYgePlW19u5/vYIOSyf89EnmUEYC0Bc/1VJV3ycN+Y7p2H42wAzlN0d2MwO4zsX0Om7ISjkQS+9my8vuXH1kB9FYnv5CuMz/Jgih5VFAF46FffTfYHDW/cnne5nsWwaojhP0Mxeeei6Y5oFVJOHag6pFmEriptL5dwk95vlCc7vWmkClDrqfnvWOkERXvbj/F3ZZyLeZwQozge2sD8AwaokUvIwuw12uAJKwdVGZhjJUEp4srDxLa2BLqH+VxRwIDAQAB",
   "minimum_chrome_version": "116",
-  "description": "Turn YouTube videos into learning resources with transcripts, bilingual translation, AI overviews, and notes.",
-  "permissions": ["sidePanel", "storage", "tabs", "scripting"],
+  "description": "Plan personal goals as interactive blueprints and learn through structured YouTube paths.",
+  "permissions": ["sidePanel", "storage", "tabs", "scripting", "nativeMessaging"],
   "host_permissions": [
     "https://www.youtube.com/*",
-    "https://api.supadata.ai/*",
-    "https://api.deepseek.com/*"
+    "https://api.supadata.ai/*"
   ],
   "action": {
-    "default_title": "Open YouTube Digest",
+    "default_title": "Open Blueprint",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
