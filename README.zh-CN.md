@@ -88,6 +88,17 @@ Windows 本地 Blueprint Agent Host
 
 目标规划、视频分析、选文讲解、字幕批量翻译和笔记润色统一经过 Agent Gateway。浏览器代码不包含 DeepSeek endpoint 或鉴权传输。提示词模板在构建时打包进 Windows 宿主。
 
+## 产品与路线文档
+
+- [产品理念](docs/product-vision.md)
+- [系统架构](docs/architecture.md)
+- [UI/UX 设计](docs/ui-ux-design.md)
+- [目标 UI/UX 规划](docs/target-ui-ux-plan.md)：Web、3D 身份状态面板和 YouTube 学习扩展的未来体验。
+- [Agent Skill 研究](docs/agent-skill-research.md)：构建目标澄清、路径规划、资源匹配和复盘工作流的公开资料。
+- [多阶段执行路线](docs/execution-roadmap.md)：持续记录当前 `2.0.0` 基线、已确认的目标架构、阶段门槛、风险和关键决策。
+
+产品理念、系统架构和现有 UI/UX 文档描述当前已实现版本；目标规划与执行路线会明确标记尚未上线的能力。
+
 ## 开发与打包
 
 ```bash

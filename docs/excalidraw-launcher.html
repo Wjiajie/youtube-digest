@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Blueprint UI/UX Flow</title>
+  <style>
+    html, body, #app { height: 100%; margin: 0; }
+    body { font-family: system-ui, sans-serif; }
+    #loading, #error { padding: 24px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="loading">正在加载可编辑线框图…</div>
+  <div id="error"></div>
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18",
+        "react-dom": "https://esm.sh/react-dom@18",
+        "react-dom/client": "https://esm.sh/react-dom@18/client",
+        "react/jsx-runtime": "https://esm.sh/react@18/jsx-runtime"
+      }
+    }
+  </script>
+  <script type="module">
+    import { Excalidraw } from "https://esm.sh/@excalidraw/excalidraw@0.18.0?external=react,react-dom";
+    import React from "https://esm.sh/react@18";
+    import ReactDOM from "https://esm.sh/react-dom/client";
+
+    const params = new URLSearchParams(location.search);
+    const file = params.get("file") || "blueprint-ui-ux-flow.excalidraw";
+
+    try {
+      const response = await fetch(file);
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${file}`);
+      const initialData = await response.json();
+      initialData.appState = {
+        ...(initialData.appState || {}),
+        scrollX: 0,
+        scrollY: 0,
+        zoom: { value: 0.8 }
+      };
+
+      document.getElementById("loading").remove();
+      ReactDOM.createRoot(document.getElementById("app")).render(
+        React.createElement(Excalidraw, {
+          initialData,
+          autoFocus: true,
+          excalidrawAPI: (api) => {
+            const fit = () => {
+              const elements = api.getSceneElements();
+              if (elements.length) {
+                api.scrollToContent(elements, {
+                  fitToViewport: true,
+                  viewportZoomFactor: 0.88
+                });
+              }
+            };
+            setTimeout(fit, 100);
+            setTimeout(fit, 700);
+          }
+        })
+      );
+    } catch (error) {
+      document.getElementById("loading")?.remove();
+      document.getElementById("error").textContent = `线框图加载失败：${error.message}`;
+    }
+  </script>
+</body>
+</html>

@@ -88,6 +88,17 @@ Local Blueprint Agent Host for Windows
 
 All five AI capabilities use the same Gateway: blueprint planning, video analysis, selection explanation, transcript-batch translation, and note polishing. The browser code has no DeepSeek endpoint or authorization transport. Prompt templates are bundled into the Windows host during its build.
 
+## Product documentation
+
+- [Product vision](docs/product-vision.md)
+- [System architecture](docs/architecture.md)
+- [UI/UX design](docs/ui-ux-design.md)
+- [Target UI/UX plan](docs/target-ui-ux-plan.md) (Chinese): the planned Web experience, 3D identity dashboard, and YouTube learning companion.
+- [Agent Skill research](docs/agent-skill-research.md) (Chinese): primary-source references for goal clarification, path planning, resource matching, and review workflows.
+- [Multi-stage execution roadmap](docs/execution-roadmap.md) (Chinese): the living record of the current `2.0.0` baseline, confirmed target architecture, phase gates, risks, and decisions.
+
+The first three documents describe the current implementation. The execution roadmap clearly marks future capabilities as planned rather than available.
+
 ## Development and packaging
 
 ```bash
