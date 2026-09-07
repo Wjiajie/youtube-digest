@@ -1,0 +1,21 @@
+{
+  "name": "@blueprint/ui",
+  "version": "3.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./tokens.css": "./src/tokens.css",
+    ".": "./src/index.tsx"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "react": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "react": "19.2.8",
+    "typescript": "7.0.2"
+  }
+}

@@ -1,40 +1,35 @@
 # Blueprint Privacy
 
-Last updated: August 22, 2026
+Last updated: August 27, 2026
 
-Blueprint is a bring-your-own-key Chrome extension with a local Blueprint Agent Host. It has no Blueprint account, developer-operated backend, analytics, advertising, or telemetry.
+Blueprint 3 uses a Web application, a YouTube browser extension, and Supabase. This document describes the current M1 source; the historical local-only version remains available at Git tag `v2.0.0`.
 
-## Data the extension handles
+## Data handled
 
-Depending on the feature, Blueprint handles YouTube video identifiers and metadata, native captions and timestamps, planner conversations, Blueprint Markdown, AI results, translations, selected text, saved notes, appearance settings, and Supadata or DeepSeek API keys.
+The cloud database can contain account identity, Blueprint titles and descriptions, Goals, Stages, Path Nodes, optional YouTube resource bindings, user-confirmed proposal snapshots and diffs, revisions, and explicit learning-session starts.
 
-Blueprint uses Chrome's local extension storage for settings, keys, Blueprint state, conversations, cached digests, translations, and notes. This data remains in the current Chrome profile until you remove it or reset the extension.
+The extension stores its own OAuth session, an account-keyed Blueprint cache, and account-keyed pending learning-session commands for short-term recovery. It does not store service-role credentials. The new version does not import historical Chrome data.
 
-## Supadata
+## Service boundaries
 
-For transcript retrieval, the extension sends the canonical YouTube watch URL to `https://api.supadata.ai` with your Supadata API key. Supadata returns native captions and timestamps. Blueprint fixes the request to `mode=native` and does not request generated transcripts.
+- Supabase provides email OTP authentication, OAuth authorization for the extension, PostgreSQL storage, and Row Level Security.
+- Vercel is the planned Web hosting environment.
+- Sentry is optional. When configured, Blueprint strips request bodies, query strings, headers, cookies, email, IP, custom context, and extra fields before sending errors.
+- Product events contain an allowlisted event name, surface, optional entity ID, bounded result code, duration bucket, and timestamp. They do not contain Goal text, proposal content, transcripts, or notes.
 
-## Local Agent and DeepSeek
+M1 does not call DeepSeek, YouTube Data API, or Supadata. Later stages must update this notice before introducing those processors.
 
-The extension does not contain a DeepSeek HTTP transport. Planning and every learning AI feature are sent through Chrome Native Messaging to the local Blueprint Agent Host installed for the current Windows user.
+## Browser permissions
 
-When a session opens, the extension reads your DeepSeek key from Chrome's local extension storage and sends it to the host. The host retains the key in memory for the session, supplies it to Pi Agent only when DeepSeek is called, and does not write it to disk. The host receives only the content required by the requested capability, such as a planner message, current Blueprint Markdown, transcript text, selected text, or note context.
+- `identity`: run the OAuth 2.1 authorization-code flow with PKCE.
+- `storage`: keep the extension session, account-scoped cache, and pending writeback queue.
+- `sidePanel`: display the Blueprint learning companion beside YouTube.
+- `tabs`: identify the current YouTube video, navigate to a bound video, and open the Web app.
+- YouTube host access: match the current watch URL to a resource binding.
+- Web and Supabase host access: read the Blueprint, write an explicit learning session, and exchange OAuth tokens.
 
-The local host then sends that requested content to DeepSeek V4 Flash under your DeepSeek account. The developer does not proxy or receive the request. Supadata and DeepSeek process data under their own terms, retention rules, and privacy policies.
+## User control
 
-## Permissions
+Blueprint changes do not enter the formal Blueprint until the user applies a proposal. Starting a learning session also requires an explicit click. Signing out removes the active extension session; the Web connection page can revoke an OAuth grant. Data export and account deletion are planned before public registration and are not yet implemented in M1.
 
-- `storage`: keep settings, credentials, Blueprint state, cached learning data, and notes in the Chrome profile.
-- `nativeMessaging`: communicate with the installed `com.blueprint.agent` local host.
-- `sidePanel`: show the YouTube learning interface beside YouTube.
-- `tabs`: open the Blueprint home page and linked YouTube learning nodes.
-- YouTube host access: identify the current video and run the learning integration.
-- Supadata host access: retrieve native captions.
-
-The extension has no DeepSeek host permission because DeepSeek calls belong to the local host.
-
-## User controls
-
-You can clear cached digests, delete notes, reset all extension data, remove the extension, run the host uninstaller, and revoke either provider key. Clearing local data cannot delete information a provider has already processed or retained.
-
-Blueprint does not sell personal information, build advertising profiles, or share data with data brokers.
+Blueprint does not sell personal information, run advertising, or build advertising profiles.

@@ -1,26 +1,37 @@
 {
   "name": "blueprint",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "private": true,
-  "description": "Plan personal goals as interactive blueprints and complete learning nodes with the integrated YouTube study panel.",
+  "type": "module",
+  "description": "An Agent-assisted personal goal system with a Web app and YouTube companion extension.",
   "license": "MIT",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "build:extension": "node scripts/build-extension.mjs",
-    "test": "node --test tests/*.test.js",
-    "test:host": "npm run test --workspace @blueprint/native-agent-host",
-    "build:host": "npm run build --workspace @blueprint/native-agent-host",
-    "smoke:host": "node scripts/smoke-native-host.mjs",
-    "package:host": "npm run package --workspace @blueprint/native-agent-host",
-    "check": "node scripts/run-bash.mjs scripts/check-release.sh",
-    "package": "node scripts/run-bash.mjs scripts/package-extension.sh",
-    "package:all": "npm run build:extension && npm run package && npm run package:host"
+    "dev:web": "npm run dev --workspace @blueprint/web",
+    "dev:extension": "npm run dev --workspace @blueprint/extension",
+    "build:web": "npm run build --workspace @blueprint/web",
+    "build:wxt": "npm run build --workspace @blueprint/extension",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test:m1": "vitest run",
+    "test:db-contract": "node scripts/test-m1-migration.mjs",
+    "test:e2e": "playwright test",
+    "check:m1-wizard": "bash -n scripts/setup-m1-cloud.sh && node scripts/check-m1-wizard.mjs",
+    "supabase:start": "bash scripts/with-m1-runtime.sh npx --yes supabase@2.115.0 start",
+    "supabase:reset": "bash scripts/with-m1-runtime.sh npx --yes supabase@2.115.0 db reset",
+    "supabase:test": "bash scripts/with-m1-runtime.sh npx --yes supabase@2.115.0 test db",
+    "setup:m1-cloud": "bash scripts/with-m1-runtime.sh bash scripts/setup-m1-cloud.sh",
+    "check:m1": "npm run typecheck && npm run test:m1 && npm run test:db-contract && npm run check:m1-wizard && npm run build:web && npm run build:wxt && node scripts/check-m1-extension.mjs",
+    "test": "npm run test:m1",
+    "check": "npm run check:m1"
   },
   "devDependencies": {
-    "esbuild": "0.28.2",
-    "three": "0.185.1"
+    "@electric-sql/pglite": "^0.3.14",
+    "@playwright/test": "1.62.1",
+    "jsdom": "30.0.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11"
   }
 }

@@ -1,36 +1,41 @@
 # Blueprint Security
 
-## Supported version
+## Supported source
 
-Security fixes target the latest code on `main` and the latest published release when releases exist. Older snapshots are not supported.
+Security fixes target the latest code on `main`. The local 2.0 runtime is historical and preserved at tag `v2.0.0`; the Windows Native Agent Host is retired.
 
 ## Trust boundaries
 
-Blueprint has two local components separated by Chrome Native Messaging:
+```text
+Next.js Web ───────┐
+                   ├─ Supabase Auth + PostgreSQL + RLS
+WXT extension ─────┘
+```
 
-1. The Chrome extension owns user interaction, Chrome local extension storage, the Blueprint document, and direct Supadata transcript calls.
-2. The local Blueprint Agent Host owns Pi Agent execution and DeepSeek transport. It accepts a versioned, length-framed JSON protocol only from the exact extension origin registered in its native-host manifest.
+- The Web session may read the user's Blueprint, create/reject proposals, and invoke the atomic proposal-application function.
+- The extension uses a separately revocable public OAuth client. It can read the owner's Blueprint and write learning sessions/product events, but RLS denies proposal and formal Blueprint writes.
+- Formal Blueprint tables are directly read-only to authenticated clients. A security-definer RPC verifies the authenticated owner, rejects the extension client, locks the current version, applies one complete proposal, and records a revision in one transaction.
+- Owner IDs are present in composite foreign keys and RLS policies. A learning resource must belong to the same owner and Path Node as its session.
 
-The extension has no direct LLM provider transport. The host keeps the DeepSeek key in session memory, redacts key-shaped values from errors, writes protocol frames only to stdout, and sends operational diagnostics to stderr. Closing the native session or process clears its in-memory session map.
+## Secrets and OAuth
 
-## Agent controls
+- The Supabase service-role key exists only in the Web server environment and invite endpoint.
+- The extension contains only public configuration and never contains service-role, DeepSeek, YouTube, or Supadata secrets.
+- Extension authorization uses the OAuth 2.1 authorization-code flow with PKCE and a random state value. The stable manifest key preserves extension ID `kipaapemlimhdkpcenelpjeccmnkninf` and therefore its callback origin.
+- Refresh and access tokens remain in extension background storage; content scripts are not part of M1.
 
-- Five explicit capabilities are allowlisted; unknown capabilities fail closed.
-- Learning capabilities receive no Agent tools.
-- The planner receives only `read_blueprint` and `propose_blueprint_revision`.
-- Proposals do not write extension storage. The extension validates the complete Markdown and requires user confirmation before applying it.
-- Input sizes, node counts, link origins, protocol frame sizes, event order, idle time, and hard execution time are bounded.
-- Requests can be cancelled. Timeouts and disconnects return structured, retryable errors without silently repeating a completed external call.
-- The Agent has no shell, file, browser-control, arbitrary HTTP, secret-reading, or extension-storage tool.
+## Data and failure controls
 
-## Installation integrity
+- Domain validation bounds hierarchy sizes, enforces stable unique UUIDs, accepts only canonical YouTube watch URLs, and rejects cross-Goal, self, duplicate, or cyclic dependencies.
+- Proposal creation and learning-session writeback use client mutation IDs for idempotency.
+- Failed extension writebacks remain in an account-scoped outbox and are retried only for the currently signed-in owner.
+- Sentry is disabled without a DSN and strips request and user content when enabled.
+- Product events use an enum and contain no free-form content fields beyond a bounded operational result code.
 
-The host packager performs a clean lockfile install, downloads the pinned Node.js runtime over HTTPS, verifies its hard-coded upstream SHA-256, and writes the runtime version, archive hash, lockfile hash, and fixed extension ID to `BUILD-PROVENANCE.json`. The Windows package includes `SHA256SUMS` for the executable, installer, uninstaller, example manifest, and provenance record. `install.ps1` refuses to install when the executable does not match that checksum and always registers the one published extension ID.
+## Verification
 
-These local development artifacts are not Authenticode-signed. The co-located checksum detects accidental corruption and tampering after package creation, but it does not establish publisher identity if the entire package is replaced. Obtain releases from a trusted channel, compare an independently published checksum when one exists, and run `install.ps1` only from a release you trust. Installation is per user and registers `com.blueprint.agent` under the Chrome native messaging registry key. `uninstall.ps1` removes that registration and installed host files.
-
-Never put provider keys in source files, commits, logs, screenshots, issue reports, planner messages, or customization prompts. Enter them only in Blueprint Settings and rotate a key if exposure is suspected.
+Run `npm run check:m1`, `npm run test:e2e`, and `npm run supabase:test`. The first command also inspects the built extension permissions and fails if service credentials, DeepSeek transport, or Supadata transport appear in client output.
 
 ## Report a vulnerability
 
-Do not publish credentials, private transcripts, or an exploitable proof in a public issue. Contact the repository maintainer privately with the affected version, reproduction steps, impact, and the smallest safe evidence. Useful reports include native-message validation bypasses, unexpected data disclosure, unauthorized tool use, unsafe proposal application, secret persistence, or release-package tampering.
+Do not publish credentials, private Blueprint content, OAuth tokens, or an exploitable proof in a public issue. Contact the repository maintainer privately with the affected commit, reproduction steps, impact, and the smallest safe evidence. Useful reports include RLS bypasses, cross-user access, proposal-confirmation bypasses, OAuth callback/state issues, secret leakage, unsafe recovery queues, and excessive browser permissions.

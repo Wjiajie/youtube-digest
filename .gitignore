@@ -18,9 +18,20 @@ skills-lock.json
 node_modules/
 dist/
 .tools/
+.next/
+.output/
+.vercel/
+.wxt/
+*.tsbuildinfo
+test-results/
+playwright-report/
+supabase/.temp/
+supabase/.branches/
 
 # Environment
 .env
 .env.*
+!.env.example
+!**/.env.example
 *.pem
 *.key

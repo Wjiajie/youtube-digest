@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  release-check:
-    name: Validate public extension package
+  m1-check:
+    name: Validate M1 cloud slice
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
 
     steps:
       - name: Check out repository
@@ -27,16 +27,43 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
-      - name: Build extension and Native Agent Host
+      - name: Test domain and extension behavior
+        run: npm run test:m1
+
+      - name: Execute embedded PostgreSQL contract
+        run: npm run test:db-contract
+
+      - name: Verify cloud setup wizard
+        run: npm run check:m1-wizard
+
+      - name: Typecheck workspaces
+        run: npm run typecheck
+
+      - name: Build Web and WXT extension
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+          NEXT_PUBLIC_EXTENSION_OAUTH_CLIENT_ID: ci-extension-client
+          WXT_PUBLIC_WEB_ORIGIN: https://blueprint.example
+          WXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          WXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+          WXT_PUBLIC_EXTENSION_OAUTH_CLIENT_ID: ci-extension-client
         run: |
-          npm run build:extension
-          npm run build:host
+          npm run build:web
+          npm run build:wxt
 
-      - name: Test Native Agent Host
-        run: npm run test:host
+      - name: Verify extension security surface
+        run: node scripts/check-m1-extension.mjs
 
-      - name: Build allowlisted ZIP
-        run: npm run package
+      - name: Install browser for Web journey checks
+        run: npx playwright install --with-deps chromium
 
-      - name: Show packaged files
-        run: unzip -Z1 dist/blueprint-v*.zip
+      - name: Test login journey on desktop and mobile
+        run: npm run test:e2e
+
+      - name: Test migrations and RLS contracts
+        run: |
+          npx --yes supabase@2.115.0 start
+          npx --yes supabase@2.115.0 db reset
+          npx --yes supabase@2.115.0 test db
+          npx --yes supabase@2.115.0 stop --no-backup

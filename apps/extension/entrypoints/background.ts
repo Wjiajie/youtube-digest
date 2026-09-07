@@ -1,0 +1,202 @@
+import { browser } from "wxt/browser";
+
+import { parseBlueprintSnapshot, type BlueprintSnapshot } from "@blueprint/domain";
+
+import { createExtensionAuthPort } from "../src/auth";
+import { initExtensionObservability } from "../src/observability";
+import { findBoundNode, flushOutbox, type OutboxCommand } from "../src/runtime";
+
+const OUTBOX_KEY = "blueprint_session_outbox_v1";
+const CLEANUP_KEY = "blueprint_v3_cleanup_complete";
+const REQUEST_TIMEOUT_MS = 15_000;
+const apiBase = (import.meta.env.WXT_PUBLIC_WEB_ORIGIN || "http://localhost:3000").replace(/\/$/, "");
+
+export default defineBackground(() => {
+  initExtensionObservability();
+  const auth = createExtensionAuthPort();
+  void cleanupLegacyStorage();
+  void auth.accessToken().then((current) => current && retryOutbox(auth, current.session.userId));
+  if (globalThis.chrome?.sidePanel) {
+    void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  }
+
+  browser.runtime.onMessage.addListener(async (message: any) => {
+    switch (message?.type) {
+      case "AUTH_STATUS":
+        return auth.status();
+      case "AUTH_CONNECT":
+        return auth.connect();
+      case "AUTH_DISCONNECT":
+        await auth.disconnect();
+        return { connected: false };
+      case "LOAD_CONTEXT":
+        return loadContext(auth);
+      case "START_SESSION":
+        return startSession(auth, message.context);
+      case "RETRY_OUTBOX": {
+        const current = await auth.accessToken();
+        return current ? retryOutbox(auth, current.session.userId) : { recovered: 0, pending: 0, rejected: 0 };
+      }
+      case "OPEN_NODE":
+        await browser.tabs.update(message.tabId, { url: message.url });
+        return { ok: true };
+      case "OPEN_WEB":
+        await browser.tabs.create({ url: apiBase });
+        return { ok: true };
+      default:
+        return undefined;
+    }
+  });
+});
+
+async function loadContext(auth: ReturnType<typeof createExtensionAuthPort>) {
+  const current = await auth.accessToken();
+  if (!current) return { connected: false };
+  let snapshot: BlueprintSnapshot | null = null;
+  let stale = false;
+  try {
+    const response = await fetch(`${apiBase}/api/v1/blueprint`, {
+      headers: { Authorization: `Bearer ${current.token}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (response.status === 401) return { connected: false };
+    if (!response.ok) throw new Error("BLUEPRINT_FETCH_FAILED");
+    snapshot = parseBlueprintSnapshot(await response.json());
+    await browser.storage.local.set({ [`blueprint_cache:${current.session.userId}`]: snapshot });
+  } catch {
+    const cached = await browser.storage.local.get(`blueprint_cache:${current.session.userId}`);
+    snapshot = cached[`blueprint_cache:${current.session.userId}`]
+      ? parseBlueprintSnapshot(cached[`blueprint_cache:${current.session.userId}`])
+      : null;
+    stale = true;
+  }
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  const currentUrl = tab?.url ?? "";
+  const context = snapshot ? findBoundNode(snapshot, currentUrl) : null;
+  const nodes = snapshot
+    ? snapshot.goals.flatMap((goal) => goal.stages.flatMap((stage) => stage.nodes.flatMap((node) => node.resources.map((resource) => ({
+        goalTitle: goal.title,
+        stageTitle: stage.title,
+        nodeId: node.id,
+        nodeTitle: node.title,
+        resourceBindingId: resource.id,
+        url: resource.url,
+      })))))
+    : [];
+  const pending = (await readOutbox()).filter((item) => item.ownerId === current.session.userId).length;
+  return {
+    connected: true,
+    email: current.session.email,
+    userId: current.session.userId,
+    snapshot,
+    context,
+    nodes,
+    tabId: tab?.id,
+    stale,
+    pending,
+  };
+}
+
+async function startSession(
+  auth: ReturnType<typeof createExtensionAuthPort>,
+  context: { nodeId: string; resourceBindingId?: string },
+) {
+  const current = await auth.accessToken();
+  if (!current) return { ok: false, code: "unauthenticated" };
+  const command: OutboxCommand = {
+    ownerId: current.session.userId,
+    nodeId: context.nodeId,
+    ...(context.resourceBindingId ? { resourceBindingId: context.resourceBindingId } : {}),
+    startedAt: new Date().toISOString(),
+    clientMutationId: crypto.randomUUID(),
+    attempts: 0,
+  };
+  const delivery = await sendSession(current.token, command);
+  if (delivery === "sent") return { ok: true, queued: false };
+  if (delivery === "rejected") return { ok: false, code: "authorization_or_data_rejected" };
+  command.failureRecorded = await sendSyncEvent(
+    current.token,
+    "failed",
+    "network_or_service_unavailable",
+  );
+  const outbox = await readOutbox();
+  await browser.storage.local.set({ [OUTBOX_KEY]: [...outbox, command] });
+  return { ok: true, queued: true };
+}
+
+async function retryOutbox(
+  auth: ReturnType<typeof createExtensionAuthPort>,
+  userId: string,
+) {
+  const current = await auth.accessToken();
+  if (!current || current.session.userId !== userId) return { recovered: 0, pending: 0 };
+  const result = await flushOutbox(await readOutbox(), userId, (command) => sendSession(current.token, command));
+  await browser.storage.local.set({ [OUTBOX_KEY]: result.remaining });
+  if (result.recovered) {
+    if (result.recoveredCommands.some((command) => !command.failureRecorded)) {
+      await sendSyncEvent(current.token, "failed", "recovered_after_offline");
+    }
+    await sendSyncEvent(current.token, "recovered");
+  }
+  return {
+    recovered: result.recovered,
+    rejected: result.rejected,
+    pending: result.remaining.filter((item) => item.ownerId === userId).length,
+  };
+}
+
+async function sendSyncEvent(token: string, outcome: "failed" | "recovered", resultCode?: string) {
+  try {
+    const response = await fetch(`${apiBase}/api/v1/events/sync`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ outcome, resultCode }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function sendSession(token: string, command: OutboxCommand): Promise<"sent" | "retryable" | "rejected"> {
+  try {
+    const response = await fetch(`${apiBase}/api/v1/learning-sessions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        nodeId: command.nodeId,
+        resourceBindingId: command.resourceBindingId,
+        clientMutationId: command.clientMutationId,
+        startedAt: command.startedAt,
+      }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (response.ok) return "sent";
+    return response.status === 408 || response.status === 425 || response.status === 429 || response.status >= 500
+      ? "retryable"
+      : "rejected";
+  } catch {
+    return "retryable";
+  }
+}
+
+async function readOutbox(): Promise<OutboxCommand[]> {
+  const stored = await browser.storage.local.get(OUTBOX_KEY);
+  return Array.isArray(stored[OUTBOX_KEY]) ? stored[OUTBOX_KEY] as OutboxCommand[] : [];
+}
+
+async function cleanupLegacyStorage() {
+  const stored = await browser.storage.local.get(null);
+  if (stored[CLEANUP_KEY]) return;
+  const exact = [
+    "blueprint_state_v1",
+    "blueprint_planner_messages_v1",
+    "ytd_settings",
+    "ytd_options_language",
+    "ytd_notes",
+  ];
+  const keys = [...exact, ...Object.keys(stored).filter((key) => key.startsWith("digest_"))];
+  if (keys.length) await browser.storage.local.remove(keys);
+  await browser.storage.local.set({ [CLEANUP_KEY]: true });
+}
