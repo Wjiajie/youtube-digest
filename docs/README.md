@@ -13,6 +13,7 @@
 7. [M1 云端配置](m1-cloud-setup.md)：本地 Supabase、OAuth、Vercel 和托管前验收。
 8. [商用品质与多主题设计复审](commercial-design-review.md)：2026-09-06 的代码证据、Q1–Q10 已确认方向、架构推导、质量门槛和后续验证事项。
 9. [开放资产研究](open-asset-research.md)：零采购候选来源、具体资源与许可依据、主题适配缺口和接入检查；不是正式资产选型或美术验收结果。
+10. [真实资产接收台账](asset-intake.md)：实际下载文件、SHA-256、许可差异与尚未通过的接入门槛。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 
