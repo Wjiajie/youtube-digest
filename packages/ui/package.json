@@ -5,6 +5,9 @@
   "type": "module",
   "exports": {
     "./tokens.css": "./src/tokens.css",
+    "./styles.css": "./src/styles.css",
+    "./theme": "./src/theme.tsx",
+    "./theme-picker": "./src/theme-picker.tsx",
     ".": "./src/index.tsx"
   },
   "scripts": {

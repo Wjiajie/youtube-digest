@@ -19,6 +19,7 @@ node_modules/
 .augment/
 .claude/
 .tools/
+.goal-loop/
 skills/
 skills-lock.json
 .playwright-mcp/

@@ -8,7 +8,7 @@ export function Panel({ className = "", ...props }: HTMLAttributes<HTMLElement>)
   return <section className={`bp-panel ${className}`.trim()} {...props} />;
 }
 
-export function Status({ tone = "neutral", children }: PropsWithChildren<{ tone?: "neutral" | "success" | "warning" | "danger" }>) {
+export function Status({ tone = "neutral", children }: PropsWithChildren<{ tone?: "neutral" | "success" | "warning" | "danger" | "progress" | "pending" }>) {
   return (
     <p className={`bp-status bp-status-${tone}`} role={tone === "danger" ? "alert" : "status"}>
       {children}

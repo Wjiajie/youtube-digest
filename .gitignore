@@ -18,6 +18,7 @@ skills-lock.json
 node_modules/
 dist/
 .tools/
+.goal-loop/
 .next/
 .output/
 .vercel/

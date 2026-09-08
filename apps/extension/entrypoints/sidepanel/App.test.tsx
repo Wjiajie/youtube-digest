@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { App } from "./App";
+import { ThemeSurface } from "@blueprint/ui/theme";
 
 const transport = vi.hoisted(() => ({ sendMessage: vi.fn() }));
 vi.mock("wxt/browser", () => ({ browser: {
@@ -50,4 +51,14 @@ test("a revoked connection does not keep a previous learning success message", a
   await clickButton("刷新");
   expect(host.textContent).toContain("连接你的蓝图");
   expect(host.textContent).not.toContain("学习会话已写入你的蓝图");
+});
+
+test("theme changes retain the learning context and do not restart a learning session or reload data", async () => {
+  await act(async () => root.render(<ThemeSurface theme="cyberpunk" density="compact"><App /></ThemeSurface>));
+  await clickButton("开始学习");
+  transport.sendMessage.mockClear();
+  await act(async () => root.render(<ThemeSurface theme="eastern" density="compact"><App /></ThemeSurface>));
+  expect(host.textContent).toContain("了解基础");
+  expect(host.textContent).toContain("学习会话已写入你的蓝图");
+  expect(transport.sendMessage).not.toHaveBeenCalled();
 });

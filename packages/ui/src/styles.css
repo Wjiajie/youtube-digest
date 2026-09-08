@@ -1,0 +1,51 @@
+@import "./tokens.css";
+
+.bp-theme {
+  background: var(--bp-page-background);
+  color: var(--bp-text);
+  font-family: var(--bp-font-sans);
+  min-width: 0;
+}
+.bp-theme :is(h1, h2, h3) { font-family: var(--bp-heading-font); }
+.bp-panel {
+  border: 1px solid var(--bp-line);
+  border-radius: var(--bp-radius-md);
+  background: var(--bp-surface);
+  box-shadow: var(--bp-panel-edge), var(--bp-shadow);
+}
+.bp-button {
+  border: 1px solid var(--bp-line-strong);
+  border-radius: var(--bp-radius-sm);
+  background: var(--bp-button);
+  color: var(--bp-text);
+  padding: var(--bp-control-padding);
+  min-height: 44px;
+  font: inherit;
+  cursor: pointer;
+}
+.bp-button:hover:not(:disabled) { background: var(--bp-button-hover); }
+.bp-button:disabled { cursor: not-allowed; opacity: .55; }
+.bp-button.primary { border-color: var(--bp-accent); background: var(--bp-accent-strong); color: var(--bp-on-accent); font-weight: 700; }
+.bp-button.primary:hover:not(:disabled) { background: var(--bp-accent-strong); filter: brightness(.95); }
+.bp-button.danger { border-color: var(--bp-danger); color: var(--bp-danger); }
+.bp-status { min-height: 1.5em; color: var(--bp-muted); overflow-wrap: anywhere; }
+.bp-status-success { color: var(--bp-success); }
+.bp-status-warning { color: var(--bp-warning); }
+.bp-status-danger { color: var(--bp-danger); }
+.bp-status-progress { color: var(--bp-progress); }
+.bp-status-pending { color: var(--bp-pending); }
+.bp-theme-picker { display: grid; gap: 6px; color: var(--bp-muted); font-size: 13px; }
+.bp-theme-picker select, .bp-theme :is(input:not([type="checkbox"]):not([type="radio"]), textarea, select) {
+  border: 1px solid var(--bp-control-border);
+  border-radius: var(--bp-radius-sm);
+  background: var(--bp-field);
+  color: var(--bp-text);
+  padding: var(--bp-control-padding);
+  min-height: 44px;
+  max-width: 100%;
+  font: inherit;
+}
+:where(.bp-theme, .bp-button, .bp-theme-picker) :focus-visible, .bp-button:focus-visible {
+  outline: 2px solid var(--bp-accent);
+  outline-offset: 3px;
+}
