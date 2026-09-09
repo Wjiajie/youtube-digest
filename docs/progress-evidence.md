@@ -1,6 +1,6 @@
 # 私人成果记录：P4 数据与双端成长档案
 
-更新：2026-09-10。数据切片源码提交 `4354d4f`，Web 界面 `cfe4e59`／恢复修复 `ccc14e9`；后续批次接入扩展。**数据与 Web 界面已通过本地验证，扩展已通过独立 MV3 浏览器及外部 HTTP 夹具验证；尚未部署成果切片或完成真实托管双端验收。** 本文是实现证据，不替代[执行路线](execution-roadmap.md)的阶段状态。
+更新：2026-09-10。数据切片源码提交 `4354d4f`，Web 界面 `cfe4e59`／恢复修复 `ccc14e9`，扩展 `b9b954a`／错误恢复修复 `c0bcf45`。**成果迁移及 Web/API 已托管发布，数据库角色检查和线上匿名冒烟通过；真实登录后的托管双端成果旅程仍待验收。** 扩展源码通过独立 MV3 浏览器及外部 HTTP 夹具验证，本批未重载用户安装版。本文是实现证据，不替代[执行路线](execution-roadmap.md)的阶段状态。
 
 ## 已实现的行为
 
@@ -19,7 +19,7 @@
 
 历史上下文 ID 不作为实时外键；保留提交时含义，不强制跟随最新路径。记录归属于 Auth 用户，完整删除账号时随之删除。本切片尚未提供用户删除／编辑成果的界面或操作，不能据此宣称这些隐私控制已交付。
 
-作品链接不会被服务器抓取或验证可信度、可达性及外站隐私。应用输入验证 URL 格式；数据库进一步约束 HTTPS、安全字符和无内嵌凭据，但不提供完整浏览器 URL 解析。读取历史值不重新应用当前表单限制或裁剪正文（PostgreSQL 字符计数也不同于 UTF-16）。Web 已先验证链接再生成带 `noopener noreferrer` 和无 referrer 的锚点，无效链接显示原文，不能令整页记录不可读；扩展将遵循同一边界。外站页面可能公开，不受 Blueprint 私人存储权限保护。
+作品链接不会被服务器抓取或验证可信度、可达性及外站隐私。应用输入验证 URL 格式；数据库进一步约束 HTTPS、安全字符和无内嵌凭据，但不提供完整浏览器 URL 解析。读取历史值不重新应用当前表单限制或裁剪正文（PostgreSQL 字符计数也不同于 UTF-16）。双端共享界面先验证链接再生成带 `noopener noreferrer` 和无 referrer 的锚点，无效链接显示原文，不能令整页记录不可读。外站页面可能公开，不受 Blueprint 私人存储权限保护。
 
 ## Web 成长档案
 
@@ -63,7 +63,7 @@
 
 ## 后续门槛
 
-托管迁移和发布、真实账号双端验收、完整历史和编辑／删除控制仍待实现／验证。当前不接入旧扩展 outbox，以免失败记录被丢弃。本地切片不是已上线的双端成果闭环，也不代表其余 P4 领域增量完成。
+真实账号双端验收、完整历史和编辑／删除控制仍待实现／验证。当前不接入旧扩展 outbox，以免失败记录被丢弃。托管发布不等于已验收的双端成果闭环，也不代表其余 P4 领域增量完成。
 
 ## 扩展接入（固定点 `ccc14e9`）
 
@@ -76,3 +76,14 @@
 - 共享模块迁移后重新运行 Web 的真实本地 Supabase 完整流程，1 项通过（11.9 秒），覆盖双主题、保存、离线重试及标签页接手；当次临时账号与级联记录已清理，既有账号未动。
 - 上述扩展检查不是实际 OAuth 登录、YouTube 播放器或真实数据库验收。没有修改 Auth／RLS／迁移，没有托管发布、重载用户安装版、接管浏览器、push 或新增费用。
 - 源码提交 `b9b954a`；独立 Standards 发现 1 项 P3（共享 UI 职责表冲突），Spec 发现 1 项 P2（网关 401 被当作确定身份失效）。前者已统一文档；后者先以空体 401 重现失败，再修为只接受匹配 `unauthenticated` 的应用 401，HTML／空体／不匹配 JSON 保留 `unavailable`。两路复核均无剩余确认问题；最终完整检查与 MV3 重跑通过。
+
+## 托管发布（2026-09-10，源码 `c0bcf45`）
+
+- 在原 Supabase 项目 `msfmsvschsbqizxhjcjp` 应用已审阅的增量 SQL。源码版本 `20260909190946_private_progress_evidence.sql` 对应托管历史 `20260909202952_private_progress_evidence`；托管迁移由四条增至五条，不改写旧时间戳或重置数据。
+- 前后均为 Auth 用户 2、蓝图 2、目标 1、节点 1、学习会话 2、成果 0；用户 ID 摘要及蓝图 ID／版本摘要保持一致，原扩展客户端配置未变。成果表 RLS 开启，authenticated 可读但不能直接写表，anon 不能读取或执行成果 RPC。
+- 真实托管数据库事务中使用现有节点调用公共 RPC：原提交重试返回相同 ID、所属账号读到一条、另一账号读不到且不能写原节点、未知 OAuth 客户端和匿名读写被拒绝。整体 ROLLBACK 后成果仍为 0，上述原始计数与摘要再次一致。该检查设置数据库角色与 JWT claims，**不是实际 Auth 签发、OAuth 授权或浏览器双账号验收**。
+- 托管 Security Advisor 前后保留同样两项 WARN：原 `apply_blueprint_proposal` 的[认证角色可执行特权函数提示](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)，以及未启用[密码泄露保护](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)。Performance 只有原有 7 项 unused-index INFO，无新增 WARN／ERROR；不能将历史本地 Advisor 无告警替代这份托管结果。
+- Vercel 在原 Hobby 项目发布 `c0bcf45`，候选为 `dpl_EWVsJaQCH3EtLBzfktgKkB9R8bBc`（[部署详情](https://vercel.com/norlymangune65-4981/blueprint-m1/EWVsJaQCH3EtLBzfktgKkB9R8bBc)）。使用生产配置、先 `--skip-domain` 构建检查，再 promote；最终 [正式站点](https://blueprint-m1.vercel.app) 查询解析到该部署。远端 Next 构建及 TypeScript 通过；本批未改产品源码，前批 199 项测试等保留为源码证据，未冒称重新执行。
+- 候选与正式域名各通过六项 HTTP 检查：`/login` 200；`/progress` 307 且回跳 `/login?next=%2Fprogress`；成果 API GET／POST 均 401、受控 `unauthenticated`、`private, no-store`；`/design` 与 `/design/assets` 均 404。候选检查沿用现有 CLI 授权，未关闭部署保护、创建用户会话或发送邮件。
+- 首次部署上传后 `fetch failed`，部署列表确认没有新构建后仅重试一次成功。CLI 的 `curl` 将 `--global-config` 错传给底层 curl；复用现有凭据仅通过子进程环境传递解决，未输出密钥、重新登录或修改产品配置。按新部署筛选、从 `2026-09-09T20:35:00Z` 起查询 error 日志无结果；这只是发布自测窗口，不代表长期监控或完整供应商故障回归完成。
+- 未操作用户持有的 ego-browser 空间 8，未重载已安装扩展、公开注册、push、购买服务或增加付费配置。真实双端保存／重读和用户旅程、其余 P4 与全产品门槛继续保留。
