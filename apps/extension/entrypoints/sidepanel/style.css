@@ -28,3 +28,10 @@ h2 { margin: 7px 0 12px; font-size: 18px; }
 .node-link:hover { border-color: var(--bp-line-strong); }
 .node-context { font-size: 11px; }
 .web-link { width: 100%; margin-top: 12px; }
+.extension-evidence .evidence-layout { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.extension-evidence .evidence-compose, .extension-evidence .evidence-history { padding: 16px; }
+.extension-evidence .evidence-layout h2 { font-size: 21px; }
+.extension-evidence .evidence-layout .bp-button { white-space: normal; overflow-wrap: anywhere; }
+.extension-evidence .evidence-layout :is(input, select, textarea) { width: 100%; }
+.extension-evidence .evidence-layout textarea { min-height: 150px; }
+.extension-evidence .evidence-layout .field { margin: 18px 0; }

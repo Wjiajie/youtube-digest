@@ -4,6 +4,7 @@ import { accountPreferencesSchema, parseBlueprintSnapshot, type BlueprintSnapsho
 
 import { createExtensionAuthPort } from "../src/auth";
 import { initExtensionObservability } from "../src/observability";
+import { createEvidenceTransport } from "../src/evidence";
 import { findBoundNode, flushOutbox, type OutboxCommand } from "../src/runtime";
 
 const OUTBOX_KEY = "blueprint_session_outbox_v1";
@@ -19,6 +20,7 @@ type AuthorizedSession = NonNullable<Awaited<ReturnType<AuthPort["accessToken"]>
 export default defineBackground(() => {
   initExtensionObservability();
   const auth = createExtensionAuthPort();
+  const evidence = createEvidenceTransport(auth, apiBase);
   void cleanupLegacyStorage();
   void auth.accessToken().then((current) => current && retryOutbox(auth, current.session.userId));
   if (globalThis.chrome?.sidePanel) {
@@ -38,6 +40,10 @@ export default defineBackground(() => {
         return loadContext(auth);
       case "LOAD_PREFERENCES":
         return loadPreferences(auth);
+      case "LOAD_EVIDENCE":
+        return evidence.load(message.ownerId);
+      case "SAVE_EVIDENCE":
+        return evidence.save(message.ownerId, message.input);
       case "START_SESSION":
         return startSession(auth, message.context);
       case "RETRY_OUTBOX": {

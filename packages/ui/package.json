@@ -8,10 +8,16 @@
     "./styles.css": "./src/styles.css",
     "./theme": "./src/theme.tsx",
     "./theme-picker": "./src/theme-picker.tsx",
+    "./evidence-journal": "./src/evidence-journal.tsx",
+    "./evidence-journal.css": "./src/evidence-journal.css",
     ".": "./src/index.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@blueprint/domain": "3.0.0",
+    "zod": "4.4.3"
   },
   "peerDependencies": {
     "react": "19.2.8"

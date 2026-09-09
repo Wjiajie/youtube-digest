@@ -1,11 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   progressEvidenceSchema, recordProgressEvidenceSchema,
-  type Actor, type ApplicationResult, type BlueprintSnapshot, type ProgressEvidence,
+  type Actor, type ApplicationResult, type EvidenceWorkspace, type ProgressEvidence,
 } from "@blueprint/domain";
 import { blueprintApplication } from "./application";
 
-export type EvidenceWorkspace = { blueprint: BlueprintSnapshot; records: ApplicationResult<ProgressEvidence[]> };
+export type { EvidenceWorkspace } from "@blueprint/domain";
 
 export async function readEvidenceWorkspace(client: SupabaseClient, actor: Actor): Promise<ApplicationResult<EvidenceWorkspace>> {
   const [blueprint, records] = await Promise.all([

@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { NODE_TYPES } from "./node-types";
+import type { BlueprintSnapshot } from "./index";
+import type { ApplicationResult } from "./application";
 
 const artifactUrlSchema = z.string().max(2048).url().refine((value) => {
   if (!URL.canParse(value)) return false;
@@ -34,3 +36,4 @@ export const progressEvidenceSchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
 });
 export type ProgressEvidence = z.infer<typeof progressEvidenceSchema>;
+export type EvidenceWorkspace = { blueprint: BlueprintSnapshot; records: ApplicationResult<ProgressEvidence[]> };

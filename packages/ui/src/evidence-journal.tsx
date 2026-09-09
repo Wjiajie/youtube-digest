@@ -2,9 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { recordProgressEvidenceSchema, type ApplicationResult, type ProgressEvidence } from "@blueprint/domain";
-import { Button, Panel, Status } from "@blueprint/ui";
-import type { EvidenceWorkspace } from "@/lib/progress-evidence";
+import { recordProgressEvidenceSchema, type ApplicationResult, type EvidenceWorkspace, type ProgressEvidence } from "@blueprint/domain";
+import { Button, Panel, Status } from "./index";
 
 type Props = {
   accountId: string;
@@ -157,7 +156,7 @@ function Journal({ accountId, initial, saveAction, reloadAction }: Props) {
     }
   }
 
-  if (identityLost) return <Panel className="evidence-compose"><Status tone="warning">账号或登录状态已变化。原账号草稿仍保留在本机，请重新登录原账号后继续。</Status><a className="bp-button" href="/progress">重新验证账号</a></Panel>;
+  if (identityLost) return <Panel className="evidence-compose"><Status tone="warning">账号或登录状态已变化。原账号草稿仍保留在本机，请重新登录原账号后继续。</Status><Button onClick={() => window.location.reload()}>重新验证账号</Button></Panel>;
 
   return <div className="evidence-layout">
     <Panel className="evidence-compose" aria-labelledby="evidence-compose-title">

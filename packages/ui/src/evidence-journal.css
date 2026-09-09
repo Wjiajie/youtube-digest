@@ -12,7 +12,7 @@
 .evidence-compose, .evidence-history { padding: clamp(20px, 3vw, 32px); min-width: 0; }
 .evidence-compose h2, .evidence-history h2 { font-size: 25px; margin: 14px 0; }
 .evidence-layout p { line-height: 1.75; overflow-wrap: anywhere; }
-.evidence-layout .field { margin: 24px 0; }
+.evidence-layout .field { display: grid; gap: 7px; margin: 24px 0; }
 .evidence-layout .field > span { font-size: 14px; color: var(--bp-text); }
 .evidence-layout .evidence-text-limit { font: 12px/1.6 var(--bp-font-mono); text-align: right; margin: -14px 0 0; }
 .evidence-layout textarea { line-height: 1.8; resize: vertical; min-height: 190px; }

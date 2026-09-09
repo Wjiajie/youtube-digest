@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { ApplicationResult, BlueprintSnapshot, ProgressEvidence } from "@blueprint/domain";
 import { ThemeSurface } from "@blueprint/ui/theme";
-import { EvidenceJournal } from "./evidence-journal";
+import { EvidenceJournal } from "@blueprint/ui/evidence-journal";
 
 const accountId = "a5000000-0000-4000-8000-000000000001";
 const nodeId = "a5000000-0000-4000-8000-000000000030";

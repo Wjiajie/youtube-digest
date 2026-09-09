@@ -6,6 +6,7 @@ import { Button, Panel, Status } from "@blueprint/ui";
 import { resolveTheme, ThemeSurface } from "@blueprint/ui/theme";
 
 import type { BoundNodeContext } from "../../src/runtime";
+import { EvidencePanel } from "./EvidencePanel";
 
 type BoundNodeListItem = {
   goalTitle: string;
@@ -256,6 +257,7 @@ export function App() {
               <p className="muted">从下面选择一个已绑定节点，或回到 Web 修改蓝图。</p>
             </Panel>
           )}
+          {state.userId ? <EvidencePanel ownerId={state.userId} /> : null}
           <section className="node-list" aria-label="已绑定的 YouTube 节点">
             <div className="section-heading"><h2>可学习节点</h2><Button disabled={busy} onClick={() => void load()}>刷新</Button></div>
             {state.nodes?.length ? state.nodes.map((item) => (

@@ -60,6 +60,22 @@ test("a revoked connection does not keep a previous learning success message", a
   expect(host.textContent).not.toContain("学习会话已写入你的蓝图");
 });
 
+test("opens an account-bound evidence journal without starting a learning session", async () => {
+  const original = transport.sendMessage.getMockImplementation()!;
+  transport.sendMessage.mockImplementation(async (message) => message.type === "LOAD_EVIDENCE"
+    ? { ok: true, value: { blueprint: { schemaVersion: 1, id: "018f6f68-9b4d-7c93-a134-c8571b8f7801", version: 1, title: "学习路径", goals: [] }, records: { ok: true, value: [] } } }
+    : original(message));
+  await act(async () => root.render(<App />));
+  transport.sendMessage.mockClear();
+  await clickButton("记录学习收获");
+  expect(host.textContent).toContain("留下一次真实的进步");
+  expect(transport.sendMessage.mock.calls.map(([message]) => message)).toEqual([{ type: "LOAD_EVIDENCE", ownerId: "user-a" }]);
+  await clickButton("收起成果记录");
+  expect(host.querySelector<HTMLElement>('[aria-label="成果记录"]')?.hidden).toBe(true);
+  await clickButton("记录学习收获");
+  expect(transport.sendMessage.mock.calls).toHaveLength(1);
+});
+
 test("the real App follows account theme changes on focus without losing learning state or focused nodes", async () => {
   await act(async () => root.render(<App />));
   await clickButton("开始学习");

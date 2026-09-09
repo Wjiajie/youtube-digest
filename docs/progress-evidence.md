@@ -1,6 +1,6 @@
-# 私人成果记录：P4 数据与 Web 成长档案
+# 私人成果记录：P4 数据与双端成长档案
 
-更新：2026-09-10。数据切片源码提交 `4354d4f`；本批增加 Web `/progress` 成长档案。**数据与 Web 界面已通过本地验证，尚未部署到托管环境；扩展成果界面尚未实现。** 本文是实现证据，不替代[执行路线](execution-roadmap.md)的阶段状态。
+更新：2026-09-10。数据切片源码提交 `4354d4f`，Web 界面 `cfe4e59`／恢复修复 `ccc14e9`；后续批次接入扩展。**数据与 Web 界面已通过本地验证，扩展已通过独立 MV3 浏览器及外部 HTTP 夹具验证；尚未部署成果切片或完成真实托管双端验收。** 本文是实现证据，不替代[执行路线](execution-roadmap.md)的阶段状态。
 
 ## 已实现的行为
 
@@ -34,7 +34,8 @@
 
 - [共享领域](../packages/domain/src/progress-evidence.ts)：输入与历史记录的数据边界。
 - [应用服务](../apps/web/src/lib/progress-evidence.ts)、[Web Action](../apps/web/src/app/progress-evidence-actions.ts)、[HTTP 入口](../apps/web/src/app/api/v1/progress-evidence/route.ts)。
-- [成长档案页面](../apps/web/src/app/progress/page.tsx)、[表单与历史](../apps/web/src/app/progress/evidence-journal.tsx)：公开的账号／初始工作区／保存／重读边界。
+- [成长档案页面](../apps/web/src/app/progress/page.tsx)、[共享表单与历史](../packages/ui/src/evidence-journal.tsx)：公开的账号／初始工作区／保存／重读边界；Web 和扩展使用同一份恢复实现。
+- [扩展成果面板](../apps/extension/entrypoints/sidepanel/EvidencePanel.tsx)、[扩展传输](../apps/extension/src/evidence.ts)：按需读取、账号绑定与受控错误分类，不将私人正文放入普通事件。
 - [增量迁移](../supabase/migrations/20260909190946_private_progress_evidence.sql)。先在本地通过 DDL 迭代，再运行 Advisor 和 CLI `db pull --local`；对生成文件恢复明确 REVOKE／GRANT，并按依赖排序，避免保留 `check_function_bodies=off`。未重置数据库，既有账号升级契约通过。
 
 技术边界依据 [Supabase 数据库函数](https://supabase.com/docs/guides/database/functions)和 [RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)。已扫描当前变更摘要；本批不升级数据库、Auth 或 SDK，不修改邮件、Realtime 或日志服务配置。
@@ -62,4 +63,15 @@
 
 ## 后续门槛
 
-托管迁移和发布、真实账号双端验收、扩展成果界面、完整历史和编辑／删除控制仍待实现／验证。当前不接入旧扩展 outbox，以免失败记录被丢弃。Web 本地切片不是已上线的双端成果闭环，也不代表其余 P4 领域增量完成。
+托管迁移和发布、真实账号双端验收、完整历史和编辑／删除控制仍待实现／验证。当前不接入旧扩展 outbox，以免失败记录被丢弃。本地切片不是已上线的双端成果闭环，也不代表其余 P4 领域增量完成。
+
+## 扩展接入（固定点 `ccc14e9`）
+
+- “记录学习收获”按需打开共享表单与近期历史，不要求先开始学习会话；四类正式节点均可选。用户先核对关联节点，视频改变不会静默移动原稿。收起面板不卸载编辑状态，重新打开不重复初始读取。
+- Web Action 与扩展消息是两个真实适配器，共享领域中的成果工作区和 UI 包中的恢复逻辑。样式共享语义 Token，扩展固定单栏、紧凑间距，两主题不改变记录含义。
+- `LOAD_EVIDENCE`／`SAVE_EVIDENCE` 必须携带页面账号，后台使用当前扩展 Token 并在响应解析后再次检查会话。请求不携带 Web Cookie，不缓存；只将匹配的应用错误视为确定拒绝，网关错误、超时、错误回执仍视为未知结果。旧账号的延迟响应不返回私人记录。
+- 恢复缓存仅保存在扩展自身 origin 的 localStorage，不在 YouTube 页面、后台 service worker 或旧 outbox 中。Web 与扩展的未提交草稿互不共享；已保存记录由云端同步。扩展 Web Storage 跨同源扩展页共享，且与 service worker 的可用 API 不同，见 [Chrome 存储说明](https://developer.chrome.com/docs/extensions/develop/concepts/storage-and-cookies)。不增加 unlimitedStorage 等权限，缓存不承诺永久保留或加密。
+- 本批新增 4 项真实后台消息／Auth／HTTP 边界测试和 1 项真实 App 开合测试；保留共享模块 16 项恢复测试。完整 `check:m1` 通过：198 项测试、类型检查、既有账号升级、向导、Web 构建及扩展安全检查，扩展产物 560.50 kB；常规生产页面 E2E 20 项通过（8.8 秒）。
+- [MV3 浏览器验证](../apps/extension/e2e/evidence.spec.ts)使用真实构建产物、真实 Chrome 消息／存储／Web Locks；外部 HTTP 为明确夹具且禁止真实网络回退。回执丢失后重载原提交仅形成一条记录，双主题 320px 无横向溢出、原稿保留，切账号隐藏旧数据并能恢复原账号草稿；无未捕获页面异常，截图已检查。1 项通过（6.3 秒），临时浏览器 profile 已清理。执行：`bash scripts/with-m1-runtime.sh npx --no-install playwright test --config playwright.extension.config.ts`，此前需使用目标配置构建扩展。
+- 共享模块迁移后重新运行 Web 的真实本地 Supabase 完整流程，1 项通过（11.9 秒），覆盖双主题、保存、离线重试及标签页接手；当次临时账号与级联记录已清理，既有账号未动。
+- 上述扩展检查不是实际 OAuth 登录、YouTube 播放器或真实数据库验收。没有修改 Auth／RLS／迁移，没有托管发布、重载用户安装版、接管浏览器、push 或新增费用。

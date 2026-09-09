@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 const platform = vi.hoisted(() => ({
   stored: {} as Record<string, unknown>,
-  listener: null as null | ((message: { type: string }) => Promise<any>),
+  listener: null as null | ((message: { type: string; ownerId?: string; input?: unknown }) => Promise<any>),
   beforeSet: null as null | ((values: Record<string, unknown>) => Promise<void>),
 }));
 vi.mock("wxt/browser", () => ({ browser: {
@@ -57,6 +57,68 @@ test("the real extension runtime reads the authorized account theme separately f
   expect(result).toMatchObject({ connected: true, userId: ownerA, snapshot, stale: false, preferences: eastern, preferencesStatus: "current" });
   const request = http.mock.calls.find(([url]) => String(url).endsWith("/account-preferences"));
   expect(request?.[1]).toMatchObject({ headers: { Authorization: `Bearer token-${ownerA}` } });
+});
+
+test("evidence workspace and writes are bound to the panel account through the real runtime", async () => {
+  const input = { nodeId: ownerB, expectedVersion: 1, clientMutationId: "018f6f68-9b4d-7c93-a134-c8571b8f7803", text: "第一次实践", artifactUrl: null };
+  const record = { id: ownerB, clientMutationId: input.clientMutationId,
+    context: { blueprintId: ownerA, blueprintVersion: 1, goalId: ownerA, goalTitle: "目标", stageId: ownerA, stageTitle: "阶段", nodeId: ownerB, nodeTitle: "实践", nodeType: "practice" },
+    text: input.text, artifactUrl: null, createdAt: "2026-09-10T00:00:00Z" };
+  http.mockImplementation(async (url, options) => Response.json(String(url).endsWith("/progress-evidence") ? options?.method === "POST" ? record : [record] : snapshot));
+  expect(await platform.listener!({ type: "LOAD_EVIDENCE", ownerId: ownerA })).toMatchObject({ ok: true, value: { blueprint: snapshot, records: { ok: true, value: [record] } } });
+  expect(await platform.listener!({ type: "SAVE_EVIDENCE", ownerId: ownerA, input })).toEqual({ ok: true, value: record });
+  const post = http.mock.calls.find(([, options]) => options?.method === "POST");
+  expect(post?.[1]).toMatchObject({ headers: { Authorization: `Bearer token-${ownerA}`, "content-type": "application/json" }, credentials: "omit", cache: "no-store" });
+  expect(JSON.parse(String(post?.[1]?.body))).toEqual(input);
+  signIn(ownerB);
+  http.mockClear();
+  expect(await platform.listener!({ type: "SAVE_EVIDENCE", ownerId: ownerA, input })).toEqual({ ok: false, code: "forbidden" });
+  expect(await platform.listener!({ type: "LOAD_EVIDENCE", ownerId: ownerA })).toEqual({ ok: false, code: "forbidden" });
+  expect(http).not.toHaveBeenCalled();
+});
+
+test("evidence uncertainty and definite rejection remain distinct without using the learning outbox", async () => {
+  const input = { nodeId: ownerB, expectedVersion: 1, clientMutationId: "018f6f68-9b4d-7c93-a134-c8571b8f7803", text: "保留原提交", artifactUrl: null };
+  const send = () => platform.listener!({ type: "SAVE_EVIDENCE", ownerId: ownerA, input });
+  http.mockRejectedValue(new TypeError("response lost"));
+  expect(await send()).toEqual({ ok: false, code: "unavailable" });
+  http.mockResolvedValue(Response.json({ code: "invalid" }, { status: 503 }));
+  expect(await send()).toEqual({ ok: false, code: "unavailable" });
+  http.mockImplementation(async () => new Response("gateway HTML", { status: 409 }));
+  expect(await send()).toEqual({ ok: false, code: "unavailable" });
+  http.mockResolvedValue(Response.json({ code: "version_conflict" }, { status: 409 }));
+  expect(await send()).toEqual({ ok: false, code: "version_conflict" });
+  expect(platform.stored.blueprint_session_outbox_v1 ?? []).toEqual([]);
+  http.mockClear();
+  expect(await platform.listener!({ type: "SAVE_EVIDENCE", ownerId: ownerA, input: { ...input, artifactUrl: "javascript:alert(1)" } })).toEqual({ ok: false, code: "invalid" });
+  expect(http).not.toHaveBeenCalled();
+});
+
+test("late evidence receipts and reads cannot escape after the owning session changes", async () => {
+  const input = { nodeId: ownerB, expectedVersion: 1, clientMutationId: "018f6f68-9b4d-7c93-a134-c8571b8f7803", text: "私人内容" };
+  let finish!: (response: Response) => void;
+  http.mockImplementation(async () => new Promise((resolve) => { finish = resolve; }));
+  const saving = platform.listener!({ type: "SAVE_EVIDENCE", ownerId: ownerA, input });
+  await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+  signIn(ownerB);
+  finish(Response.json({ text: "不能显示给新账号" }));
+  expect(await saving).toEqual({ ok: false, code: "forbidden" });
+  signIn();
+  http.mockImplementation(async (url) => String(url).endsWith("/blueprint") ? Response.json(snapshot) : new Promise((resolve) => { finish = resolve; }));
+  finish = undefined!;
+  const reading = platform.listener!({ type: "LOAD_EVIDENCE", ownerId: ownerA });
+  await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+  signIn(ownerB);
+  finish(Response.json([]));
+  expect(await reading).toEqual({ ok: false, code: "forbidden" });
+});
+
+test("unavailable evidence history is not an empty feed and unauthorized reads invalidate only their token", async () => {
+  http.mockImplementation(async (url) => String(url).endsWith("/blueprint") ? Response.json(snapshot) : new Response(null, { status: 503 }));
+  expect(await platform.listener!({ type: "LOAD_EVIDENCE", ownerId: ownerA })).toEqual({ ok: true, value: { blueprint: snapshot, records: { ok: false, code: "unavailable" } } });
+  http.mockResolvedValue(new Response(null, { status: 401 }));
+  expect((await platform.listener!({ type: "LOAD_EVIDENCE", ownerId: ownerA })).ok).toBe(false);
+  expect(await platform.listener!({ type: "AUTH_STATUS" })).toEqual({ connected: false });
 });
 
 test("offline preferences use only the same owner's validated cache and do not mark the Blueprint stale", async () => {

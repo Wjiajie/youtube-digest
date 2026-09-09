@@ -6,8 +6,8 @@ import { readEvidenceWorkspace } from "@/lib/progress-evidence";
 import { AccountThemeShell } from "../account-theme-shell";
 import { AuthUnavailable } from "../auth-unavailable";
 import { readEvidenceWorkspaceAction, recordProgressEvidenceAction } from "../progress-evidence-actions";
-import { EvidenceJournal } from "./evidence-journal";
-import "./journal.css";
+import { EvidenceJournal } from "@blueprint/ui/evidence-journal";
+import "@blueprint/ui/evidence-journal.css";
 
 export const metadata = { title: "成长档案 · Blueprint" };
 
