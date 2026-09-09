@@ -77,7 +77,7 @@ Blueprint（每个用户一份）
 
 一次性登录回调使用 Auth 交换响应中的用户和 SDK 已保存的 Cookie 会话；不再追加一个可能失败的用户查询来否定成功交换。受保护目标页面仍独立验证身份，并在故障时提供不含 code 的恢复入口。显式 `sb_flow_id` 交给 SDK 选择对应 PKCE 校验信息；交换不确定时提示稍后申请新链接，不自动重发或重放旧 code。回调禁用缓存及 Referer，内部跳转过滤反斜杠和控制字符，防止浏览器归一化为外站。依据 [Supabase PKCE 交换说明](https://supabase.com/docs/reference/javascript/auth-exchangecodeforsession)及仓库锁定 SDK 验证。
 
-主动退出保留原有 `global` 范围，并明确标为“退出所有设备”。SDK 返回错误或调用异常时进入独立恢复页；客户端响应丢失时只提供只读状态检查，不直接重放退出。恢复页独立验证身份：仍已登录才提供显式重试，没有有效登录则提供重新登录后返回恢复页的路径，提供方不可用则只允许重新检查。浏览器 Cookie 被 SDK 清除不等于云端撤销成功；退出会话也不等于撤销扩展的长期 OAuth 授权，已经签发的 JWT 仍存在过期窗口，见 [Supabase signOut](https://supabase.com/docs/reference/javascript/auth-signout)。本地已覆盖服务端失败、响应丢失、重复提交与页面恢复；上述认证增量尚未部署，其余真实托管验收仍待完成。
+主动退出保留原有 `global` 范围，并明确标为“退出所有设备”。SDK 返回错误或调用异常时进入独立恢复页；客户端响应丢失时只提供只读状态检查，不直接重放退出。恢复页独立验证身份：仍已登录才提供显式重试，没有有效登录则提供重新登录后返回恢复页的路径，提供方不可用则只允许重新检查。浏览器 Cookie 被 SDK 清除不等于云端撤销成功；退出会话也不等于撤销扩展的长期 OAuth 授权，已经签发的 JWT 仍存在过期窗口，见 [Supabase signOut](https://supabase.com/docs/reference/javascript/auth-signout)。本地已覆盖服务端失败、响应丢失、重复提交与页面恢复；认证增量已于 2026-09-10 部署并完成候选／正式域名冒烟，其余真实托管验收仍待完成。
 
 ### 扩展
 
@@ -100,6 +100,8 @@ Web 直接调用应用层。扩展只访问 `/api/v1`：
 - 写入受限的授权和同步结果事件。
 
 用户打开 YouTube watch 页面时，扩展按规范视频 ID 匹配 Resource Binding。只有点击“开始学习”才创建会话，不根据打开页面或观看时长推断学习。
+
+个人应用结果的 HTTP 响应统一设置 `Cache-Control: private, no-store`，包含成功、身份拒绝和临时故障，避免浏览器或共享缓存保留个人数据及旧认证结果。扩展自行管理的账号隔离缓存和 outbox 不依赖 HTTP 缓存。
 
 网络失败或请求超过 15 秒时，命令以 `ownerId + clientMutationId` 写入扩展 outbox。重新登录或手动重试只处理当前用户命令；服务端唯一约束保证重复投递不会生成两条会话。
 
