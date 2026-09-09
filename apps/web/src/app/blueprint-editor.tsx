@@ -147,7 +147,7 @@ export function BlueprintEditor({ initial, sessions, createAction = createPropos
       next.goals.splice(goalIndex, 1);
       normalizePositions(next.goals);
     });
-    removeResourceDrafts(removedNodeIds);
+    removeNodeInputDrafts(removedNodeIds);
   }
 
   function removeStage(goalIndex: number, stageIndex: number) {
@@ -163,7 +163,7 @@ export function BlueprintEditor({ initial, sessions, createAction = createPropos
         }
       }
     });
-    removeResourceDrafts(removedNodeIds);
+    removeNodeInputDrafts(removedNodeIds);
   }
 
   function addNode(goalIndex: number, stageIndex: number) {
@@ -194,10 +194,10 @@ export function BlueprintEditor({ initial, sessions, createAction = createPropos
       }
       normalizePositions(goal.stages[stageIndex]!.nodes);
     });
-    removeResourceDrafts([nodeId]);
+    removeNodeInputDrafts([nodeId]);
   }
 
-  function removeResourceDrafts(nodeIds: string[]) {
+  function removeNodeInputDrafts(nodeIds: string[]) {
     setMinutesInputs(current => Object.fromEntries(Object.entries(current).filter(([id]) => !nodeIds.includes(id))));
     setResourceUrls((current) => {
       const next = { ...current };
