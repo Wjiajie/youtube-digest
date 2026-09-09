@@ -42,7 +42,7 @@ function Model({ asset, animate, hideWeapon }: { asset: GLTF; animate: boolean; 
 
 export default function AssetPreview() {
   const [asset, setAsset] = useState<GLTF | null>(null);
-  const [message, setMessage] = useState("选择已核验来源的内嵌 glTF 文件，开始真实渲染检查。");
+  const [message, setMessage] = useState("选择已核验来源的内嵌 glTF 或 GLB 文件，开始真实渲染检查。");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [animate, setAnimate] = useState(false);
@@ -67,14 +67,14 @@ export default function AssetPreview() {
     let loaded: GLTF | undefined;
     try {
       if (file.size > 10 * 1024 * 1024) throw new Error("试装文件不能超过 10 MB。");
-      const text = await file.text();
-      validatePreviewAsset(text);
+      const data = file.name.toLowerCase().endsWith(".glb") ? await file.arrayBuffer() : await file.text();
+      validatePreviewAsset(data);
       const manager = new LoadingManager();
       manager.setURLModifier((url) => {
         if (!/^(data:|blob:)/.test(url)) throw new Error("试装禁止请求外部资源。");
         return url;
       });
-      loaded = await new GLTFLoader(manager).parseAsync(text, "");
+      loaded = await new GLTFLoader(manager).parseAsync(data, "");
       const height = new Box3().setFromObject(loaded.scene).getSize(new Vector3()).y;
       if (!Number.isFinite(height) || height <= 0) throw new Error("文件没有可显示的有效几何体。");
       if (current !== request.current) { disposeAsset(loaded); return; }
@@ -91,10 +91,10 @@ export default function AssetPreview() {
   const playing = animate && motionAllowed && visible;
   return <ThemeSurface theme="cyberpunk"><main className="shell">
     <a href="/design" style={{ color: "var(--bp-accent)" }}>← 返回双主题控件</a>
-    <h1 style={{ fontSize: 32, margin: "24px 0 12px" }}>人物资产 · 实时试装</h1>
+    <h1 style={{ fontSize: 32, margin: "24px 0 12px" }}>人物与环境资产 · 实时试装</h1>
     <p className="subtle">内部制作工具，不是正式蓝图。文件只在本页解析，不上传，不写入账号；不支持外链资源或压缩解码插件。</p>
     <Panel style={{ padding: 24, margin: "24px 0" }}>
-      <label className="field"><span>选择内嵌 glTF 2.0（最多 10 MB）</span><input type="file" accept=".gltf" disabled={loading} onChange={(event) => {
+      <label className="field"><span>选择内嵌 glTF 2.0 / GLB 2.0（最多 10 MB）</span><input type="file" accept=".gltf,.glb" disabled={loading} onChange={(event) => {
         const file = event.currentTarget.files?.[0];
         if (file) void load(file);
         event.currentTarget.value = "";
@@ -107,7 +107,7 @@ export default function AssetPreview() {
       <Status>{loading ? "正在本地解析文件……" : message}</Status>
       {error ? <Status tone="danger">{error} 当前已加载场景不变。</Status> : null}
     </Panel>
-    <section aria-label="人物实时渲染，拖动旋转，滚轮缩放" style={{ height: "min(68vh, 720px)", minHeight: 360, border: "1px solid var(--bp-line)", borderRadius: 16, overflow: "hidden", background: "#08131e" }}>
+    <section aria-label="资产实时渲染，拖动旋转，滚轮缩放" style={{ height: "min(68vh, 720px)", minHeight: 360, border: "1px solid var(--bp-line)", borderRadius: 16, overflow: "hidden", background: "#08131e" }}>
       {asset ? <SceneBoundary key={asset.scene.uuid}><Canvas shadows={{ type: PCFShadowMap }} dpr={[1, 1.5]} frameloop={playing ? "always" : "demand"} camera={{ position: [3, 1.8, 4.5], fov: 36 }} fallback={<Status tone="warning">当前设备不支持 WebGL，可继续使用文字检查。</Status>}>
         <color attach="background" args={["#08131e"]} />
         <ambientLight intensity={.8} />
@@ -116,7 +116,7 @@ export default function AssetPreview() {
         <Model asset={asset} animate={playing} hideWeapon={hideWeapon} />
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -.02, 0]} receiveShadow><circleGeometry args={[2.2, 64]} /><meshStandardMaterial color="#203747" roughness={.7} /></mesh>
         <OrbitControls target={[0, 1, 0]} enablePan={false} minDistance={2} maxDistance={9} maxPolarAngle={Math.PI / 2} />
-      </Canvas></SceneBoundary> : <p className="subtle" style={{ padding: 32 }}>尚未载入真实人物，不以几何占位模型代替验收。</p>}
+      </Canvas></SceneBoundary> : <p className="subtle" style={{ padding: 32 }}>尚未载入真实资产，不以几何占位模型代替验收。</p>}
     </section>
   </main></ThemeSurface>;
 }

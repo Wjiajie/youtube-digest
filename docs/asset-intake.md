@@ -1,6 +1,6 @@
 # 真实资产接收台账
 
-核验日期：2026-09-09。阶段状态以 [执行路线](execution-roadmap.md) 为准。
+核验日期：2026-09-10。阶段状态以 [执行路线](execution-roadmap.md) 为准。
 本台账证明已获取文件及许可证据，不证明美术、骨架运行或商用品质已验收。
 
 ## Quaternius / Cyberpunk Game Kit / Character
@@ -30,3 +30,22 @@ glTF 结构检查：1,500,456 字节，4 个 mesh、1 个 skin、22 个动画，
 首次画面暴露静止场景未及时重绘武器隐藏和阴影条纹，已补按需重绘及阴影 normalBias，随后画面中武器消失、条纹消除。人物整体是黄外套的风格化机器人，轮廓和材质可用来验证动画／光照，但**当前不认可它作为正式身份主角**：机器人比例、面部表达与“这是我”的代入感仍有明显差距。不能将这个试装底座称为精修赛博目标世界。
 
 尚未取得平台、东方人物与自然场景，尚未压缩导出、完成双主题构图或正式性能预算。下一步继续人物对比与场景组合；东方主题不能复用此机器人换色代替。工具与验证说明见 [本地 3D 试装](scene-intake-preview.md)。
+
+## 2026-09-10 Kenney / Nature Kit 环境候选
+
+从 [官方 Nature Kit 页面](https://kenney.nl/assets/nature-kit)的「Continue without donating」取得 [原始 ZIP](https://kenney.nl/media/pages/assets/nature-kit/37ac38a37b-1677698939/kenney_nature-kit.zip)，没有捐款、购买合集或注册新服务。原包与选出文件置于外置盘 Git 忽略目录 `.tools/asset-intake/kenney-nature/`，不放入 Web public 或扩展。
+
+页面写 1.0／2020；实际包内 `License.txt` 写 **Nature Kit (2.1)**、创建日期 2020-04-29，并明确 CC0 1.0、允许个人／教育／商业使用，署名可选。保留这一版本口径差异，以具体 ZIP 校验值固定此次取得的内容，不猜测发布日期。项目仍记录作者 Kenney、来源和修改说明，素材许可不被项目 MIT 取代。
+
+| 文件（原包 GLTF format） | 字节 | 三角形 | SHA-256 |
+| --- | ---: | ---: | --- |
+| rock_largeA.glb | 7,552 | 80 | `6dd15390fd96501dcd1454765a17ba61dbbd8d47705dfe5149c8dd92b353ce25` |
+| rock_tallA.glb | 12,072 | 136 | `88250f236a3b75f8b55c1d8afb6af020f8a91b1e81f9fb51f7ef513420d45a2d` |
+| tree_pineTallA.glb | 7,200 | 78 | `e0a56eb196d8a64ba86c7304d607136e17e6f9ad748dffcf86bd53b18b91b196` |
+| tree_plateau.glb | 16,304 | 215 | `7f19e347ff28703dd9e5fcce89b920156e291fbdb19331a57cb31a95c73e1322` |
+
+原 ZIP SHA-256：`fa7974a0d342bfe63c38664ba9f8ec1a4aab8ea25f099bdc56870e33588c4d9d`。包内许可 SHA-256：`cb96b75e3560ac78d7a53ce6f083f4cdb5c53faea6141b62d63458dcfe1e4b9d`。下载原文件未修改；只选择性解压四个模型和许可。
+
+四个文件均通过本地 glTF／GLB 校验与真实 Three.js GLTFLoader 解析，运行时分别为 2／3／2／2 个 Mesh（一个文件级 mesh 的多材质 primitive 会拆分），包围盒有有限正高度；没有动画、外部图片或必需解码扩展。三角形数由原文件 primitive/accessor 统计，约 43 KB 合计是未压缩文件大小，不是正式世界网络预算。
+
+这批是路线中 **B2 简洁环境备选**，不是已选定的东方成品；尚未进行 WebGL 画面评审、组合山势／雾层／光照或最终性能测试。原包包含 DAE／FBX／GLTF 等导出格式，但未发现作者 `.blend` 工程，不能宣称拿到了原始制作工程。低多边形外形能否与正式人物、山水材质协调仍需实际试装；不会用“松树＋岩石”直接冒充完整东方美术。B1 Quaternius 自然包与东方主角仍待取得／比较。

@@ -4,7 +4,7 @@
 
 ## 使用与隔离
 
-运行本地 Web 开发服务，进入 `/design` →「打开真实人物试装」，或直接访问 `/design/assets`。选择已核验来源、资源全部内嵌的 glTF 2.0 JSON 文件，最大 10 MB。实际人物文件见 [资产台账](asset-intake.md)，放在 Git 忽略的外置盘目录中。
+运行本地 Web 开发服务，进入 `/design` →「打开真实人物试装」，或直接访问 `/design/assets`。选择已核验来源、资源全部内嵌的 glTF 2.0 JSON 或 GLB 2.0 文件，最大 10 MB。实际人物／环境文件见 [资产台账](asset-intake.md)，放在 Git 忽略的外置盘目录中。
 
 文件经浏览器 File API 本地读取，验证后通过 [Three.js GLTFLoader.parseAsync](https://threejs.org/docs/pages/GLTFLoader.html) 解析；拒绝外部 URI，加载器还限制实际资源请求。没有上传端点、数据库写入、模型服务调用或自动安装解码器。仅用于可信来源候选，不将文件大小上限视为任意恶意 3D 文件的完整资源沙箱。
 
@@ -31,3 +31,9 @@ ego-browser 实际加载 Character.gltf：画布内人物可见、武器可隐�
 Standards 审阅发现初版清理遗漏 glTF 允许的 Line／Points 图元，已先通过真实 Three 对象的 dispose 事件复现失败，再改为覆盖所有支持的图元，并对共享几何、材质、纹理、骨架和位图按实例去重；复核确认原问题解决。Spec 审阅无已确认的本批次需求缺陷；指出动画时序、迟到任务、隐藏页停止与真实 WebGL 降级仍缺自动化旅程证据，继续作为后续验证项，不与静态代码审查混淆。
 
 修复后单元／组件测试为 12 个文件、33 项通过，TypeScript 通过；此前两端完整构建／安全检查通过，扩展仍为 466.46 kB，生产隔离及登录 E2E 共 14 项通过。未把这些计数当作正式三维性能或双主题美术验收。
+
+### 2026-09-10 GLB 环境输入
+
+为实际取得的 Kenney 二进制模型增加 `.glb` File API 输入，不转换或上传文件。校验 [GLB 2.0 容器](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#glb-file-format-specification)的 magic、版本、总长度、四字节对齐及块长度；本工具只接受一个 JSON 和可选一个 BIN 块，其他块类型暂不支持。JSON 与原 JSON glTF 采用同一外部 URI 拒绝策略，加载器的 URL 限制不变。先复现第二 JSON 块可以覆盖已检查文档，再拒绝重复／尾随块，避免检查与实际解析不一致。
+
+新增 10 项测试，包含真实 GLTFLoader 解析二进制三角形及损坏容器／外部资源拒绝；149 项测试与完整 `check:m1` 通过。另用真实 Three.js 加载四个取得的 GLB，检查 Mesh 和包围盒并释放资源。**这是容器、几何与加载器证据，不是 GPU 渲染或 UI 上传旅程证据**。浏览器空间 8 已交给用户，本批没有夺回控制；实际文件选择、WebGL 画面和场景构图留待后续试装。
