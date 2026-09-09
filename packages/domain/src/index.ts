@@ -321,6 +321,7 @@ function flattenBlueprint(snapshot: BlueprintSnapshot): FlatEntity[] {
 }
 
 export * from "./application";
+export * from "./account-preferences";
 
 function byPosition<T extends { position: number }>(left: T, right: T): number {
   return left.position - right.position;

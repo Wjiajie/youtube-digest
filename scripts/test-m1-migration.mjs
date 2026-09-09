@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 
 import { PGlite } from "@electric-sql/pglite";
 
@@ -54,6 +54,14 @@ try {
     ids.outsider,
     "outsider@example.com",
   ]);
+  // Upgrade already-created accounts with every subsequent migration. The test
+  // deliberately does not recreate their data after adding new schema fields.
+  const migrationDirectory = new URL("../supabase/migrations/", import.meta.url);
+  for (const file of (await readdir(migrationDirectory)).filter((name) => name.endsWith(".sql")).sort()) {
+    if (file === "202608260001_m1_cloud_slice.sql") continue;
+    const migration = await readFile(new URL(file, migrationDirectory), "utf8");
+    await db.exec(migration.replaceAll("extensions.citext", "text"));
+  }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
   );
@@ -173,7 +181,20 @@ try {
     "a user cannot write a session against another user's node",
   );
 
-  console.log("M1 migration contract passed: apply, idempotency, ownership, and RLS boundaries.");
+  await db.exec("reset role");
+  await becomeUser(ids.owner);
+  const preferences = await db.query("select theme_id, theme_version, preferences_revision from public.profiles");
+  assert.equal(preferences.rows[0]?.theme_id, "cyberpunk", "existing accounts receive the default theme");
+  assert.equal(Number(preferences.rows[0]?.preferences_revision), 0);
+  const saved = await db.query("update public.profiles set theme_id = 'eastern' where preferences_revision = 0 returning theme_id, preferences_revision");
+  assert.equal(saved.rows[0]?.theme_id, "eastern", "the generated migration preserves the column UPDATE grant");
+  assert.equal(Number(saved.rows[0]?.preferences_revision), 1);
+  const stale = await db.query("update public.profiles set theme_id = 'cyberpunk' where preferences_revision = 0 returning id");
+  assert.equal(stale.rows.length, 0, "a stale preference write cannot replace a newer choice");
+  const unchangedBlueprint = await db.query("select version from public.blueprints");
+  assert.equal(Number(unchangedBlueprint.rows[0]?.version), 1, "preferences do not revise the Blueprint");
+
+  console.log("Migration contract passed: proposals, idempotency, ownership, RLS, and existing-account preferences upgrade.");
 } finally {
   await db.close();
 }
