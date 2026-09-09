@@ -12,7 +12,7 @@ export function LogoutForm({ action, label = "退出所有设备" }: { action: (
   return (
     <form action={action} onSubmit={(event) => {
       event.preventDefault();
-      if (inFlight.current) return;
+      if (inFlight.current || failed) return;
       inFlight.current = true;
       setFailed(false);
       startTransition(async () => {
@@ -28,8 +28,10 @@ export function LogoutForm({ action, label = "退出所有设备" }: { action: (
         }
       });
     }}>
-      <button className="bp-button" disabled={pending}>{pending ? "正在退出…" : label}</button>
-      {failed ? <Status tone="warning">无法确认退出结果。请检查网络后重试，不要将本次操作视为已退出。</Status> : null}
+      {failed ? <>
+        <Status tone="warning">无法确认退出结果。请恢复网络后检查登录状态，不要将本次操作视为已退出。</Status>
+        <div className="actions auth-recovery-actions"><a className="bp-button" href="/auth/logout-recovery">检查退出状态</a></div>
+      </> : <button className="bp-button" disabled={pending}>{pending ? "正在退出…" : label}</button>}
     </form>
   );
 }
