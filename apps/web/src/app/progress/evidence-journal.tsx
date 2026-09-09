@@ -30,6 +30,7 @@ function Journal({ accountId, initial, saveAction, reloadAction }: Props) {
   const [historyUnavailable, setHistoryUnavailable] = useState(!initial.records.ok);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [storageWarning, setStorageWarning] = useState("");
+  const [storageReadFailed, setStorageReadFailed] = useState(false);
   const [unreadableDraft, setUnreadableDraft] = useState<string | null>(null);
   const [lockState, setLockState] = useState<"pending" | "owned" | "elsewhere" | "unsupported">("pending");
   const [lockAttempt, setLockAttempt] = useState(0);
@@ -45,7 +46,7 @@ function Journal({ accountId, initial, saveAction, reloadAction }: Props) {
   }))));
   const selectedExists = nodes.some((node) => node.id === draft?.nodeId);
   const versionChanged = Boolean(draft && draft.baseVersion !== blueprint.version);
-  const editable = lockState === "owned";
+  const editable = lockState === "owned" && !storageReadFailed;
 
   useEffect(() => {
     active.current = true;
@@ -54,6 +55,7 @@ function Journal({ accountId, initial, saveAction, reloadAction }: Props) {
     const restore = () => {
       try {
         const saved = localStorage.getItem(storageKey);
+        setStorageReadFailed(false); setStorageWarning(""); setUnreadableDraft(null);
         if (saved === null) setDraft(blankDraft(initial.blueprint.version));
         else {
           try { setDraft(draftSchema.parse(JSON.parse(saved))); setUnreadableDraft(null); }
@@ -61,7 +63,7 @@ function Journal({ accountId, initial, saveAction, reloadAction }: Props) {
         }
       } catch {
         setStorageWarning("无法读取本机恢复草稿。原数据不会自动删除，请先保留已有内容。");
-        setDraft(blankDraft(initial.blueprint.version));
+        setStorageReadFailed(true);
       }
     };
     setLockState("pending");
@@ -85,11 +87,11 @@ function Journal({ accountId, initial, saveAction, reloadAction }: Props) {
   }, [storageKey, lockAttempt]);
 
   function update(next: Draft) {
-    if (!editable) return;
+    if (!editable) return false;
     setDraft(next);
     setMessage("");
-    try { localStorage.setItem(storageKey, JSON.stringify(next)); setStorageWarning(""); }
-    catch { setStorageWarning("浏览器无法保存恢复草稿。请勿关闭本页，并先复制文字留存。"); }
+    try { localStorage.setItem(storageKey, JSON.stringify(next)); setStorageWarning(""); return true; }
+    catch { setStorageWarning("浏览器无法保存恢复草稿。请勿关闭本页，并先复制文字留存。"); return false; }
   }
 
   async function save() {
@@ -103,10 +105,14 @@ function Journal({ accountId, initial, saveAction, reloadAction }: Props) {
     });
     if (!parsed.success) { setMessage("请选择路径节点，填写 1–8,000 字符的收获，并检查 HTTPS 作品链接（不可含账号密码）。"); return; }
     const attempt = parsed.data;
-    inFlight.current = true; setBusy(true); setMessage("");
     // Persist the exact request BEFORE transport: a lost response must replay it,
     // never manufacture a new mutation ID after reload or edit the pending body.
-    update({ ...draft, attempt });
+    if (!update({ ...draft, attempt })) {
+      setDraft(draft);
+      setMessage("尚未发送：无法保存提交恢复信息，请先复制内容留存，恢复浏览器存储后再重试。");
+      return;
+    }
+    inFlight.current = true; setBusy(true); setMessage("");
     try {
       const result = await saveAction(attempt);
       if (!active.current) return;
@@ -161,7 +167,7 @@ function Journal({ accountId, initial, saveAction, reloadAction }: Props) {
       {storageWarning ? <Status tone="warning">{storageWarning}</Status> : null}
       {lockState === "elsewhere" ? <div><Status tone="warning">另一标签页正在编辑这个账号的草稿。本页只读，避免互相覆盖；关闭原标签页后可接手。</Status><Button disabled={busy} onClick={() => setLockAttempt((value) => value + 1)}>重新尝试编辑</Button></div> : null}
       {lockState === "unsupported" ? <Status tone="warning">浏览器无法提供安全的草稿编辑锁，当前仅可查看。请使用支持 Web Locks 的现代浏览器与安全连接。</Status> : null}
-      {unreadableDraft !== null ? <div>
+      {storageReadFailed ? <Button disabled={busy || lockState !== "owned"} onClick={() => setLockAttempt((value) => value + 1)}>重新读取本机草稿</Button> : unreadableDraft !== null ? <div>
         <Status tone="warning">草稿格式无法识别，原内容未被覆盖。请先复制下方原文另行保存，再清除并重新填写。</Status>
         <label className="field"><span>原始恢复内容</span><textarea aria-label="无法识别的草稿" readOnly rows={7} value={unreadableDraft} /></label>
         <Button className="danger" disabled={!editable} onClick={() => {

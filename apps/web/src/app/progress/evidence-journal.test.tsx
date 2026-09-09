@@ -176,6 +176,42 @@ test("does not lose in-page writing when browser storage refuses a write", async
   expect(host.textContent).toContain("浏览器无法保存恢复草稿");
 });
 
+test("does not send an outcome until its exact retry identity can survive a reload", async () => {
+  let submissions = 0;
+  saveAction = async (value) => { submissions++; return { ok: true, value: receipt((value as { clientMutationId: string }).clientMutationId) }; };
+  await render(); await writeDraft();
+  const write = Storage.prototype.setItem;
+  const quota = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (this: Storage, key, value) {
+    if (JSON.parse(value).attempt) throw new DOMException("quota", "QuotaExceededError");
+    write.call(this, key, value);
+  });
+  await act(async () => button("保存私人记录").click());
+  expect(submissions).toBe(0);
+  expect(host.textContent).toContain("尚未发送");
+  expect(host.querySelector("textarea")?.readOnly).toBe(false);
+  expect(host.querySelector("textarea")?.value).toContain("第一次录制");
+  await render("a5000000-0000-4000-8000-000000000002");
+  quota.mockRestore();
+  await render();
+  expect(host.querySelector("textarea")?.value).toContain("第一次录制");
+  await act(async () => button("保存私人记录").click());
+  expect(submissions).toBe(1);
+  expect(host.textContent).toContain("记录已保存");
+});
+
+test("does not replace an unread draft after a transient storage read failure", async () => {
+  await render(); await writeDraft();
+  await render("a5000000-0000-4000-8000-000000000002");
+  vi.spyOn(Storage.prototype, "getItem").mockImplementationOnce(() => { throw new DOMException("temporarily denied", "SecurityError"); });
+  await render();
+  expect(host.querySelector('[aria-label="这次的收获"]')).toBeNull();
+  expect(host.textContent).toContain("原数据不会自动删除");
+  await act(async () => button("重新读取本机草稿").click());
+  expect(host.querySelector("textarea")?.value).toContain("第一次录制");
+  expect(host.querySelector("textarea")?.readOnly).toBe(false);
+  expect(host.textContent).not.toContain("无法读取本机恢复草稿");
+});
+
 test("renders historical content as text and links only safe HTTPS artifacts", async () => {
   const safe = { ...receipt("a5000000-0000-4000-8000-000000000060"), artifactUrl: "https://example.test/work", text: "<script>not HTML</script>" };
   const unsafe = { ...safe, id: "a5000000-0000-4000-8000-000000000051", artifactUrl: "javascript:alert(1)" };
