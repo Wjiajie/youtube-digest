@@ -5,28 +5,42 @@ import { safeInternalPath } from "@/lib/navigation";
 import { recordProductEvent } from "@/lib/product-events";
 import { createServerSupabase } from "@/lib/supabase/server";
 
+function callbackRedirect(url: URL) {
+  return NextResponse.redirect(url, {
+    headers: { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" },
+  });
+}
+
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
+  const flowId = request.nextUrl.searchParams.get("sb_flow_id");
   const nextPath = safeInternalPath(request.nextUrl.searchParams.get("next") ?? undefined);
-  const supabase = await createServerSupabase();
+  let failure = "invalid_link";
 
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
+    try {
+      const supabase = await createServerSupabase();
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code, flowId === null ? undefined : { flowId });
+      if (!error && data.user) {
+        // The exchange response comes from Auth and the SDK has persisted the
+        // session. Protected destinations validate it without replaying this code.
         await recordProductEvent(
           supabase,
           { userId: data.user.id, client: "web" },
           "auth_succeeded",
         );
-        return NextResponse.redirect(new URL(nextPath, request.url));
+        return callbackRedirect(new URL(nextPath, request.url));
       }
+      if (!error?.status || ![400, 401, 403, 422].includes(error.status)) {
+        failure = "exchange_unavailable";
+      }
+    } catch {
+      failure = "exchange_unavailable";
     }
   }
 
   const loginUrl = new URL("/login", request.url);
-  loginUrl.searchParams.set("error", "invalid_link");
+  loginUrl.searchParams.set("error", failure);
   loginUrl.searchParams.set("next", nextPath);
-  return NextResponse.redirect(loginUrl);
+  return callbackRedirect(loginUrl);
 }
