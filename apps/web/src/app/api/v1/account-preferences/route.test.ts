@@ -16,11 +16,13 @@ const accessToken = [
 ].join(".");
 let storedPreference = { theme_id: "eastern", theme_version: 1, preferences_revision: 4 };
 let providerUnavailable = false;
+let authStatus = 200;
 
 beforeEach(() => {
   cookieJar.length = 0;
   storedPreference = { theme_id: "eastern", theme_version: 1, preferences_revision: 4 };
   providerUnavailable = false;
+  authStatus = 200;
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://preferences.example.com");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "test-publishable-key");
   vi.stubEnv("NEXT_PUBLIC_EXTENSION_OAUTH_CLIENT_ID", extensionId);
@@ -29,7 +31,9 @@ beforeEach(() => {
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const url = new URL(request.url);
-    if (url.pathname === "/auth/v1/user") return Response.json({ id: ownerId });
+    if (url.pathname === "/auth/v1/user") return authStatus === 200
+      ? Response.json({ id: ownerId })
+      : Response.json({ message: "private auth provider details" }, { status: authStatus });
     if (url.pathname === "/rest/v1/profiles") {
       // Keep the real SDK retry behavior but avoid wall-clock backoff in this
       // provider fixture: all attempts receive a terminal service failure.
@@ -125,6 +129,29 @@ it("reports a provider failure without exposing database details or claiming a s
   const response = await GET(new NextRequest("https://blueprint.example.com/api/v1/account-preferences"));
   expect(response.status).toBe(503);
   expect(await response.json()).toEqual({ code: "unavailable" });
+});
+
+it.each([429, 503])("reports Auth provider status %i as unavailable, not as a lost account authorization", async (status) => {
+  signInWeb();
+  authStatus = status;
+  expect(await saveAccountThemeAction({ theme: { id: "eastern", version: 1 }, expectedRevision: 4 }))
+    .toEqual({ ok: false, code: "unavailable" });
+  const response = await GET(new NextRequest("https://blueprint.example.com/api/v1/account-preferences", {
+    headers: { authorization: `Bearer ${accessToken}` },
+  }));
+  expect(response.status).toBe(503);
+  expect(await response.json()).toEqual({ code: "unavailable" });
+});
+
+it("still reports an invalid session as unauthenticated", async () => {
+  signInWeb();
+  authStatus = 401;
+  expect(await saveAccountThemeAction({ theme: { id: "eastern", version: 1 }, expectedRevision: 4 }))
+    .toEqual({ ok: false, code: "unauthenticated" });
+  const response = await GET(new NextRequest("https://blueprint.example.com/api/v1/account-preferences", {
+    headers: { authorization: `Bearer ${accessToken}` },
+  }));
+  expect(response.status).toBe(401);
 });
 
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });

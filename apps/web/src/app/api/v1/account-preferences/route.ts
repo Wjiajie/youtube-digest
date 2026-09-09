@@ -2,14 +2,14 @@ import type { NextRequest } from "next/server";
 
 import { readAccountPreferences } from "@/lib/account-preferences";
 import { resultResponse } from "@/lib/http";
-import { requestActor } from "@/lib/supabase/request";
+import { resolveRequestActor } from "@/lib/supabase/request";
 
 export async function GET(request: NextRequest) {
   try {
-    const context = await requestActor(request);
-    const response = resultResponse(context
-      ? await readAccountPreferences(context.client, context.actor)
-      : { ok: false, code: "unauthenticated" });
+    const context = await resolveRequestActor(request);
+    const response = resultResponse(context.ok
+      ? await readAccountPreferences(context.value.client, context.value.actor)
+      : context);
     response.headers.set("Cache-Control", "private, no-store");
     return response;
   } catch {

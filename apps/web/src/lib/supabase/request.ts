@@ -7,16 +7,30 @@ import type { Actor } from "@blueprint/domain";
 import { extensionClientId, publicSupabaseConfig } from "../env";
 import { createServerSupabase } from "./server";
 
-export async function requestActor(request?: NextRequest): Promise<{
+type RequestActorContext = {
   actor: Actor;
   client: SupabaseClient<any, any, any, any, any>;
-} | null> {
+};
+
+type RequestActorResult =
+  | { ok: true; value: RequestActorContext }
+  | { ok: false; code: "unauthenticated" | "unavailable" };
+
+// Preserve the existing nullable contract for M1 callers. New recovery-aware
+// surfaces use the result contract instead of treating an outage as a logout.
+export async function requestActor(request?: NextRequest): Promise<RequestActorContext | null> {
+  const result = await resolveRequestActor(request);
+  return result.ok ? result.value : null;
+}
+
+export async function resolveRequestActor(request?: NextRequest): Promise<RequestActorResult> {
   const authorization = request?.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) {
     const client = await createServerSupabase();
     const { data, error } = await client.auth.getUser();
-    if (error || !data.user) return null;
-    return { actor: { userId: data.user.id, client: "web" }, client: client as SupabaseClient<any, any, any, any, any> };
+    if (error) return authFailure(error);
+    if (!data.user) return { ok: false, code: "unauthenticated" };
+    return { ok: true, value: { actor: { userId: data.user.id, client: "web" }, client: client as SupabaseClient<any, any, any, any, any> } };
   }
 
   const accessToken = authorization.slice("Bearer ".length);
@@ -26,14 +40,23 @@ export async function requestActor(request?: NextRequest): Promise<{
     global: { headers: { Authorization: authorization } },
   });
   const { data, error } = await client.auth.getUser(accessToken);
-  if (error || !data.user) return null;
+  if (error) return authFailure(error);
+  if (!data.user) return { ok: false, code: "unauthenticated" };
   const claims = decodeJwtPayload(accessToken);
   const configuredClientId = extensionClientId();
-  if (!configuredClientId || claims?.client_id !== configuredClientId) return null;
+  if (!configuredClientId || claims?.client_id !== configuredClientId) return { ok: false, code: "unauthenticated" };
   return {
-    actor: { userId: data.user.id, client: "extension" },
-    client: client as SupabaseClient<any, any, any, any, any>,
+    ok: true,
+    value: {
+      actor: { userId: data.user.id, client: "extension" },
+      client: client as SupabaseClient<any, any, any, any, any>,
+    },
   };
+}
+
+function authFailure(error: { status?: number }): RequestActorResult {
+  const invalidSession = error.status !== undefined && [400, 401, 403, 422].includes(error.status);
+  return { ok: false, code: invalidSession ? "unauthenticated" : "unavailable" };
 }
 
 export async function extensionRequestActor(request: NextRequest) {
