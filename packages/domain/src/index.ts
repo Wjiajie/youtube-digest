@@ -1,11 +1,7 @@
 import { z } from "zod";
 
-export const NODE_TYPES = [
-  "learn",
-  "practice",
-  "checkpoint",
-  "reflection",
-] as const;
+import { NODE_TYPES } from "./node-types";
+export { NODE_TYPES } from "./node-types";
 
 export const RESOURCE_KINDS = ["youtube_video"] as const;
 
@@ -322,6 +318,7 @@ function flattenBlueprint(snapshot: BlueprintSnapshot): FlatEntity[] {
 
 export * from "./application";
 export * from "./account-preferences";
+export * from "./progress-evidence";
 
 function byPosition<T extends { position: number }>(left: T, right: T): number {
   return left.position - right.position;

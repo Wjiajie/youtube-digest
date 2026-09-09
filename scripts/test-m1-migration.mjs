@@ -164,6 +164,25 @@ try {
   );
   assert.equal(replay.rows[0]?.version, 1, "proposal application is idempotent");
 
+  const evidence = await db.query(
+    "select * from public.record_progress_evidence($1, 1, '已完成一次独立练习', null, $2)",
+    [ids.node, ids.sessionMutation],
+  );
+  assert.equal(evidence.rows[0]?.node_title, "理解分析流程", "upgraded accounts can record server-owned historical context");
+  const evidenceReplay = await db.query(
+    "select * from public.record_progress_evidence($1, 1, '已完成一次独立练习', null, $2)",
+    [ids.node, ids.sessionMutation],
+  );
+  assert.equal(evidenceReplay.rows[0]?.id, evidence.rows[0]?.id, "upgraded evidence RPC is idempotent");
+  await assert.rejects(() => db.query("update public.progress_evidence set evidence_text = 'forged'"), /permission denied/,
+    "migration preserves the direct-write deny rule");
+  const evidencePermissions = await db.query(`select
+    has_function_privilege('anon', 'public.record_progress_evidence(uuid,bigint,text,text,uuid)', 'EXECUTE') as anon_rpc,
+    has_function_privilege('anon', 'private.record_progress_evidence(uuid,bigint,text,text,uuid)', 'EXECUTE') as anon_private,
+    has_table_privilege('anon', 'public.progress_evidence', 'SELECT') as anon_read`);
+  assert.deepEqual(evidencePermissions.rows[0], { anon_rpc: false, anon_private: false, anon_read: false },
+    "generated migration explicitly removes default public access");
+
   await db.query(`
     insert into public.learning_sessions (
       owner_id, node_id, resource_binding_id, source, started_at, client_mutation_id

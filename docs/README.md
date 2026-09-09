@@ -17,6 +17,7 @@
 11. [双主题 DOM 基础](theme-foundation.md)：已实现的轻量主题接口、本地设计预览、验证证据与尚未接通的产品能力。
 12. [本地 3D 资产试装](scene-intake-preview.md)：真实模型的内部检查工具、运行时隔离、已验证行为与未通过的美术／性能门槛。
 13. [云端账号偏好](account-preferences.md)：独立主题修订、Web 保存与扩展只读、本地迁移验证及尚未接入的正式界面。
+14. [私人成果记录](progress-evidence.md)：独立历史上下文、幂等、四类节点与精确账号权限；本地数据／应用切片及未完成的界面和托管门槛。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 
