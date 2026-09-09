@@ -26,6 +26,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         {error === "invalid_link" ? <Status tone="danger">登录链接已失效或无法验证。请在发起请求的同一浏览器中打开最新邮件；仍无法登录时，再申请新链接。</Status> : null}
         {error === "exchange_unavailable" ? <Status tone="warning">暂时无法完成登录，无法确认这次链接交换的结果。不要反复点击旧链接；请稍后在此浏览器申请新链接，我们不会自动重发邮件。</Status> : null}
         <LoginForm nextPath={nextPath} />
+        <p className="subtle"><a href="/preview">先看看公开示例</a> · 示例不会写入你的账号。</p>
       </section>
     </main>
   );

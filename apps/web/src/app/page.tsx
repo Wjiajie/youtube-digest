@@ -16,7 +16,7 @@ export default async function HomePage() {
   const identity = await resolveRequestActor();
   if (!identity.ok) {
     if (identity.code === "unavailable") return <AuthUnavailable retryPath="/" />;
-    redirect("/login");
+    redirect("/preview");
   }
   const { actor, client } = identity.value;
   const result = await readNodeStatusWorkspace(client, actor).catch(() => ({ ok: false as const, code: "unavailable" as const }));

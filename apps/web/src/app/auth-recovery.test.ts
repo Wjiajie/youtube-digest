@@ -159,8 +159,8 @@ it("keeps the extension-only API closed to Web cookies and other OAuth clients",
   }))).status).toBe(401);
 });
 
-it("still offers sign-in for an absent session and preserves a pending OAuth continuation", async () => {
-  await expect(HomePage()).rejects.toThrow("redirect:/login");
+it("offers a public example for an absent session and preserves explicit login and OAuth continuations", async () => {
+  await expect(HomePage()).rejects.toThrow("redirect:/preview");
   const login = renderToStaticMarkup(await LoginPage({ searchParams: Promise.resolve({}) }));
   expect(login).toContain('type="email"');
   await expect(OAuthConsentPage({ searchParams: Promise.resolve({ authorization_id: "pending-authorization" }) }))
