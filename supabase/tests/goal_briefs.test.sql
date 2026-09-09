@@ -75,5 +75,13 @@ select throws_ok($$select public.save_goal_brief(null, 0, '{}'::jsonb, false, nu
 reset role;
 select is((select count(*) from private.goal_brief_mutations where owner_id = 'c6000000-0000-4000-8000-000000000001'), 3::bigint,
   'only the three accepted mutations have private receipts');
+set local role authenticated;
+select set_config('request.jwt.claims', '{"sub":"c6000000-0000-4000-8000-000000000001"}', true);
+select lives_ok($$select public.save_goal_brief('c6000000-0000-4000-8000-000000000011', 0,
+  jsonb_set((select value from ready_content), '{outcome}', '"v"'), true, gen_random_uuid())$$,
+  'the letter v is meaningful text, not whitespace');
+select throws_ok($$select public.save_goal_brief('c6000000-0000-4000-8000-000000000010', 3,
+  jsonb_set((select value from ready_content), '{outcome}', to_jsonb(chr(11))), true, gen_random_uuid())$$,
+  '22023', 'GOAL_BRIEF_INVALID', 'vertical-tab-only outcomes cannot be confirmed');
 select * from finish();
 rollback;
