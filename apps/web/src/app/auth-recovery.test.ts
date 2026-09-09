@@ -74,10 +74,28 @@ function signInWeb() {
   });
 }
 
+it("prevents browsers and shared caches from retaining a personal Blueprint response", async () => {
+  const response = await readBlueprint(extensionRequest("/api/v1/blueprint"));
+  expect(response.status).toBe(200);
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  expect((await response.json()).id).toBe(blueprintId);
+});
+
+it.each([200, 401, 503])("does not cache learning history or its identity failure (%i)", async (status) => {
+  authStatus = status;
+  const response = await readSessions(extensionRequest("/api/v1/learning-sessions"));
+  expect(response.status).toBe(status);
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
+  expect(await response.json()).toEqual(status === 200 ? [] : {
+    code: status === 401 ? "unauthenticated" : "unavailable",
+  });
+});
+
 it("keeps an Auth outage distinct from revoked extension authorization when reading the Blueprint", async () => {
   authStatus = 503;
   const response = await readBlueprint(extensionRequest("/api/v1/blueprint"));
   expect(response.status).toBe(503);
+  expect(response.headers.get("cache-control")).toBe("private, no-store");
   expect(await response.json()).toEqual({ code: "unavailable" });
 });
 
@@ -130,7 +148,9 @@ it.each([400, 401, 403, 422])("still rejects invalid Auth status %i without expo
 
 it("keeps the extension-only API closed to Web cookies and other OAuth clients", async () => {
   signInWeb();
-  expect((await readBlueprint(new NextRequest("https://blueprint.example.com/api/v1/blueprint"))).status).toBe(401);
+  const anonymous = await readBlueprint(new NextRequest("https://blueprint.example.com/api/v1/blueprint"));
+  expect(anonymous.status).toBe(401);
+  expect(anonymous.headers.get("cache-control")).toBe("private, no-store");
   expect((await readBlueprint(new NextRequest("https://blueprint.example.com/api/v1/blueprint", {
     headers: { authorization: `Bearer ${token("other-client")}` },
   }))).status).toBe(401);
