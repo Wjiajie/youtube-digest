@@ -5,6 +5,7 @@ import {
   type BlueprintSnapshot,
   diffBlueprints,
   parseBlueprintSnapshot,
+  parseCurrentBlueprintSnapshot,
 } from "./index";
 
 export type Actor = {
@@ -40,6 +41,7 @@ export type LearningSessionRecord = {
 export type ApplyProposalStoreResult =
   | { kind: "applied"; snapshot: BlueprintSnapshot }
   | { kind: "not_found" }
+  | { kind: "invalid" }
   | { kind: "version_conflict" };
 
 export interface BlueprintStore {
@@ -121,7 +123,7 @@ export function createBlueprintApplication(dependencies: {
 
       let draft: BlueprintSnapshot;
       try {
-        draft = parseBlueprintSnapshot(input.draft);
+        draft = parseCurrentBlueprintSnapshot(input.draft);
       } catch (error) {
         return {
           ok: false,
@@ -169,6 +171,7 @@ export function createBlueprintApplication(dependencies: {
         input.clientMutationId,
       );
       if (result.kind === "not_found") return { ok: false, code: "not_found" };
+      if (result.kind === "invalid") return { ok: false, code: "invalid" };
       if (result.kind === "version_conflict") return { ok: false, code: "version_conflict" };
       return { ok: true, value: parseBlueprintSnapshot(result.snapshot) };
     },

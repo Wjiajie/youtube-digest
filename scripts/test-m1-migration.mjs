@@ -59,8 +59,10 @@ try {
   const migrationDirectory = new URL("../supabase/migrations/", import.meta.url);
   for (const file of (await readdir(migrationDirectory)).filter((name) => name.endsWith(".sql")).sort()) {
     if (file === "202608260001_m1_cloud_slice.sql") continue;
+    const legacy = file.endsWith("_node_planning_metadata.sql") ? await seedLegacyPlanningUpgrade() : null;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
+    if (legacy) await verifyLegacyPlanningUpgrade(legacy);
   }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
@@ -85,7 +87,7 @@ try {
   );
 
   const snapshot = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: blueprintId,
     version: 0,
     title: "职业成长蓝图",
@@ -101,6 +103,8 @@ try {
           id: ids.node,
           type: "learn",
           title: "理解分析流程",
+          estimatedMinutes: 45,
+          completionCriteria: "解释分析流程并完成一次练习",
           position: 0,
           dependencyIds: [],
           resources: [{
@@ -164,12 +168,12 @@ try {
   );
   assert.equal(replay.rows[0]?.version, 1, "proposal application is idempotent");
 
-  const coherentRead = await db.query("select public.read_blueprint_snapshot($1) as snapshot", [ids.owner]);
+  const coherentRead = await db.query("select public.read_blueprint_snapshot_v2($1) as snapshot", [ids.owner]);
   assert.deepEqual(coherentRead.rows[0]?.snapshot, { ...snapshot, version: 1 },
     "upgraded existing accounts read one complete confirmed Blueprint snapshot");
-  assert.equal((await db.query("select public.read_blueprint_snapshot($1) as snapshot", [ids.outsider])).rows[0]?.snapshot, null,
+  assert.equal((await db.query("select public.read_blueprint_snapshot_v2($1) as snapshot", [ids.outsider])).rows[0]?.snapshot, null,
     "the new snapshot RPC cannot widen owner access");
-  const readPermissions = await db.query("select has_function_privilege('anon', 'public.read_blueprint_snapshot(uuid)', 'EXECUTE') as allowed");
+  const readPermissions = await db.query("select has_function_privilege('anon', 'public.read_blueprint_snapshot_v2(uuid)', 'EXECUTE') as allowed");
   assert.equal(readPermissions.rows[0]?.allowed, false, "generated migration explicitly denies anonymous snapshot reads");
 
   const briefContent = { schemaVersion: 1, outcome: "完成一次独立分析", startingPoint: "刚接触分析工具",
@@ -282,4 +286,49 @@ async function becomeUser(userId) {
   await db.exec("set role authenticated");
   await db.query("select set_config('request.jwt.claim.sub', $1, false)", [userId]);
   await db.query("select set_config('request.jwt.claims', '{}', false)");
+}
+
+async function seedLegacyPlanningUpgrade() {
+  const owner = "d9000000-0000-4000-8000-000000000101";
+  const proposal = "d9000000-0000-4000-8000-000000000140";
+  const pending = "d9000000-0000-4000-8000-000000000141";
+  const mutation = "d9000000-0000-4000-8000-000000000160";
+  await db.query("insert into auth.users(id,email) values($1,'legacy-planning@example.test')", [owner]);
+  await becomeUser(owner);
+  const root = (await db.query("select id from public.blueprints")).rows[0].id;
+  const snapshot = { schemaVersion: 1, id: root, version: 0, title: "Pre-upgrade path", goals: [{
+    id: "d9000000-0000-4000-8000-000000000110", title: "Existing goal", position: 0, stages: [{
+      id: "d9000000-0000-4000-8000-000000000120", title: "Existing stage", position: 0, nodes: [{
+        id: "d9000000-0000-4000-8000-000000000130", title: "Existing reflection", type: "reflection",
+        position: 0, dependencyIds: [], resources: [],
+      }],
+    }],
+  }] };
+  await db.query("insert into public.blueprint_proposals(id,owner_id,blueprint_id,base_version,proposed_snapshot,client_mutation_id) values($1,$2,$3,0,$4,gen_random_uuid())", [proposal, owner, root, snapshot]);
+  await db.query("select public.apply_blueprint_proposal($1,0,$2)", [proposal, mutation]);
+  const current = { ...snapshot, version: 1 };
+  await db.query("insert into public.blueprint_proposals(id,owner_id,blueprint_id,base_version,proposed_snapshot,client_mutation_id) values($1,$2,$3,1,$4,gen_random_uuid())", [pending, owner, root, current]);
+  const before = (await db.query("select to_jsonb(b) as root, (select jsonb_agg(to_jsonb(p) order by id) from public.blueprint_proposals p) as proposals, (select jsonb_agg(to_jsonb(r) order by id) from public.blueprint_revisions r) as revisions from public.blueprints b")).rows[0];
+  await db.exec("reset role");
+  return { owner, proposal, pending, mutation, current, before };
+}
+
+async function verifyLegacyPlanningUpgrade({ owner, proposal, pending, mutation, current, before }) {
+  await becomeUser(owner);
+  const after = (await db.query("select to_jsonb(b) as root, (select jsonb_agg(to_jsonb(p) order by id) from public.blueprint_proposals p) as proposals, (select jsonb_agg(to_jsonb(r) order by id) from public.blueprint_revisions r) as revisions from public.blueprints b")).rows[0];
+  assert.deepEqual(after, before, "schema upgrade preserves the existing root and exact historical v1 proposal/revision JSON");
+  assert.deepEqual((await db.query("select public.read_blueprint_snapshot($1) as value", [owner])).rows[0].value, current,
+    "the old read projection still supports existing clients");
+  const expected = structuredClone(current);
+  expected.schemaVersion = 2;
+  Object.assign(expected.goals[0].stages[0].nodes[0], { estimatedMinutes: null, completionCriteria: "" });
+  assert.deepEqual((await db.query("select public.read_blueprint_snapshot_v2($1) as value", [owner])).rows[0].value, expected,
+    "existing nodes read as v2 with explicit unknown metadata without creating a revision");
+  assert.equal(Number((await db.query("select public.apply_blueprint_proposal($1,0,$2) as version", [proposal, mutation])).rows[0].version), 1,
+    "an already-applied legacy request still replays before the new format gate");
+  await assert.rejects(() => db.query("select public.apply_blueprint_proposal($1,1,gen_random_uuid())", [pending]), /BLUEPRINT_SNAPSHOT_INVALID/,
+    "a legacy pending proposal cannot strip new metadata through the old format");
+  assert.deepEqual((await db.query("select to_jsonb(b) as root, (select jsonb_agg(to_jsonb(p) order by id) from public.blueprint_proposals p) as proposals, (select jsonb_agg(to_jsonb(r) order by id) from public.blueprint_revisions r) as revisions from public.blueprints b")).rows[0], before,
+    "replaying and rejecting legacy requests do not change any existing state");
+  await db.exec("reset role");
 }

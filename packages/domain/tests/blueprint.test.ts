@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   diffBlueprints,
   parseBlueprintSnapshot,
+  parseCurrentBlueprintSnapshot,
+  prepareBlueprintDraft,
   toBlueprintMarkdown,
 } from "../src/index";
 
@@ -64,6 +66,66 @@ function validSnapshot() {
 }
 
 describe("BlueprintSnapshot", () => {
+  it("makes an effort-only or completion-only change reviewable and includes both in Markdown", () => {
+    const before = prepareBlueprintDraft(parseBlueprintSnapshot(validSnapshot()));
+    const after = structuredClone(before);
+    after.goals[0]!.stages[0]!.nodes[1]!.estimatedMinutes = 90;
+    after.goals[0]!.stages[0]!.nodes[1]!.completionCriteria = "提交报告\n说明三个结论";
+    expect(diffBlueprints(before, after)).toEqual([{ kind: "update", entity: "path_node", id: ids.practice, label: "practice node" }]);
+    expect(toBlueprintMarkdown(after)).toContain("预计投入：90 分钟");
+    expect(toBlueprintMarkdown(after)).toContain("完成依据：提交报告\n    说明三个结论");
+    expect(toBlueprintMarkdown(after)).toContain("预计投入：待明确");
+    const criteriaOnly = structuredClone(before);
+    criteriaOnly.goals[0]!.stages[0]!.nodes[1]!.completionCriteria = "提交报告";
+    expect(diffBlueprints(before, criteriaOnly)).toHaveLength(1);
+    const effortOnly = structuredClone(before);
+    effortOnly.goals[0]!.stages[0]!.nodes[1]!.estimatedMinutes = 30;
+    expect(diffBlueprints(before, effortOnly)).toHaveLength(1);
+  });
+
+  it.each([-1, 0, 1.5, 2_147_483_648, "30"])("rejects invalid estimated minutes %s", value => {
+    const draft = prepareBlueprintDraft(parseBlueprintSnapshot(validSnapshot()));
+    Object.assign(draft.goals[0]!.stages[0]!.nodes[0]!, { estimatedMinutes: value });
+    expect(() => parseCurrentBlueprintSnapshot(draft)).toThrow();
+  });
+
+  it("keeps completion criteria bounded in UTF-16 units and distinguishes unknown from zero effort", () => {
+    const draft = prepareBlueprintDraft(parseBlueprintSnapshot(validSnapshot()));
+    draft.goals[0]!.stages[0]!.nodes[0]!.completionCriteria = "🧭".repeat(2001);
+    expect(() => parseCurrentBlueprintSnapshot(draft)).toThrow();
+    draft.goals[0]!.stages[0]!.nodes[0]!.completionCriteria = "  ";
+    expect(parseCurrentBlueprintSnapshot(draft).goals[0]!.stages[0]!.nodes[0]).toMatchObject({ estimatedMinutes: null, completionCriteria: "" });
+  });
+  it("requires an explicit upgrade for a historical path and never drops unknown planning fields", () => {
+    const historical = parseBlueprintSnapshot(validSnapshot());
+    expect(() => parseCurrentBlueprintSnapshot(historical)).toThrow();
+    const draft = prepareBlueprintDraft(historical);
+    expect(draft.schemaVersion).toBe(2);
+    expect(draft.version).toBe(historical.version);
+    expect(draft.goals[0]!.stages[0]!.nodes[0]).toMatchObject({ estimatedMinutes: null, completionCriteria: "" });
+    expect(historical.schemaVersion).toBe(1);
+    const missing = structuredClone(draft);
+    delete missing.goals[0]!.stages[0]!.nodes[0]!.estimatedMinutes;
+    expect(() => parseCurrentBlueprintSnapshot(missing)).toThrow();
+    const downgraded = { ...draft, schemaVersion: 1 };
+    expect(() => parseBlueprintSnapshot(downgraded)).toThrow();
+    const future = structuredClone(draft);
+    Object.assign(future.goals[0]!.stages[0]!.nodes[0]!, { futureEvidence: "must not disappear" });
+    expect(() => parseCurrentBlueprintSnapshot(future)).toThrow();
+  });
+  it("preserves explicit node effort and completion evidence in a version 2 path", () => {
+    const input = validSnapshot();
+    const snapshot = parseBlueprintSnapshot({ ...input, schemaVersion: 2, goals: input.goals.map(goal => ({
+      ...goal, stages: goal.stages.map(stage => ({ ...stage, nodes: stage.nodes.map(node => ({
+        ...node, estimatedMinutes: node.type === "practice" ? 90 : null,
+        completionCriteria: node.type === "practice" ? "交付一份可以复现的分析报告" : "",
+      })) })),
+    })) });
+    expect(snapshot.goals[0]!.stages[0]!.nodes[1]).toMatchObject({
+      estimatedMinutes: 90, completionCriteria: "交付一份可以复现的分析报告",
+    });
+    expect(snapshot.goals[0]!.stages[0]!.nodes[0]).toMatchObject({ estimatedMinutes: null, completionCriteria: "" });
+  });
   it("accepts one goal with ordered stages and all four path node types", () => {
     const snapshot = parseBlueprintSnapshot(validSnapshot());
 

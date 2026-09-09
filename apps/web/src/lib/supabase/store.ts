@@ -6,6 +6,7 @@ import {
   type BlueprintStore,
   type LearningSessionRecord,
   parseBlueprintSnapshot,
+  parseCurrentBlueprintSnapshot,
 } from "@blueprint/domain";
 
 type LooseClient = SupabaseClient<any, "public", any>;
@@ -14,9 +15,9 @@ export function createSupabaseBlueprintStore(client: LooseClient): BlueprintStor
   const store: BlueprintStore = {
     async getMainBlueprint(userId) {
       // Root version and every nested entity must come from one database snapshot.
-      const { data, error } = await client.rpc("read_blueprint_snapshot", { p_owner_id: userId });
+      const { data, error } = await client.rpc("read_blueprint_snapshot_v2", { p_owner_id: userId });
       if (error) throw error;
-      return data === null ? null : parseBlueprintSnapshot(data);
+      return data === null ? null : parseCurrentBlueprintSnapshot(data);
     },
 
     async getProposalByMutation(userId, mutationId) {
@@ -57,6 +58,7 @@ export function createSupabaseBlueprintStore(client: LooseClient): BlueprintStor
         mutation_id: mutationId,
       });
       if (error) {
+        if (error.code === "23514" && ["BLUEPRINT_SNAPSHOT_INVALID", "NODE_PLANNING_INVALID"].includes(error.message)) return { kind: "invalid" };
         if (/VERSION_CONFLICT|PROPOSAL_NOT_PENDING/.test(error.message)) {
           return { kind: "version_conflict" };
         }

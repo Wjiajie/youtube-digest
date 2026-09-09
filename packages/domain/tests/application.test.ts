@@ -18,7 +18,7 @@ const extensionActor: Actor = { ...owner, client: "extension" };
 
 function emptyBlueprint(): BlueprintSnapshot {
   return parseBlueprintSnapshot({
-    schemaVersion: 1,
+    schemaVersion: 2,
     id: "018f6f68-9b4d-7c93-a134-c8571b8f7702",
     version: 0,
     title: "我的蓝图",
@@ -187,6 +187,8 @@ describe("Blueprint application", () => {
             id: nodeId,
             type: "learn",
             title: "理解 SQL 查询",
+            estimatedMinutes: null,
+            completionCriteria: "",
             position: 0,
             dependencyIds: [],
             resources: [{

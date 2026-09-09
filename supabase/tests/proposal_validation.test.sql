@@ -7,13 +7,13 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"a3000000-0000-4000-8000-000000000001"}', true);
 
 create temporary table valid_snapshot as
-select jsonb_build_object('schemaVersion', 1, 'id', id, 'version', 0, 'title', 'Intact path',
-  'goals', '[{"id":"a3000000-0000-4000-8000-000000000100","title":"Goal","position":0,"stages":[{"id":"a3000000-0000-4000-8000-000000000101","title":"Stage","position":0,"nodes":[{"id":"a3000000-0000-4000-8000-000000000102","title":"Learn","position":0,"type":"learn","dependencyIds":[],"resources":[{"id":"a3000000-0000-4000-8000-000000000103","kind":"youtube_video","url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","externalId":"dQw4w9WgXcQ"}]}]}]}]'::jsonb
+select jsonb_build_object('schemaVersion', 2, 'id', id, 'version', 0, 'title', 'Intact path',
+  'goals', '[{"id":"a3000000-0000-4000-8000-000000000100","title":"Goal","position":0,"stages":[{"id":"a3000000-0000-4000-8000-000000000101","title":"Stage","position":0,"nodes":[{"id":"a3000000-0000-4000-8000-000000000102","title":"Learn","position":0,"type":"learn","estimatedMinutes":null,"completionCriteria":"","dependencyIds":[],"resources":[{"id":"a3000000-0000-4000-8000-000000000103","kind":"youtube_video","url":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","externalId":"dQw4w9WgXcQ"}]}]}]}]'::jsonb
 ) as value from public.blueprints;
 
 insert into public.blueprint_proposals (id, owner_id, blueprint_id, base_version, proposed_snapshot, client_mutation_id)
 select 'a3000000-0000-4000-8000-000000000010', owner_id, id, 0,
-  '{"schemaVersion":1,"version":0,"title":"Missing identity","goals":[]}'::jsonb,
+  '{"schemaVersion":2,"version":0,"title":"Missing identity","goals":[]}'::jsonb,
   'a3000000-0000-4000-8000-000000000020'
 from public.blueprints;
 select throws_ok(
@@ -60,7 +60,7 @@ from valid_snapshot cross join (values
   ('foreign identity', '{id}', '"a3000000-0000-4000-8000-000000000999"', 'BLUEPRINT_ID_MISMATCH'),
   ('missing schema version', '{schemaVersion}', null, 'BLUEPRINT_SNAPSHOT_INVALID'),
   ('null schema version', '{schemaVersion}', 'null', 'BLUEPRINT_SNAPSHOT_INVALID'),
-  ('unsupported schema version', '{schemaVersion}', '2', 'BLUEPRINT_SNAPSHOT_INVALID'),
+  ('unsupported schema version', '{schemaVersion}', '3', 'BLUEPRINT_SNAPSHOT_INVALID'),
   ('missing snapshot version', '{version}', null, 'BLUEPRINT_SNAPSHOT_INVALID'),
   ('null snapshot version', '{version}', 'null', 'BLUEPRINT_SNAPSHOT_INVALID'),
   ('string snapshot version', '{version}', '"1"', 'BLUEPRINT_SNAPSHOT_INVALID'),

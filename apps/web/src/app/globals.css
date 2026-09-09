@@ -43,6 +43,16 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .node-card .wide { grid-column: 1 / -1; }
 .proposal { padding: 18px; margin-top: 18px; border-color: var(--bp-accent); }
 .proposal ul { padding-left: 20px; }
+.blueprint-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.node-planning-time input { max-width: 280px; }
+.node-card textarea { min-height: 100px; resize: vertical; }
+.node-planning-review { border-top: 1px solid var(--bp-line); margin-top: 20px; padding-top: 12px; }
+.node-planning-change { margin: 16px 0; padding: 16px; border: 1px solid var(--bp-line); border-radius: var(--bp-radius-sm); }
+.node-planning-change h4 { margin: 0 0 14px; overflow-wrap: anywhere; }
+.node-planning-comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.node-planning-comparison dt { color: var(--bp-muted); font-size: 12px; margin-top: 14px; }
+.node-planning-comparison dd { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.7; }
+@media (max-width: 640px) { .node-planning-comparison { grid-template-columns: 1fr; } }
 .empty { padding: 22px; border: 1px dashed var(--bp-line); border-radius: 10px; color: var(--bp-muted); }
 @media (max-width: 780px) {
   .hud { grid-template-columns: 1fr; }

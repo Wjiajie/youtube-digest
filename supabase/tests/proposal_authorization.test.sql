@@ -12,7 +12,7 @@ set local role authenticated;
 select set_config('request.jwt.claims', '{"sub":"a2000000-0000-4000-8000-000000000001"}', true);
 insert into public.blueprint_proposals (id, owner_id, blueprint_id, base_version, proposed_snapshot, client_mutation_id)
 select 'a2000000-0000-4000-8000-000000000010', owner_id, id, 0,
-  jsonb_build_object('schemaVersion', 1, 'id', id, 'version', 0, 'title', 'Authorized path', 'goals', '[]'::jsonb),
+  jsonb_build_object('schemaVersion', 2, 'id', id, 'version', 0, 'title', 'Authorized path', 'goals', '[]'::jsonb),
   'a2000000-0000-4000-8000-000000000011'
 from public.blueprints;
 select set_config('request.jwt.claims', '{"sub":"a2000000-0000-4000-8000-000000000001","client_id":"proposal-test-extension"}', true);

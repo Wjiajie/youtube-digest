@@ -21,9 +21,9 @@ test("real local account records a private outcome, retains an offline draft and
     const root = await client.from("blueprints").select("id").single();
     expect(root.error).toBeNull();
     const nodeId = randomUUID(), proposalId = randomUUID();
-    const snapshot = { schemaVersion: 1, id: root.data!.id, version: 0, title: "成果体验测试", goals: [{
+    const snapshot = { schemaVersion: 2, id: root.data!.id, version: 0, title: "成果体验测试", goals: [{
       id: randomUUID(), title: "提升演讲能力", position: 0, stages: [{ id: randomUUID(), title: "第一周：练习表达", position: 0,
-        nodes: [{ id: nodeId, type: "practice", title: "录制一次三分钟演讲", position: 0, dependencyIds: [], resources: [] }],
+        nodes: [{ id: nodeId, type: "practice", title: "录制一次三分钟演讲", estimatedMinutes: null, completionCriteria: "", position: 0, dependencyIds: [], resources: [] }],
       }],
     }] };
     expect((await client.from("blueprint_proposals").insert({ id: proposalId, owner_id: id, blueprint_id: root.data!.id,

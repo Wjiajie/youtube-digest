@@ -15,6 +15,7 @@ export const resourceBindingSchema = z
     url: z.url(),
     externalId: z.string().trim().min(1).max(128),
   })
+  .strict()
   .superRefine((binding, context) => {
     if (binding.kind !== "youtube_video") return;
     const canonical = canonicalYouTubeUrl(binding.url);
@@ -32,10 +33,13 @@ export const pathNodeSchema = z
     type: z.enum(NODE_TYPES),
     title: titleSchema,
     description: z.string().trim().max(2_000).optional(),
+    estimatedMinutes: z.int().positive().max(2_147_483_647).nullable().optional(),
+    completionCriteria: z.string().trim().max(4_000).optional(),
     position: z.int().nonnegative(),
     dependencyIds: z.array(idSchema).max(64),
     resources: z.array(resourceBindingSchema).max(16),
   })
+  .strict()
   .superRefine((node, context) => {
     if (new Set(node.dependencyIds).size !== node.dependencyIds.length) {
       addDomainIssue(context, ["dependencyIds"], "Path Node dependency IDs must be unique");
@@ -51,7 +55,7 @@ export const stageSchema = z.object({
   title: titleSchema,
   position: z.int().nonnegative(),
   nodes: z.array(pathNodeSchema).max(256),
-});
+}).strict();
 
 export const goalSchema = z.object({
   id: idSchema,
@@ -59,16 +63,17 @@ export const goalSchema = z.object({
   description: z.string().trim().max(2_000).optional(),
   position: z.int().nonnegative(),
   stages: z.array(stageSchema).max(64),
-});
+}).strict();
 
 export const blueprintSnapshotSchema = z
   .object({
-    schemaVersion: z.literal(1),
+    schemaVersion: z.union([z.literal(1), z.literal(2)]),
     id: idSchema,
     version: z.int().nonnegative(),
     title: titleSchema,
     goals: z.array(goalSchema).max(12),
   })
+  .strict()
   .superRefine((snapshot, context) => {
     const allIds = new Set<string>([snapshot.id]);
     for (const goal of snapshot.goals) {
@@ -84,6 +89,13 @@ export const blueprintSnapshotSchema = z
         }
         allIds.add(stage.id);
         for (const node of stage.nodes) {
+          const hasPlanning = node.estimatedMinutes !== undefined && node.completionCriteria !== undefined;
+          if (snapshot.schemaVersion === 2 && !hasPlanning) {
+            addDomainIssue(context, ["goals"], "Version 2 Path Nodes require explicit estimatedMinutes and completionCriteria");
+          }
+          if (snapshot.schemaVersion === 1 && (node.estimatedMinutes !== undefined || node.completionCriteria !== undefined)) {
+            addDomainIssue(context, ["goals"], "Planning fields require Blueprint format 2");
+          }
           if (allIds.has(node.id)) {
             addDomainIssue(context, ["goals"], "All Blueprint IDs must be unique");
           }
@@ -131,6 +143,24 @@ export type BlueprintDiffEntry = {
 
 export function parseBlueprintSnapshot(input: unknown): BlueprintSnapshot {
   return blueprintSnapshotSchema.parse(input);
+}
+
+/** Current reads and new proposals must never silently upgrade old write payloads. */
+export function parseCurrentBlueprintSnapshot(input: unknown): BlueprintSnapshot {
+  const snapshot = parseBlueprintSnapshot(input);
+  if (snapshot.schemaVersion !== 2) throw new Error("Blueprint format changed; reload and review a new proposal");
+  return snapshot;
+}
+
+/** Explicitly prepare a reviewable draft; leaves the historical source untouched. */
+export function prepareBlueprintDraft(input: BlueprintSnapshot): BlueprintSnapshot {
+  const snapshot = parseBlueprintSnapshot(input);
+  if (snapshot.schemaVersion === 2) return snapshot;
+  return parseCurrentBlueprintSnapshot({ ...snapshot, schemaVersion: 2, goals: snapshot.goals.map(goal => ({
+    ...goal, stages: goal.stages.map(stage => ({ ...stage, nodes: stage.nodes.map(node => ({
+      ...node, estimatedMinutes: null, completionCriteria: "",
+    })) })),
+  })) });
 }
 
 export function canonicalYouTubeUrl(
@@ -212,6 +242,10 @@ export function toBlueprintMarkdown(snapshotInput: BlueprintSnapshot): string {
         lines.push(
           `- [${labels[node.type]}] ${node.title}${resource ? ` | ${resource.url}` : ""}`,
         );
+        if (snapshot.schemaVersion === 2) {
+          lines.push(`  - 预计投入：${node.estimatedMinutes === null ? "待明确" : `${node.estimatedMinutes} 分钟`}`);
+          lines.push(`  - 完成依据：${(node.completionCriteria || "待明确").replace(/\n/g, "\n    ")}`);
+        }
       }
       lines.push("");
     }
@@ -298,6 +332,8 @@ function flattenBlueprint(snapshot: BlueprintSnapshot): FlatEntity[] {
             node.title,
             node.description ?? "",
             node.dependencyIds,
+            node.estimatedMinutes ?? null,
+            node.completionCriteria ?? "",
           ]),
         });
         for (const resource of node.resources) {

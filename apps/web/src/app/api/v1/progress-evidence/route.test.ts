@@ -62,7 +62,7 @@ beforeEach(() => {
     if (url.pathname === "/auth/v1/user") return authStatus === 200
       ? Response.json({ id: ownerId }) : Response.json({ message: "private auth detail" }, { status: authStatus });
     if (databaseCode) return Response.json({ code: databaseCode, message: "private database detail" }, { status: 400 });
-    if (url.pathname === "/rest/v1/rpc/read_blueprint_snapshot") return Response.json({ schemaVersion: 1, id: row.blueprint_id, title: "我的蓝图", version: 3, goals: [] });
+    if (url.pathname === "/rest/v1/rpc/read_blueprint_snapshot_v2") return Response.json({ schemaVersion: 2, id: row.blueprint_id, title: "我的蓝图", version: 3, goals: [] });
     if (url.pathname === "/rest/v1/rpc/record_progress_evidence" && req.method === "POST") {
       const body = await req.json();
       expect(body).toEqual({
@@ -195,7 +195,7 @@ it("keeps historical text and links readable without applying today's input norm
 it("refreshes the journal only for its bound Web account, without confusing Auth outages with logout", async () => {
   signInWeb(); records = [row];
   expect(await readEvidenceWorkspaceAction(ownerId)).toEqual({ ok: true, value: {
-    blueprint: { schemaVersion: 1, id: row.blueprint_id, title: "我的蓝图", version: 3, goals: [] },
+    blueprint: { schemaVersion: 2, id: row.blueprint_id, title: "我的蓝图", version: 3, goals: [] },
     records: { ok: true, value: [expected] },
   } });
   expect(await readEvidenceWorkspaceAction("a4000000-0000-4000-8000-000000000002"))

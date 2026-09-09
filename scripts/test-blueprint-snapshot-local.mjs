@@ -49,7 +49,7 @@ try {
   await query(`insert into auth.users(id, email) values ('${owner}', 'snapshot-${owner}@example.test');`);
   const blueprintId = await query(`select id from public.blueprints where owner_id = '${owner}';`);
   const goalId = randomUUID();
-  const initial = { schemaVersion: 1, id: blueprintId, version: 0, title: "First revision", goals: [
+  const initial = { schemaVersion: 2, id: blueprintId, version: 0, title: "First revision", goals: [
     { id: goalId, title: "Old goal", position: 0, stages: [] },
   ] };
   async function apply(snapshot) {
@@ -65,7 +65,7 @@ try {
   reader = start(`${identity}
     set application_name = '${readerName}';
     with gate as materialized (select pg_advisory_xact_lock_shared(${lockId}))
-    select public.read_blueprint_snapshot('${owner}') from gate;`);
+    select public.read_blueprint_snapshot_v2('${owner}') from gate;`);
   // The waiting SELECT has established its MVCC snapshot before the writer commits.
   await until(async () => (await query(`select count(*) from pg_stat_activity where application_name = '${readerName}' and wait_event_type = 'Lock' and wait_event = 'advisory';`)) === "1");
   const changed = structuredClone(initial);
@@ -75,7 +75,7 @@ try {
   await locker.done;
   const oldRead = JSON.parse((await reader.done).split("\n").at(-1));
   assert.deepEqual(oldRead, { ...initial, version: 1 }, "the waiting read retains one whole old revision, not new nested rows");
-  const newRead = JSON.parse((await query(`${identity} select public.read_blueprint_snapshot('${owner}');`)).split("\n").at(-1));
+  const newRead = JSON.parse((await query(`${identity} select public.read_blueprint_snapshot_v2('${owner}');`)).split("\n").at(-1));
   assert.deepEqual(newRead, { ...changed, version: 2 }, "a new statement observes the whole committed revision");
   console.log("PASS: real concurrent confirmation/read returns coherent old then new Blueprint revisions");
 } finally {
