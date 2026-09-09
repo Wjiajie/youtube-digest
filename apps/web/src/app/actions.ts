@@ -48,7 +48,11 @@ export async function applyProposalAction(input: {
       result.ok ? "proposal_applied" : result.code === "version_conflict" ? "proposal_conflict" : "proposal_applied",
       { entityType: "proposal", entityId: input.proposalId, ...(!result.ok ? { resultCode: result.code } : {}) },
     );
-    if (result.ok) revalidatePath("/");
+    if (result.ok) {
+      revalidatePath("/");
+      revalidatePath("/blueprint/edit");
+      revalidatePath("/paths", "layout");
+    }
     return result;
   } catch {
     return { ok: false as const, code: "unavailable" as const };

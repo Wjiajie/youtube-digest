@@ -1,12 +1,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-import { blueprintApplication } from "@/lib/application";
+import { projectBlueprintProgress } from "@blueprint/domain";
+import { readNodeStatusWorkspace } from "@/lib/node-status";
 import { recordProductEvent } from "@/lib/product-events";
 import { resolveRequestActor } from "@/lib/supabase/request";
 
 import { logoutAction } from "./actions";
-import { BlueprintEditor } from "./blueprint-editor";
+import { HomeDashboard } from "./home-dashboard";
 import { AccountThemeShell } from "./account-theme-shell";
 import { AuthUnavailable } from "./auth-unavailable";
 import { LogoutForm } from "./logout-form";
@@ -17,48 +18,24 @@ export default async function HomePage() {
     if (identity.code === "unavailable") return <AuthUnavailable retryPath="/" />;
     redirect("/login");
   }
-  const context = identity.value;
-  const application = blueprintApplication(context.client);
-  const [result, sessions] = await Promise.all([
-    application.getMainBlueprint(context.actor).catch(() => ({ ok: false as const, code: "unavailable" as const })),
-    application.listLearningSessions(context.actor).catch(() => ({ ok: false as const, code: "unavailable" as const })),
-  ]);
-  if (!result.ok) {
-    return (
-      <main className="shell">
-        <section className="bp-panel editor-panel">
-          <h1>蓝图暂时不可用</h1>
-          <p className="subtle">请确认数据库迁移已经完成，然后重新加载。</p>
-        </section>
-      </main>
-    );
-  }
-  await recordProductEvent(context.client, context.actor, "blueprint_viewed", {
+  const { actor, client } = identity.value;
+  const result = await readNodeStatusWorkspace(client, actor).catch(() => ({ ok: false as const, code: "unavailable" as const }));
+  if (result.ok) await recordProductEvent(client, actor, "blueprint_viewed", {
     entityType: "blueprint",
-    entityId: result.value.id,
+    entityId: result.value.blueprint.id,
   });
   return (
-    <AccountThemeShell accountId={context.actor.userId} client={context.client}><main className="shell">
-      <header className="topbar">
+    <AccountThemeShell accountId={actor.userId} client={client}><main className="shell">
+      <header className="topbar home-topbar">
         <div>
-          <div className="brand">Blueprint / M1 Cloud Slice</div>
-          <p className="subtle">一份属于你的目标蓝图 · 版本 {result.value.version}</p>
+          <div className="brand">Blueprint / Your Becoming</div>
+          <h1>我的蓝图</h1>
         </div>
-        <div className="actions"><Link className="bp-button" href="/goals">目标定义</Link><Link className="bp-button" href="/progress">成长档案</Link><Link className="bp-button" href="/settings/connections">扩展连接</Link><LogoutForm action={logoutAction} /></div>
+        <nav className="actions" aria-label="蓝图导航"><Link className="bp-button" href="/paths">全部目标</Link><Link className="bp-button" href="/progress">成长档案</Link><Link className="bp-button" href="/settings/connections">扩展连接</Link><LogoutForm action={logoutAction} /></nav>
       </header>
-      <div className="hud">
-        <aside className="bp-panel identity-panel" aria-label="身份状态面板">
-          <div>
-            <div className="brand">Identity Signal</div>
-            <div className="avatar" aria-label="人物占位形象" />
-          </div>
-          <div>
-            <strong>{result.value.goals.length} 个目标已接入</strong>
-            <p className="subtle">3D 人物将在 M3 接替这个占位面板。现在先确保数据与路径真实属于你。</p>
-          </div>
-        </aside>
-        <BlueprintEditor initial={result.value} sessions={sessions.ok ? sessions.value : []} />
-      </div>
+      {result.ok ? <HomeDashboard key={actor.userId} goals={projectBlueprintProgress(result.value.blueprint, result.value.current)} evidence={result.value.evidence} />
+        : <section className="bp-panel editor-panel"><h2>蓝图暂时不可用</h2><p className="subtle">没有清空已有路径或状态。请稍后重新读取。</p>
+          <a className="bp-button" href="/">重新读取</a></section>}
     </main></AccountThemeShell>
   );
 }

@@ -9,6 +9,9 @@ import { POST as recordAuthorization } from "./api/v1/events/extension-authoriza
 import { POST as recordRevocation } from "./api/v1/events/extension-revoked/route";
 import { createProposalAction, applyProposalAction, rejectProposalAction } from "./actions";
 import HomePage from "./page";
+import BlueprintEditPage from "./blueprint/edit/page";
+import PathsPage from "./paths/page";
+import GoalPathPage from "./paths/[goalId]/page";
 import LoginPage from "./login/page";
 import ConnectionsPage from "./settings/connections/page";
 import OAuthConsentPage from "./oauth/consent/page";
@@ -178,6 +181,19 @@ it("keeps the personal homepage recoverable instead of redirecting during an Aut
   const html = renderToStaticMarkup(await HomePage());
   expect(html).toContain("暂时无法验证登录状态");
   expect(html).toContain('href="/"');
+  expect(html).not.toContain("My path");
+});
+
+it.each([
+  [() => BlueprintEditPage(), "/blueprint/edit"],
+  [() => PathsPage(), "/paths"],
+  [() => GoalPathPage({ params: Promise.resolve({ goalId: blueprintId }), searchParams: Promise.resolve({ node: mutationId }) }), `/paths/${blueprintId}?node=${mutationId}`],
+] as const)("protects formal path routes and preserves their continuation during Auth failure", async (page, path) => {
+  await expect(page()).rejects.toThrow(`redirect:/login?next=${encodeURIComponent(path)}`);
+  signInWeb(); authStatus = 503;
+  const html = renderToStaticMarkup(await page());
+  expect(html).toContain("暂时无法验证登录状态");
+  expect(html).toContain(`href="${path}"`);
   expect(html).not.toContain("My path");
 });
 

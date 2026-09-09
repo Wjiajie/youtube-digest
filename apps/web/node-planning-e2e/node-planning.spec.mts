@@ -34,7 +34,7 @@ test("real user reviews node effort and completion criteria before they become o
     }
     await context.addCookies(cookies.map(({ name, value }) => ({ name, value, url: "http://127.0.0.1:3100", sameSite: "Lax" as const })));
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
-    await page.goto("/");
+    await page.goto("/blueprint/edit");
     await page.getByRole("button", { name: "添加目标", exact: true }).click();
     await page.getByLabel("目标", { exact: true }).fill("准备一次公开演讲");
     await page.getByRole("button", { name: "添加节点", exact: true }).click();

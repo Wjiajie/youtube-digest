@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./blueprint-progress";
 
 import { NODE_TYPES } from "./node-types";
 export { NODE_TYPES } from "./node-types";
