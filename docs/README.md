@@ -15,6 +15,7 @@
 9. [开放资产研究](open-asset-research.md)：零采购候选来源、具体资源与许可依据、主题适配缺口和接入检查；不是正式资产选型或美术验收结果。
 10. [真实资产接收台账](asset-intake.md)：实际下载文件、SHA-256、许可差异与尚未通过的接入门槛。
 11. [双主题 DOM 基础](theme-foundation.md)：已实现的轻量主题接口、本地设计预览、验证证据与尚未接通的产品能力。
+12. [本地 3D 资产试装](scene-intake-preview.md)：真实模型的内部检查工具、运行时隔离、已验证行为与未通过的美术／性能门槛。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 
