@@ -39,6 +39,7 @@ export function App() {
   currentState.current = state;
   const loadRequest = useRef(0);
   const preferenceRequest = useRef(0);
+  const authRequest = useRef(0);
 
   const load = useCallback(async () => {
     const request = ++loadRequest.current;
@@ -103,6 +104,7 @@ export function App() {
     return () => {
       ++loadRequest.current;
       ++preferenceRequest.current;
+      ++authRequest.current;
       browser.tabs.onUpdated.removeListener(listener);
     };
   }, [load]);
@@ -113,6 +115,10 @@ export function App() {
       if (area !== "local" || !session) return;
       const owner = (value: unknown) => typeof value === "object" && value !== null && "userId" in value ? value.userId : undefined;
       if (owner(session.oldValue) === owner(session.newValue)) return;
+      // The storage event owns loading a newly connected account, including
+      // connections made from another panel. Older auth completions must not
+      // replace that account or clear its loading state.
+      if (owner(session.newValue)) ++authRequest.current;
       ++loadRequest.current;
       ++preferenceRequest.current;
       currentState.current = { connected: false };
@@ -126,6 +132,7 @@ export function App() {
   }, [load]);
 
   async function connect() {
+    const request = ++authRequest.current;
     ++loadRequest.current;
     ++preferenceRequest.current;
     setBusy(true);
@@ -133,26 +140,31 @@ export function App() {
     setMessage("");
     try {
       await browser.runtime.sendMessage({ type: "AUTH_CONNECT" });
+      if (request !== authRequest.current) return;
       await load();
     } catch (caught) {
+      if (request !== authRequest.current) return;
       setError(caught instanceof Error && caught.message === "AUTH_CANCELLED" ? "你取消了授权，Blueprint 没有获得访问权限。" : "授权未完成，请确认 Web 已登录后重试。");
       setBusy(false);
     }
   }
 
   async function disconnect() {
+    const request = ++authRequest.current;
     ++loadRequest.current;
     ++preferenceRequest.current;
     setBusy(true);
     setError("");
     try {
       await browser.runtime.sendMessage({ type: "AUTH_DISCONNECT" });
+      if (request !== authRequest.current) return;
       setState({ connected: false });
       setMessage("扩展会话已退出。你可以在 Web 设置中撤销完整授权。");
     } catch {
+      if (request !== authRequest.current) return;
       setError("暂时无法退出扩展会话，请稍后重试。");
     } finally {
-      setBusy(false);
+      if (request === authRequest.current) setBusy(false);
     }
   }
 

@@ -231,3 +231,67 @@ test("connecting a new account survives an older stalled refresh and disconnect"
   http.mockRejectedValue(new TypeError("offline"));
   expect(await platform.listener!({ type: "LOAD_PREFERENCES" })).toMatchObject({ connected: true, userId: ownerB, preferences: null, preferencesStatus: "unavailable" });
 });
+
+test("a newer theme read cannot discard a valid current-video context from another runtime caller", async () => {
+  const boundSnapshot = { ...snapshot, goals: [{ id: "018f6f68-9b4d-7c93-a134-c8571b8f7805", title: "目标", position: 0, stages: [{
+    id: "018f6f68-9b4d-7c93-a134-c8571b8f7806", title: "起步", position: 0, nodes: [{
+      id: "018f6f68-9b4d-7c93-a134-c8571b8f7803", type: "learn", title: "当前视频节点", position: 0, dependencyIds: [], resources: [{
+        id: "018f6f68-9b4d-7c93-a134-c8571b8f7804", kind: "youtube_video", externalId: "dQw4w9WgXcQ", url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      }],
+    }],
+  }] }] };
+  let release!: (response: Response) => void;
+  http.mockImplementation(async (url) => String(url).endsWith("/account-preferences")
+    ? new Promise((resolve) => { release = resolve; }) : Response.json(boundSnapshot));
+  const context = platform.listener!({ type: "LOAD_CONTEXT" });
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  http.mockResolvedValue(Response.json(cyberpunk));
+  expect(await platform.listener!({ type: "LOAD_PREFERENCES" })).toMatchObject({ preferences: cyberpunk, preferencesStatus: "current" });
+  release(Response.json(eastern));
+  expect(await context).toMatchObject({ connected: true, snapshot: boundSnapshot, context: { nodeTitle: "当前视频节点" }, preferences: cyberpunk });
+  http.mockRejectedValue(new TypeError("offline"));
+  expect(await platform.listener!({ type: "LOAD_PREFERENCES" })).toMatchObject({ preferences: cyberpunk, preferencesStatus: "cached" });
+});
+
+test.each([ownerA, ownerB])("a delayed Blueprint cache write cannot survive disconnect and reconnect to %s", async (ownerId) => {
+  let release!: () => void;
+  platform.beforeSet = async (values) => {
+    if (`blueprint_cache:${ownerA}` in values && !release) await new Promise<void>((resolve) => { release = resolve; });
+  };
+  const loading = platform.listener!({ type: "LOAD_CONTEXT" });
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  await platform.listener!({ type: "AUTH_DISCONNECT" });
+  release();
+  await loading;
+  http.mockResolvedValue(Response.json({ access_token: `header.${btoa(JSON.stringify({ sub: ownerId }))}.signature`, refresh_token: `new-${ownerId}`, expires_in: 3600 }));
+  await platform.listener!({ type: "AUTH_CONNECT" });
+  http.mockRejectedValue(new TypeError("offline"));
+  expect(await platform.listener!({ type: "LOAD_CONTEXT" })).toMatchObject({ connected: true, userId: ownerId, snapshot: null, stale: true });
+  if (ownerId === ownerB) {
+    http.mockResolvedValue(Response.json({ access_token: `header.${btoa(JSON.stringify({ sub: ownerA }))}.signature`, refresh_token: "new-owner-a", expires_in: 3600 }));
+    await platform.listener!({ type: "AUTH_CONNECT" });
+    http.mockRejectedValue(new TypeError("offline"));
+    expect(await platform.listener!({ type: "LOAD_CONTEXT" })).toMatchObject({ connected: true, userId: ownerA, snapshot: null });
+  }
+});
+
+test.each([ownerA, ownerB])("a new session for %s can cache its Blueprint while old-cache cleanup is pending", async (ownerId) => {
+  let release!: () => void;
+  platform.beforeSet = async (values) => {
+    if (`blueprint_cache:${ownerA}` in values && !release) await new Promise<void>((resolve) => { release = resolve; });
+  };
+  const old = platform.listener!({ type: "LOAD_CONTEXT" });
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  await platform.listener!({ type: "AUTH_DISCONNECT" });
+  http.mockResolvedValue(Response.json({ access_token: `header.${btoa(JSON.stringify({ sub: ownerId }))}.signature`, refresh_token: `new-${ownerId}`, expires_in: 3600 }));
+  await platform.listener!({ type: "AUTH_CONNECT" });
+  const freshSnapshot = { ...snapshot, id: ownerId, version: 2, title: "新会话的蓝图" };
+  http.mockImplementation(async (url) => Response.json(String(url).endsWith("/account-preferences") ? cyberpunk : freshSnapshot));
+  const fresh = platform.listener!({ type: "LOAD_CONTEXT" });
+  await vi.waitFor(() => expect(http.mock.calls.filter(([url]) => String(url).endsWith("/blueprint"))).toHaveLength(2));
+  release();
+  await old;
+  expect(await fresh).toMatchObject({ connected: true, userId: ownerId, snapshot: freshSnapshot });
+  http.mockRejectedValue(new TypeError("offline"));
+  expect(await platform.listener!({ type: "LOAD_CONTEXT" })).toMatchObject({ connected: true, userId: ownerId, snapshot: freshSnapshot, stale: true });
+});

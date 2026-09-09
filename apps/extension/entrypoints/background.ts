@@ -12,6 +12,7 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const apiBase = (import.meta.env.WXT_PUBLIC_WEB_ORIGIN || "http://localhost:3000").replace(/\/$/, "");
 let preferencesRequest = 0;
 let preferencesCacheWrite = Promise.resolve();
+let blueprintCacheWrite = Promise.resolve();
 type AuthPort = ReturnType<typeof createExtensionAuthPort>;
 type AuthorizedSession = NonNullable<Awaited<ReturnType<AuthPort["accessToken"]>>>;
 
@@ -77,8 +78,18 @@ async function loadContext(auth: ReturnType<typeof createExtensionAuthPort>) {
     if (!response.ok) throw new Error("BLUEPRINT_FETCH_FAILED");
     snapshot = parseBlueprintSnapshot(await response.json());
     if (!await auth.isCurrent(current.token)) return { superseded: true as const };
-    await browser.storage.local.set({ [`blueprint_cache:${current.session.userId}`]: snapshot });
+    const cacheKey = `blueprint_cache:${current.session.userId}`;
+    const write = blueprintCacheWrite.then(async () => {
+      if (!await auth.isCurrent(current.token)) return;
+      await browser.storage.local.set({ [cacheKey]: snapshot });
+      // Auth can change while Chrome is persisting the snapshot. Complete any
+      // obsolete write's cleanup before a newer session writes this cache.
+      if (!await auth.isCurrent(current.token)) await browser.storage.local.remove(cacheKey);
+    });
+    blueprintCacheWrite = write.catch(() => undefined);
+    await write;
   } catch {
+    await blueprintCacheWrite;
     if (!await auth.isCurrent(current.token)) return { superseded: true as const };
     const cached = await browser.storage.local.get(`blueprint_cache:${current.session.userId}`);
     snapshot = cached[`blueprint_cache:${current.session.userId}`]
@@ -101,8 +112,12 @@ async function loadContext(auth: ReturnType<typeof createExtensionAuthPort>) {
     : [];
   const pending = (await readOutbox()).filter((item) => item.ownerId === current.session.userId).length;
   if (!await auth.isCurrent(current.token)) return { superseded: true as const };
-  const preferences = await preferencesRead;
-  if (!("connected" in preferences) || !preferences.connected) return preferences;
+  const preferenceResult = await preferencesRead;
+  if ("connected" in preferenceResult && !preferenceResult.connected) return preferenceResult;
+  if (!await auth.isCurrent(current.token)) return { superseded: true as const };
+  // Another panel's preference refresh can supersede this theme read without
+  // superseding the video context. Use the latest accepted account cache.
+  const preferences = "superseded" in preferenceResult ? await cachedPreferences(current) : preferenceResult;
   if (!await auth.isCurrent(current.token)) return { superseded: true as const };
   return {
     ...preferences,
@@ -151,15 +166,22 @@ async function loadPreferences(auth: AuthPort, authorized?: AuthorizedSession) {
     if (!await isCurrent()) return { superseded: true as const };
     return { connected: true as const, userId: ownerId, preferences, preferencesStatus: "current" as const };
   } catch {
-    await preferencesCacheWrite;
-    const cached = (await browser.storage.local.get(cacheKey))[cacheKey];
+    const cached = await cachedPreferences(current);
     if (!await isCurrent()) return { superseded: true as const };
-    const parsed = accountPreferencesSchema.safeParse(
-      typeof cached === "object" && cached !== null && "ownerId" in cached && cached.ownerId === ownerId && "preferences" in cached
-        ? cached.preferences : null,
-    );
-    return { connected: true as const, userId: ownerId, preferences: parsed.success ? parsed.data : null, preferencesStatus: parsed.success ? "cached" as const : "unavailable" as const };
+    return cached;
   }
+}
+
+async function cachedPreferences(current: AuthorizedSession) {
+  await preferencesCacheWrite;
+  const ownerId = current.session.userId;
+  const cacheKey = `blueprint_preferences:${ownerId}`;
+  const cached = (await browser.storage.local.get(cacheKey))[cacheKey];
+  const parsed = accountPreferencesSchema.safeParse(
+    typeof cached === "object" && cached !== null && "ownerId" in cached && cached.ownerId === ownerId && "preferences" in cached
+      ? cached.preferences : null,
+  );
+  return { connected: true as const, userId: ownerId, preferences: parsed.success ? parsed.data : null, preferencesStatus: parsed.success ? "cached" as const : "unavailable" as const };
 }
 
 async function startSession(

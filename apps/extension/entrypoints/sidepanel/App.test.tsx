@@ -118,3 +118,37 @@ test("a learning result arriving after an account switch cannot show success on 
   await act(async () => release({ ok: true }));
   expect(host.textContent).not.toContain("学习会话已写入你的蓝图");
 });
+
+test("a delayed logout cannot hide the account connected through the newly available login control", async () => {
+  await act(async () => root.render(<App />));
+  const onStorageChanged = storage.addListener.mock.calls[0]![0];
+  let owner: string | null = "user-a";
+  let finishLogout!: (value: unknown) => void;
+  transport.sendMessage.mockImplementation(async ({ type }: { type: string }) => {
+    if (type === "AUTH_DISCONNECT") {
+      owner = null;
+      onStorageChanged({ blueprint_cloud_session_v1: { oldValue: { userId: "user-a" } } }, "local");
+      return new Promise((resolve) => { finishLogout = resolve; });
+    }
+    if (type === "AUTH_CONNECT") {
+      owner = "user-b";
+      onStorageChanged({ blueprint_cloud_session_v1: { newValue: { userId: owner } } }, "local");
+      return { connected: true, userId: owner };
+    }
+    if (type === "LOAD_CONTEXT") return owner ? {
+      connected: true, userId: owner, email: "next-account@example.test", nodes: [],
+      preferences: { theme: { id: "eastern", version: 1 }, revision: 1 }, preferencesStatus: "current",
+      context: { nodeId: "node-b", nodeTitle: "新账号当前节点", goalTitle: "新目标", stageTitle: "起步" },
+    } : { connected: false };
+    throw new Error(`Unexpected browser message: ${type}`);
+  });
+  await clickButton("退出");
+  expect([...host.querySelectorAll("button")].find((button) => button.textContent === "连接 Blueprint")?.disabled).toBe(false);
+  await clickButton("连接 Blueprint");
+  expect(host.textContent).toContain("新账号当前节点");
+  await act(async () => finishLogout({ connected: false }));
+  expect(host.textContent).toContain("next-account@example.test");
+  expect(host.textContent).toContain("新账号当前节点");
+  expect(host.textContent).not.toContain("扩展会话已退出");
+  expect(host.querySelector("[data-bp-theme]")?.getAttribute("data-bp-theme")).toBe("eastern");
+});
