@@ -116,9 +116,18 @@ test("late evidence receipts and reads cannot escape after the owning session ch
 test("unavailable evidence history is not an empty feed and unauthorized reads invalidate only their token", async () => {
   http.mockImplementation(async (url) => String(url).endsWith("/blueprint") ? Response.json(snapshot) : new Response(null, { status: 503 }));
   expect(await platform.listener!({ type: "LOAD_EVIDENCE", ownerId: ownerA })).toEqual({ ok: true, value: { blueprint: snapshot, records: { ok: false, code: "unavailable" } } });
-  http.mockResolvedValue(new Response(null, { status: 401 }));
+  http.mockResolvedValue(Response.json({ code: "unauthenticated" }, { status: 401 }));
   expect((await platform.listener!({ type: "LOAD_EVIDENCE", ownerId: ownerA })).ok).toBe(false);
   expect(await platform.listener!({ type: "AUTH_STATUS" })).toEqual({ connected: false });
+});
+
+test("a gateway 401 cannot erase the account or classify an uncertain evidence write as rejected", async () => {
+  const input = { nodeId: ownerB, expectedVersion: 1, clientMutationId: "018f6f68-9b4d-7c93-a134-c8571b8f7803", text: "保留原提交" };
+  for (const body of [null, "<html>upstream auth required</html>", JSON.stringify({ code: "invalid" })]) {
+    http.mockImplementation(async () => new Response(body, { status: 401 }));
+    expect(await platform.listener!({ type: "SAVE_EVIDENCE", ownerId: ownerA, input })).toEqual({ ok: false, code: "unavailable" });
+    expect(await platform.listener!({ type: "AUTH_STATUS" })).toEqual({ connected: true, userId: ownerA });
+  }
 });
 
 test("offline preferences use only the same owner's validated cache and do not mark the Blueprint stale", async () => {

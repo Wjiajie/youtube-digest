@@ -71,7 +71,8 @@
 - Web Action 与扩展消息是两个真实适配器，共享领域中的成果工作区和 UI 包中的恢复逻辑。样式共享语义 Token，扩展固定单栏、紧凑间距，两主题不改变记录含义。
 - `LOAD_EVIDENCE`／`SAVE_EVIDENCE` 必须携带页面账号，后台使用当前扩展 Token 并在响应解析后再次检查会话。请求不携带 Web Cookie，不缓存；只将匹配的应用错误视为确定拒绝，网关错误、超时、错误回执仍视为未知结果。旧账号的延迟响应不返回私人记录。
 - 恢复缓存仅保存在扩展自身 origin 的 localStorage，不在 YouTube 页面、后台 service worker 或旧 outbox 中。Web 与扩展的未提交草稿互不共享；已保存记录由云端同步。扩展 Web Storage 跨同源扩展页共享，且与 service worker 的可用 API 不同，见 [Chrome 存储说明](https://developer.chrome.com/docs/extensions/develop/concepts/storage-and-cookies)。不增加 unlimitedStorage 等权限，缓存不承诺永久保留或加密。
-- 本批新增 4 项真实后台消息／Auth／HTTP 边界测试和 1 项真实 App 开合测试；保留共享模块 16 项恢复测试。完整 `check:m1` 通过：198 项测试、类型检查、既有账号升级、向导、Web 构建及扩展安全检查，扩展产物 560.50 kB；常规生产页面 E2E 20 项通过（8.8 秒）。
-- [MV3 浏览器验证](../apps/extension/e2e/evidence.spec.ts)使用真实构建产物、真实 Chrome 消息／存储／Web Locks；外部 HTTP 为明确夹具且禁止真实网络回退。回执丢失后重载原提交仅形成一条记录，双主题 320px 无横向溢出、原稿保留，切账号隐藏旧数据并能恢复原账号草稿；无未捕获页面异常，截图已检查。1 项通过（6.3 秒），临时浏览器 profile 已清理。执行：`bash scripts/with-m1-runtime.sh npx --no-install playwright test --config playwright.extension.config.ts`，此前需使用目标配置构建扩展。
+- 本批新增 5 项真实后台消息／Auth／HTTP 边界测试和 1 项真实 App 开合测试；保留共享模块 16 项恢复测试。完整 `check:m1` 通过：199 项测试、类型检查、既有账号升级、向导、Web 构建及扩展安全检查，扩展产物 560.56 kB；常规生产页面 E2E 20 项通过（8.8 秒）。
+- [MV3 浏览器验证](../apps/extension/e2e/evidence.spec.ts)使用真实构建产物、真实 Chrome 消息／存储／Web Locks；外部 HTTP 为明确夹具且禁止真实网络回退。回执丢失后重载原提交仅形成一条记录，双主题 320px 无横向溢出、原稿保留，切账号隐藏旧数据并能恢复原账号草稿；无未捕获页面异常，截图已检查。最终重跑 1 项通过（2.5 秒），临时浏览器 profile 已清理。执行：`bash scripts/with-m1-runtime.sh npx --no-install playwright test --config playwright.extension.config.ts`，此前需使用目标配置构建扩展。
 - 共享模块迁移后重新运行 Web 的真实本地 Supabase 完整流程，1 项通过（11.9 秒），覆盖双主题、保存、离线重试及标签页接手；当次临时账号与级联记录已清理，既有账号未动。
 - 上述扩展检查不是实际 OAuth 登录、YouTube 播放器或真实数据库验收。没有修改 Auth／RLS／迁移，没有托管发布、重载用户安装版、接管浏览器、push 或新增费用。
+- 源码提交 `b9b954a`；独立 Standards 发现 1 项 P3（共享 UI 职责表冲突），Spec 发现 1 项 P2（网关 401 被当作确定身份失效）。前者已统一文档；后者先以空体 401 重现失败，再修为只接受匹配 `unauthenticated` 的应用 401，HTML／空体／不匹配 JSON 保留 `unavailable`。两路复核均无剩余确认问题；最终完整检查与 MV3 重跑通过。

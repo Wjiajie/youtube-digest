@@ -24,12 +24,12 @@ export function createEvidenceTransport(auth: Auth, apiBase: string) {
         credentials: "omit", cache: "no-store", signal: AbortSignal.timeout(15_000),
       });
       if (!await auth.isCurrent(session.token)) return { ok: false, code: "forbidden" };
-      if (response.status === 401) {
+      const body: unknown = await response.json();
+      if (!await auth.isCurrent(session.token)) return { ok: false, code: "forbidden" };
+      if (response.status === 401 && typeof body === "object" && body !== null && "code" in body && body.code === "unauthenticated") {
         await auth.invalidate(session.token);
         return { ok: false, code: "unauthenticated" };
       }
-      const body: unknown = await response.json();
-      if (!await auth.isCurrent(session.token)) return { ok: false, code: "forbidden" };
       if (response.ok) return { ok: true, value: parse(body) };
       const code = { 403: "forbidden", 404: "not_found", 409: "version_conflict", 422: "invalid" }[response.status] as
         "forbidden" | "not_found" | "version_conflict" | "invalid" | undefined;
