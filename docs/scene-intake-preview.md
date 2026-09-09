@@ -37,3 +37,5 @@ Standards 审阅发现初版清理遗漏 glTF 允许的 Line／Points 图元，�
 为实际取得的 Kenney 二进制模型增加 `.glb` File API 输入，不转换或上传文件。校验 [GLB 2.0 容器](https://registry.khronos.org/glTF/specs/2.0/glTF-2.0.html#glb-file-format-specification)的 magic、版本、总长度、四字节对齐及块长度；本工具只接受一个 JSON 和可选一个 BIN 块，其他块类型暂不支持。JSON 与原 JSON glTF 采用同一外部 URI 拒绝策略，加载器的 URL 限制不变。先复现第二 JSON 块可以覆盖已检查文档，再拒绝重复／尾随块，避免检查与实际解析不一致。
 
 新增 10 项测试，包含真实 GLTFLoader 解析二进制三角形及损坏容器／外部资源拒绝；149 项测试与完整 `check:m1` 通过。另用真实 Three.js 加载四个取得的 GLB，检查 Mesh 和包围盒并释放资源。**这是容器、几何与加载器证据，不是 GPU 渲染或 UI 上传旅程证据**。浏览器空间 8 已交给用户，本批没有夺回控制；实际文件选择、WebGL 画面和场景构图留待后续试装。
+
+源码提交 `328074e`；固定点 `c6fd053` 的 Standards／Spec 两路复核均无确认发现。16 项生产模式 E2E（含内部设计页保持 404）通过，耗时 7.4 秒；未部署新的线上版本，扩展权限与云端数据没有变化。
