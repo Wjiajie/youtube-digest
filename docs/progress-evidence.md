@@ -1,6 +1,6 @@
 # 私人成果记录：P4 数据与应用切片
 
-更新：2026-09-10。**源码与本地数据库已实现，尚未部署到托管环境，也没有接入正式界面。** 本文是实现证据，不替代[执行路线](execution-roadmap.md)的阶段状态。
+更新：2026-09-10，源码提交 `4354d4f`。**源码与本地数据库已实现，尚未部署到托管环境，也没有接入正式界面。** 本文是实现证据，不替代[执行路线](execution-roadmap.md)的阶段状态。
 
 ## 已实现的行为
 
@@ -36,7 +36,8 @@
 - 本地 Security／Performance Advisor 在修正精确授权判断后无 WARN／ERROR；迁移列表五条与本地应用历史对应。
 - [升级契约](../scripts/test-m1-migration.mjs)从已有账号应用全部迁移，验证成果写入、重试及匿名 ACL，不重新创建原账号。
 - [本地真实 API 检查](../scripts/test-progress-evidence-local.mjs)通过真实 SDK／PostgREST 同时提交两次，获得同一记录 ID；第二账号读取为空。只创建当次随机 ID 的临时账号，finally 清理两名账号及其测试数据，原本地账号未动。运行方式：`bash scripts/with-m1-runtime.sh node scripts/test-progress-evidence-local.mjs`；CLI 不在 PATH 时通过 `BLUEPRINT_SUPABASE_BIN` 指定已安装二进制。
-- 16 项生产模式 E2E 通过（7.4 秒），覆盖现有登录／恢复、偏好匿名读取与内部设计页门禁；不是尚未接入的成果 UI 验收。独立规范／需求复核结果待归档。
+- 16 项生产模式 E2E 通过（7.4 秒），覆盖现有登录／恢复、偏好匿名读取与内部设计页门禁；不是尚未接入的成果 UI 验收。
+- 固定点 `027d70f` → `4354d4f` 的独立复核：Standards 0 项确认发现；Spec 0 项确认发现，无阻断。两路只读审阅源码、测试与文档，实际运行验证由主任务完成。
 
 ## 后续门槛
 
