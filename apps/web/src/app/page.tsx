@@ -9,6 +9,7 @@ import { logoutAction } from "./actions";
 import { BlueprintEditor } from "./blueprint-editor";
 import { AccountThemeShell } from "./account-theme-shell";
 import { AuthUnavailable } from "./auth-unavailable";
+import { LogoutForm } from "./logout-form";
 
 export default async function HomePage() {
   const identity = await resolveRequestActor();
@@ -43,7 +44,7 @@ export default async function HomePage() {
           <div className="brand">Blueprint / M1 Cloud Slice</div>
           <p className="subtle">一份属于你的目标蓝图 · 版本 {result.value.version}</p>
         </div>
-        <div className="actions"><Link className="bp-button" href="/settings/connections">扩展连接</Link><form action={logoutAction}><button className="bp-button">退出登录</button></form></div>
+        <div className="actions"><Link className="bp-button" href="/settings/connections">扩展连接</Link><LogoutForm action={logoutAction} /></div>
       </header>
       <div className="hud">
         <aside className="bp-panel identity-panel" aria-label="身份状态面板">

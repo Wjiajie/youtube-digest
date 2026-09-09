@@ -73,7 +73,15 @@ export async function rejectProposalAction(input: { proposalId: string }) {
 }
 
 export async function logoutAction() {
-  const supabase = await createServerSupabase();
-  await supabase.auth.signOut();
-  redirect("/login");
+  let destination = "/login";
+  try {
+    const supabase = await createServerSupabase();
+    // Preserve the existing all-session scope. A provider failure can clear
+    // this browser's cookie without confirming remote session revocation.
+    const { error } = await supabase.auth.signOut({ scope: "global" });
+    if (error) destination = "/auth/logout-recovery";
+  } catch {
+    destination = "/auth/logout-recovery";
+  }
+  redirect(destination);
 }
