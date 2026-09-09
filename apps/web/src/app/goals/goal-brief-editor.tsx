@@ -76,6 +76,7 @@ function Editor({ accountId, id, initial, saveAction, reloadAction }: Props) {
         restore();
         if (!lock) { setLockState("elsewhere"); return; }
         if (lockAttempt > 0) {
+          inFlight.current = true; setBusy(true); setNeedsRead(true);
           try {
             const result = await reloadAction();
             if (cancelled) return;
@@ -86,6 +87,7 @@ function Editor({ accountId, id, initial, saveAction, reloadAction }: Props) {
             } else if (result.code === "forbidden" || result.code === "unauthenticated") setIdentityLost(true);
             else setNeedsRead(result.code !== "not_found" || Boolean(initial));
           } catch { if (!cancelled) setNeedsRead(true); }
+          finally { if (!cancelled) { inFlight.current = false; setBusy(false); } }
         }
         if (cancelled) return;
         setLockState("owned");
@@ -111,7 +113,7 @@ function Editor({ accountId, id, initial, saveAction, reloadAction }: Props) {
   const readonly = busy || Boolean(draft.attempt) || recoveryBlocked || lockState !== "owned";
 
   async function reload() {
-    if (inFlight.current || identityLost) return;
+    if (inFlight.current || identityLost || lockState === "pending") return;
     inFlight.current = true; setBusy(true);
     try {
       const result = await reloadAction();
@@ -209,7 +211,7 @@ function Editor({ accountId, id, initial, saveAction, reloadAction }: Props) {
       <Panel className="brief-card brief-readiness"><div className="brand">02 / Readiness</div><h2>方向准备度</h2>
         <Status tone={confirmed ? "success" : "pending"}>{confirmed ? "当前云端定义已确认" : "等待你的核对"}</Status>
         <p className="subtle">云端修订 {cloud?.revision ?? 0} · {confirmed ? "定义已确认，尚未生成路径" : "定义仍可调整，尚未生成路径"}</p>
-        <Button disabled={busy} onClick={() => void reload()}>读取当前云端定义</Button>
+        <Button disabled={busy || lockState === "pending"} onClick={() => void reload()}>读取当前云端定义</Button>
         {conflict ? <div className="brief-conflict"><Status tone="warning">云端已有更新，或仍需要读取最新修订。本机基于修订 {draft.revision}。</Status>
           {cloud ? <details><summary>查看当前云端文字</summary><dl>{Object.entries(draftFrom(cloud).fields).map(([key, value]) => <div key={key}><dt>{key in labels ? labels[key as keyof typeof labels] : key === "targetDate" ? "期限" : "约束"}</dt><dd>{value || "未填写"}</dd></div>)}</dl></details> : null}
           <Button disabled={readonly || needsRead || !cloud} onClick={() => { if (cloud) update({ ...draft, revision: cloud.revision }); }}>保留我的文字，以当前修订重新核对</Button>

@@ -212,3 +212,26 @@ test("a failed recovery read does not replace potentially existing private data"
   expect(host.textContent).toContain("无法读取本机恢复内容");
   expect(write).not.toHaveBeenCalled();
 });
+
+test("serializes takeover reads with manual reloads so a late older read cannot replace newer state", async () => {
+  await render(); await ready(); await act(async () => button("确认这版目标定义").click());
+  const prior = cloud!;
+  let release!: (value: ApplicationResult<GoalBrief>) => void;
+  const pending = new Promise<ApplicationResult<GoalBrief>>(resolve => { release = resolve; });
+  let reads = 0;
+  const second = document.createElement("div"); document.body.append(second); const secondRoot = createRoot(second);
+  const secondRead = async () => { reads++; return reads === 1 ? pending : { ok: true as const, value: { ...prior, revision: 2, status: "draft" as const } }; };
+  try {
+    await act(async () => secondRoot.render(<GoalBriefEditor accountId={account} id={id} initial={prior} saveAction={save} reloadAction={secondRead} />));
+    await act(async () => root.render(null));
+    await act(async () => [...second.querySelectorAll("button")].find(item => item.textContent === "接手编辑")!.click());
+    const reload = [...second.querySelectorAll("button")].find(item => item.textContent === "读取当前云端定义")!;
+    await act(async () => reload.click());
+    expect(reads).toBe(1);
+    expect(reload.disabled).toBe(true);
+    await act(async () => release({ ok: true, value: prior }));
+    await act(async () => reload.click());
+    expect(reads).toBe(2);
+    expect(second.textContent).not.toContain("当前云端定义已确认");
+  } finally { await act(async () => { release({ ok: true, value: prior }); }); await act(async () => secondRoot.unmount()); second.remove(); }
+});
