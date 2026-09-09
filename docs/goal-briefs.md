@@ -1,6 +1,6 @@
 # 目标定义：P4 云端基础与双主题工作台
 
-更新：2026-09-10；云端基础固定点 `baa6776`，实现 `f694b07`、复核 `9d76a32`；工作台固定点 `9d76a32`。**已实现并本地验证领域、数据库、Web Action、双主题目标定义列表与卡片；尚未提供 Agent 对话、规划门禁或托管发布。** 本文记录实现边界，阶段以[执行路线](execution-roadmap.md)为准。
+更新：2026-09-10；云端基础固定点 `baa6776`，实现 `f694b07`、复核 `9d76a32`；工作台实现 `488d961`、修复 `c53111f`。**领域、数据库、Web Action、双主题目标定义列表与卡片已发布到托管主站；真实托管登录旅程尚未验收，Agent 对话与规划门禁尚未实现。** 本文记录实现边界，阶段以[执行路线](execution-roadmap.md)为准。
 
 ## 用户语义与状态
 
@@ -52,7 +52,7 @@ Standards：最终 0 项确认缺陷、0 项判断性 smells。Spec：最终 0 �
 
 两轴曾提出 SQL `E'\v'` 不支持垂直制表符的候选问题；未修改生产代码时，新增公共 RPC 正反例已通过：字母 `v` 可确认，仅 U+000B 的目标不可确认。实际数据库返回该转义的字符码为 11，[PostgreSQL 17 解析器源码](https://github.com/postgres/postgres/blob/REL_17_STABLE/src/backend/parser/scan.l#L1334)也明确支持它。两轴据此撤回候选问题；保留两条测试，不将未成立的问题记录为已修复缺陷。
 
-## 工作台验证（本批）
+## 工作台验证（发布前源码批次）
 
 15 项公开 React 表单测试覆盖准备度、明确确认、精确重试、旧回执／当前状态分离、版本重核对、账号隔离、主题连续性、Web Locks 接手与不可用、Strict Mode、存储拒写／拒读与损坏恢复；26 项 Action／实际 SDK 外部夹具测试包含列表权限、分页提示与失败状态。恢复文字／请求不一致、过期确认提示、接手读取与手动读取重叠已分别 red→green。
 
@@ -60,4 +60,28 @@ Standards：最终 0 项确认缺陷、0 项判断性 smells。Spec：最终 0 �
 
 工作台实现提交 `488d961`，两轴独立只读复核 `9d76a32...488d961` 及后续修复。Standards：0 项确认违反，1 项非阻断的锁生命周期重复判断；当前不为此抽取跨模块恢复逻辑。Spec：初次发现 1 项 P2 接手读取竞态，主线程以可控延迟测试复现重叠请求；修复后接手读取占用同一 `busy/inFlight`，待取得锁时禁用手动读取，已知待核对时不宣称确认有效。再次复核 0 项剩余问题。实际测试由主线程执行，独立代码复核不替代运行证据。
 
-后续顺序：与一致性读取迁移一起先迁移再部署 → 托管验收；再推进节点投入／完成标准及澄清 Skills、规划门禁。完整双主题 3D、美术与商用品质仍待交付。本批没有费用、push、托管变更或浏览器空间 8 接管。
+该源码批次没有费用、push、托管变更或浏览器空间 8 接管；随后的发布结果如下。节点投入／完成标准及澄清 Skills、规划门禁继续推进；完整双主题 3D、美术与商用品质仍待交付。
+
+## 托管发布（2026-09-10，源码 c53111f）
+
+先迁移，再构建候选并验证，最后切换主域名；未修改产品源码或已应用迁移文件，也未重置数据库。原 Supabase 项目 `msfmsvschsbqizxhjcjp` 的历史由五条增至七条：
+
+| 内容 | 仓库迁移版本 | 托管记录版本 |
+| --- | --- | --- |
+| 蓝图一致性读取 | `20260909205257` | `20260909220319` |
+| 目标定义与提交回执 | `20260909211441` | `20260909220330` |
+
+托管工具保存的两份 SQL 均与对应仓库文件逐字一致，保留各环境生成的版本，不伪造时间戳来对齐历史。迁移前后用户 2、蓝图 2、目标 1、节点 1、学习会话 2、成果 0；用户 ID、蓝图 ID／版本以及整行蓝图内容摘要不变。
+
+实际托管 PostgreSQL 事务检查覆盖 Web owner 读取快照、跨账号隔离、草稿／确认／再编辑、精确重复请求、旧确认回执不恢复较新草稿、过期修订、空白输入、禁止直写；配置扩展能读快照但不能读写目标定义，未知 OAuth 与匿名被拒绝。检查只在数据库事务内设置角色和身份声明，不冒充 Auth 签发会话。事务整体回滚后定义／回执均为 0，原用户、蓝图与会话计数及蓝图内容摘要不变；未创建托管测试账号或发送邮件。
+
+托管 Advisor 保留既有两项 Security WARN：[公开 guarded-definer 执行权](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)与[密码泄露保护未启用](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)。新增一项 [RLS 无策略 INFO](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)对应 `private.goal_brief_mutations`，该私有回执表刻意默认拒绝客户端访问，不能为了清除提示增加客户端策略。Performance 为九项[未使用索引 INFO](https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index)，比发布前增加两个新定义表索引；无新增 WARN／ERROR，不宣称无告警。
+
+Vercel 在原 Hobby 项目构建源码 `c53111f`，Next／TypeScript 构建通过；候选使用 `--skip-domain`，检查通过后才 promote 同一部署：
+
+- 部署：`dpl_3P1TjdDz3WtaHEokBWxZaR8rvpYM`；[不可变候选](https://blueprint-m1-11kx1koot-norlymangune65-4981.vercel.app)；[主站目标定义入口](https://blueprint-m1.vercel.app/goals)。切换后主域名查询解析到同一 READY 部署。
+- 候选及主域名各 10 项检查通过：登录页 200；成果、目标列表、新建与新草稿 URL 四项 307 且保留登录后返回地址；蓝图读取、成果读取／写入三项 401 且 `private, no-store`；内部设计页及资产页两项 404。候选仅使用已有部署访问凭据，主域名匿名检查不带凭据，未绕过应用登录。
+- READY 超过 60 秒后查询该部署自 `2026-09-09T22:05:00Z` 至当次查询时的 error 日志，返回无记录；这仅是发布早期检查，不代表完整一小时、持续监控或真实登录流程没有错误。当前使用 Hobby CLI／Dashboard 观测回退，未开通付费 Drains。
+- 保留上次 `dpl_EWVsJaQCH3EtLBzfktgKkB9R8bBc`／`c0bcf45` 作为回滚参考；回滚 Web 不需要删除新增函数、表或用户数据。
+
+本批未重载用户安装的扩展、接管空间 8、调用模型／字幕、push、采购或升级套餐。261 项源码测试及真实本地旅程证据来自上一批；本批没有重复运行全量测试。**发布成功不等于真实托管账号的目标定义、双端成果或 OAuth 全旅程验收通过**；这些门槛及其余 P1–P9 仍待完成。
