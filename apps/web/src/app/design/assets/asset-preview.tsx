@@ -3,26 +3,12 @@
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { AnimationMixer, Box3, LoadingManager, Mesh, PCFShadowMap, SkinnedMesh, Texture, Vector3 } from "three";
+import { AnimationMixer, Box3, LoadingManager, Mesh, PCFShadowMap, Vector3 } from "three";
 import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { Button, Panel, Status } from "@blueprint/ui";
 import { ThemeSurface } from "@blueprint/ui/theme";
 import { validatePreviewAsset } from "@/lib/scene/preview-asset";
-
-function disposeAsset(asset: GLTF) {
-  for (const scene of asset.scenes) scene.traverse((object) => {
-    if (!(object instanceof Mesh)) return;
-    object.geometry.dispose();
-    for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
-      for (const value of Object.values(material)) if (value instanceof Texture) {
-        value.dispose();
-        if (typeof ImageBitmap !== "undefined" && value.source.data instanceof ImageBitmap) value.source.data.close();
-      }
-      material.dispose();
-    }
-    if (object instanceof SkinnedMesh) object.skeleton.dispose();
-  });
-}
+import { disposeAsset } from "@/lib/scene/asset-resources";
 
 class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
