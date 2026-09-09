@@ -1,6 +1,6 @@
 import { browser } from "wxt/browser";
 
-import { parseBlueprintSnapshot, type BlueprintSnapshot } from "@blueprint/domain";
+import { accountPreferencesSchema, parseBlueprintSnapshot, type BlueprintSnapshot } from "@blueprint/domain";
 
 import { createExtensionAuthPort } from "../src/auth";
 import { initExtensionObservability } from "../src/observability";
@@ -10,6 +10,10 @@ const OUTBOX_KEY = "blueprint_session_outbox_v1";
 const CLEANUP_KEY = "blueprint_v3_cleanup_complete";
 const REQUEST_TIMEOUT_MS = 15_000;
 const apiBase = (import.meta.env.WXT_PUBLIC_WEB_ORIGIN || "http://localhost:3000").replace(/\/$/, "");
+let preferencesRequest = 0;
+let preferencesCacheWrite = Promise.resolve();
+type AuthPort = ReturnType<typeof createExtensionAuthPort>;
+type AuthorizedSession = NonNullable<Awaited<ReturnType<AuthPort["accessToken"]>>>;
 
 export default defineBackground(() => {
   initExtensionObservability();
@@ -31,6 +35,8 @@ export default defineBackground(() => {
         return { connected: false };
       case "LOAD_CONTEXT":
         return loadContext(auth);
+      case "LOAD_PREFERENCES":
+        return loadPreferences(auth);
       case "START_SESSION":
         return startSession(auth, message.context);
       case "RETRY_OUTBOX": {
@@ -52,6 +58,10 @@ export default defineBackground(() => {
 async function loadContext(auth: ReturnType<typeof createExtensionAuthPort>) {
   const current = await auth.accessToken();
   if (!current) return { connected: false };
+  const preferencesRead = loadPreferences(auth, current);
+  // The context may exit early on revocation; keep the independent read's
+  // rejection handled even when its result is no longer needed.
+  void preferencesRead.catch(() => undefined);
   let snapshot: BlueprintSnapshot | null = null;
   let stale = false;
   try {
@@ -59,11 +69,17 @@ async function loadContext(auth: ReturnType<typeof createExtensionAuthPort>) {
       headers: { Authorization: `Bearer ${current.token}` },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-    if (response.status === 401) return { connected: false };
+    if (!await auth.isCurrent(current.token)) return { superseded: true as const };
+    if (response.status === 401) {
+      await auth.invalidate(current.token);
+      return { connected: false };
+    }
     if (!response.ok) throw new Error("BLUEPRINT_FETCH_FAILED");
     snapshot = parseBlueprintSnapshot(await response.json());
+    if (!await auth.isCurrent(current.token)) return { superseded: true as const };
     await browser.storage.local.set({ [`blueprint_cache:${current.session.userId}`]: snapshot });
   } catch {
+    if (!await auth.isCurrent(current.token)) return { superseded: true as const };
     const cached = await browser.storage.local.get(`blueprint_cache:${current.session.userId}`);
     snapshot = cached[`blueprint_cache:${current.session.userId}`]
       ? parseBlueprintSnapshot(cached[`blueprint_cache:${current.session.userId}`])
@@ -84,7 +100,12 @@ async function loadContext(auth: ReturnType<typeof createExtensionAuthPort>) {
       })))))
     : [];
   const pending = (await readOutbox()).filter((item) => item.ownerId === current.session.userId).length;
+  if (!await auth.isCurrent(current.token)) return { superseded: true as const };
+  const preferences = await preferencesRead;
+  if (!("connected" in preferences) || !preferences.connected) return preferences;
+  if (!await auth.isCurrent(current.token)) return { superseded: true as const };
   return {
+    ...preferences,
     connected: true,
     email: current.session.email,
     userId: current.session.userId,
@@ -95,6 +116,50 @@ async function loadContext(auth: ReturnType<typeof createExtensionAuthPort>) {
     stale,
     pending,
   };
+}
+
+async function loadPreferences(auth: AuthPort, authorized?: AuthorizedSession) {
+  const request = ++preferencesRequest;
+  const current = authorized ?? await auth.accessToken();
+  if (!current) return { connected: false as const };
+  const ownerId = current.session.userId;
+  const cacheKey = `blueprint_preferences:${ownerId}`;
+  const isCurrent = async () => request === preferencesRequest && await auth.isCurrent(current.token);
+  try {
+    const response = await fetch(`${apiBase}/api/v1/account-preferences`, {
+      headers: { Authorization: `Bearer ${current.token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!await isCurrent()) return { superseded: true as const };
+    if (response.status === 401) {
+      await auth.invalidate(current.token);
+      return { connected: false as const };
+    }
+    if (!response.ok) throw new Error("PREFERENCES_FETCH_FAILED");
+    const preferences = accountPreferencesSchema.parse(await response.json());
+    if (!await isCurrent()) return { superseded: true as const };
+    // Serialize writes as well as checking responses: a slow storage operation
+    // must not finish after and overwrite the next accepted preference.
+    const write = preferencesCacheWrite.then(async () => {
+      if (!await isCurrent()) return;
+      await browser.storage.local.set({ [cacheKey]: { ownerId, preferences } });
+      if (!await auth.isCurrent(current.token)) await browser.storage.local.remove(cacheKey);
+    });
+    preferencesCacheWrite = write.catch(() => undefined);
+    await write;
+    if (!await isCurrent()) return { superseded: true as const };
+    return { connected: true as const, userId: ownerId, preferences, preferencesStatus: "current" as const };
+  } catch {
+    await preferencesCacheWrite;
+    const cached = (await browser.storage.local.get(cacheKey))[cacheKey];
+    if (!await isCurrent()) return { superseded: true as const };
+    const parsed = accountPreferencesSchema.safeParse(
+      typeof cached === "object" && cached !== null && "ownerId" in cached && cached.ownerId === ownerId && "preferences" in cached
+        ? cached.preferences : null,
+    );
+    return { connected: true as const, userId: ownerId, preferences: parsed.success ? parsed.data : null, preferencesStatus: parsed.success ? "cached" as const : "unavailable" as const };
+  }
 }
 
 async function startSession(

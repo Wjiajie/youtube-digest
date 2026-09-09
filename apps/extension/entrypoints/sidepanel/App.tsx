@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { browser } from "wxt/browser";
 
-import type { BlueprintSnapshot } from "@blueprint/domain";
+import type { AccountPreferences, BlueprintSnapshot } from "@blueprint/domain";
 import { Button, Panel, Status } from "@blueprint/ui";
+import { resolveTheme, ThemeSurface } from "@blueprint/ui/theme";
 
 import type { BoundNodeContext } from "../../src/runtime";
 
@@ -17,7 +18,10 @@ type BoundNodeListItem = {
 
 type ViewState = {
   connected: boolean;
+  userId?: string;
   email?: string;
+  preferences?: AccountPreferences | null;
+  preferencesStatus?: "current" | "cached" | "unavailable";
   snapshot?: BlueprintSnapshot | null;
   context?: BoundNodeContext | null;
   nodes?: BoundNodeListItem[];
@@ -31,20 +35,64 @@ export function App() {
   const [busy, setBusy] = useState(true);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const currentState = useRef(state);
+  currentState.current = state;
+  const loadRequest = useRef(0);
+  const preferenceRequest = useRef(0);
 
   const load = useCallback(async () => {
+    const request = ++loadRequest.current;
+    const preference = ++preferenceRequest.current;
     setBusy(true);
     setError("");
     try {
-      const next = await browser.runtime.sendMessage({ type: "LOAD_CONTEXT" }) as ViewState;
-      setState(next);
-      if (!next.connected) setMessage("");
+      const next = await browser.runtime.sendMessage({ type: "LOAD_CONTEXT" }) as ViewState & { superseded?: boolean };
+      if (request !== loadRequest.current || next.superseded) return;
+      setState((previous) => preference !== preferenceRequest.current && previous.userId === next.userId && next.connected
+        ? { ...next, preferences: previous.preferences, preferencesStatus: previous.preferencesStatus }
+        : next);
+      if (!next.connected || currentState.current.userId !== next.userId) setMessage("");
     } catch {
-      setError("无法连接 Blueprint 后台，请重新打开侧边栏。");
+      if (request === loadRequest.current) setError("无法连接 Blueprint 后台，请重新打开侧边栏。");
     } finally {
-      setBusy(false);
+      if (request === loadRequest.current) setBusy(false);
     }
   }, []);
+
+  const refreshPreferences = useCallback(async () => {
+    if (!currentState.current.connected) return;
+    const request = ++preferenceRequest.current;
+    const ownerId = currentState.current.userId;
+    try {
+      const next = await browser.runtime.sendMessage({ type: "LOAD_PREFERENCES" }) as ViewState & { superseded?: boolean };
+      if (request !== preferenceRequest.current || next.superseded || currentState.current.userId !== ownerId) return;
+      if (!next.connected) {
+        ++loadRequest.current;
+        setState({ connected: false });
+        setMessage("");
+        setBusy(false);
+        return;
+      }
+      setState((previous) => previous.userId === next.userId
+        ? { ...previous, preferences: next.preferences, preferencesStatus: next.preferencesStatus }
+        : previous);
+    } catch {
+      if (request === preferenceRequest.current && currentState.current.userId === ownerId) {
+        setState((previous) => ({ ...previous, preferencesStatus: previous.preferences ? "cached" : "unavailable" }));
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => void refreshPreferences();
+    const onVisible = () => { if (document.visibilityState === "visible") void refreshPreferences(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [refreshPreferences]);
 
   useEffect(() => {
     void load();
@@ -52,10 +100,34 @@ export function App() {
       if (change.url) void load();
     };
     browser.tabs.onUpdated.addListener(listener);
-    return () => browser.tabs.onUpdated.removeListener(listener);
+    return () => {
+      ++loadRequest.current;
+      ++preferenceRequest.current;
+      browser.tabs.onUpdated.removeListener(listener);
+    };
+  }, [load]);
+
+  useEffect(() => {
+    const onSessionChanged = (changes: Record<string, { oldValue?: unknown; newValue?: unknown }>, area: string) => {
+      const session = changes.blueprint_cloud_session_v1;
+      if (area !== "local" || !session) return;
+      const owner = (value: unknown) => typeof value === "object" && value !== null && "userId" in value ? value.userId : undefined;
+      if (owner(session.oldValue) === owner(session.newValue)) return;
+      ++loadRequest.current;
+      ++preferenceRequest.current;
+      currentState.current = { connected: false };
+      setState({ connected: false });
+      setMessage("");
+      setError("");
+      void load();
+    };
+    browser.storage.onChanged.addListener(onSessionChanged);
+    return () => browser.storage.onChanged.removeListener(onSessionChanged);
   }, [load]);
 
   async function connect() {
+    ++loadRequest.current;
+    ++preferenceRequest.current;
     setBusy(true);
     setError("");
     setMessage("");
@@ -69,6 +141,8 @@ export function App() {
   }
 
   async function disconnect() {
+    ++loadRequest.current;
+    ++preferenceRequest.current;
     setBusy(true);
     setError("");
     try {
@@ -84,10 +158,12 @@ export function App() {
 
   async function startLearning() {
     if (!state.context) return;
+    const ownerId = state.userId;
     setBusy(true);
     setError("");
     try {
       const result = await browser.runtime.sendMessage({ type: "START_SESSION", context: state.context }) as { ok: boolean; queued?: boolean };
+      if (!currentState.current.connected || currentState.current.userId !== ownerId) return;
       if (!result.ok) {
         setError("学习会话被拒绝。请重新授权，或回到 Web 检查该节点是否仍然存在。");
         setBusy(false);
@@ -96,20 +172,24 @@ export function App() {
       setMessage(result.queued ? "网络不可用，学习会话已进入待同步队列。" : "学习会话已写入你的蓝图。");
       await load();
     } catch {
+      if (!currentState.current.connected || currentState.current.userId !== ownerId) return;
       setError("无法保存学习会话，请重新打开侧边栏后重试。");
       setBusy(false);
     }
   }
 
   async function retry() {
+    const ownerId = state.userId;
     setBusy(true);
     setError("");
     try {
       const result = await browser.runtime.sendMessage({ type: "RETRY_OUTBOX" }) as { recovered: number; pending: number; rejected: number };
+      if (!currentState.current.connected || currentState.current.userId !== ownerId) return;
       if (result.rejected) setError(`${result.rejected} 条记录已失效，请回到 Web 检查节点或重新授权。`);
       else setMessage(result.recovered ? `已恢复 ${result.recovered} 条学习会话。` : result.pending ? "仍无法同步，记录会继续保留。" : "没有待同步记录。");
       await load();
     } catch {
+      if (!currentState.current.connected || currentState.current.userId !== ownerId) return;
       setError("暂时无法重试，待同步记录仍保存在本机。");
       setBusy(false);
     }
@@ -119,7 +199,10 @@ export function App() {
     await browser.runtime.sendMessage({ type: "OPEN_NODE", tabId: state.tabId, url: item.url });
   }
 
+  const theme = resolveTheme(state.connected ? state.preferences?.theme : null);
+
   return (
+    <ThemeSurface theme={theme.id} density="compact">
     <main className="extension-shell">
       <header>
         <div className="brand">Blueprint / YouTube</div>
@@ -140,6 +223,11 @@ export function App() {
             <div><span className="label">已连接</span><strong>{state.email ?? "Blueprint 用户"}</strong></div>
             <Button disabled={busy} onClick={() => void disconnect()}>退出</Button>
           </Panel>
+          <p className="muted theme-status">主题：{theme.label} · 在 Web 修改</p>
+          {state.preferencesStatus === "cached" ? <Status tone="warning">账号主题暂未更新，当前使用此账号的缓存主题。</Status> : null}
+          {state.preferencesStatus === "unavailable" ? <Status tone="warning">暂时无法读取账号主题，当前使用默认表现。</Status> : null}
+          {state.preferences && (state.preferences.theme.id !== theme.id || state.preferences.theme.version !== theme.version)
+            ? <Status tone="warning">当前扩展暂不支持账号主题，已使用默认表现。</Status> : null}
           {state.stale ? <Status tone="warning">当前显示缓存蓝图，网络恢复后可刷新。</Status> : null}
           {state.pending ? <Panel className="sync-card"><span>{state.pending} 条学习会话待同步</span><Button disabled={busy} onClick={() => void retry()}>重试</Button></Panel> : null}
           {state.context ? (
@@ -169,5 +257,6 @@ export function App() {
         </>
       )}
     </main>
+    </ThemeSurface>
   );
 }

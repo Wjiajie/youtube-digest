@@ -4,6 +4,11 @@ import { readFile } from "node:fs/promises";
 const source = await readFile(new URL("./setup-m1-cloud.sh", import.meta.url), "utf8");
 const stageSource = source.slice(source.indexOf("TOTAL_STAGES=9"));
 const stages = source.match(/^stage "/gm) ?? [];
+const localConfig = await readFile(new URL("../supabase/config.toml", import.meta.url), "utf8");
+const authConfig = localConfig.match(/\[auth\]\s*([\s\S]*?)(?=\n\[|$)/)?.[1] ?? "";
+const emailConfig = localConfig.match(/\[auth\.email\]\s*([\s\S]*?)(?=\n\[|$)/)?.[1] ?? "";
+assert.match(authConfig, /^enable_signup = false$/m, "local public registration must remain disabled");
+assert.match(emailConfig, /^enable_signup = true$/m, "existing invited accounts still need the local email provider");
 
 assert.match(source, /^TOTAL_STAGES=9$/m);
 assert.equal(stages.length, 9, "wizard must keep exactly nine confirmed stages");

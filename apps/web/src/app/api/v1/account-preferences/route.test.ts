@@ -2,12 +2,13 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { GET } from "./route";
-import { saveAccountThemeAction } from "@/app/account-preferences-actions";
+import { readAccountThemeAction, saveAccountThemeAction as saveTheme } from "@/app/account-preferences-actions";
 
 const { cookieJar } = vi.hoisted(() => ({ cookieJar: [] as { name: string; value: string }[] }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ getAll: () => cookieJar, set: () => {} }) }));
 
 const ownerId = "a1000000-0000-4000-8000-000000000001";
+const saveAccountThemeAction = (input: unknown) => saveTheme(ownerId, input);
 const extensionId = "preferences-extension";
 const accessToken = [
   Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url"),
@@ -56,7 +57,7 @@ function signInWeb() {
   cookieJar.push({
     name: "sb-preferences-auth-token",
     value: `base64-${Buffer.from(JSON.stringify({
-      access_token: accessToken,
+      access_token: [accessToken.split(".")[0], Buffer.from(JSON.stringify({ sub: ownerId })).toString("base64url"), "test-signature"].join("."),
       refresh_token: "test-refresh-token",
       expires_at: Math.floor(Date.now() / 1000) + 3600,
       token_type: "bearer",
@@ -152,6 +153,20 @@ it("still reports an invalid session as unauthenticated", async () => {
     headers: { authorization: `Bearer ${accessToken}` },
   }));
   expect(response.status).toBe(401);
+});
+
+it("refuses a stale page's theme save after the authenticated account changes", async () => {
+  signInWeb();
+  expect(await saveTheme("a1000000-0000-4000-8000-000000000002", {
+    theme: { id: "cyberpunk", version: 1 }, expectedRevision: 4,
+  })).toEqual({ ok: false, code: "forbidden" });
+});
+
+it("reads only the account to which the Web page was bound", async () => {
+  signInWeb();
+  expect(await readAccountThemeAction(ownerId)).toEqual({ ok: true, value: { theme: { id: "eastern", version: 1 }, revision: 4 } });
+  expect(await readAccountThemeAction("a1000000-0000-4000-8000-000000000002"))
+    .toEqual({ ok: false, code: "forbidden" });
 });
 
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });

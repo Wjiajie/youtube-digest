@@ -24,6 +24,16 @@ npm run supabase:test
 
 复制两个应用各自的 `.env.example` 为 `.env.local`，把 `supabase start` 输出的 URL 和 Publishable Key 写入本地文件。管理员密钥只存在于 Supabase 托管的 Edge Function 环境，不进入 Web 或扩展环境文件。
 
+已有本地数据时不要重复执行 `supabase:reset`，该命令仅用于可丢弃的新开发数据库。配置变更需重新启动时使用 CLI 默认备份的 `supabase stop` 再 `supabase start`，不要使用 `--no-backup`。增量迁移按迁移文件应用并验证。
+
+本地邀请登录还需在单独终端提供 Edge Function：
+
+```bash
+bash scripts/with-m1-runtime.sh npx --yes supabase@2.115.0 functions serve --no-verify-jwt
+```
+
+该公开函数仅接受白名单邀请准备，不返回账号数据。`supabase/config.toml` 的全局 `[auth] enable_signup = false` 是公开注册门；`[auth.email] enable_signup = true` 保持邮箱 provider 可用，让预创建的受邀账号能收到 Magic Link，不能把后者也关闭。2026-09-10 已用真实本地 Auth 验证：受邀登录成功，直接公开 signup 仍返回 `signup_disabled`。本地邮件在 Mailpit 查看，按 `supabase start` 提供的地址打开最新链接；无需真实邮箱或邮件额度。以上不表示托管项目配置已更新。
+
 ## 2. 受邀邮箱
 
 公开注册必须保持关闭。个人自测前，在 Supabase SQL Editor 或本地数据库中添加允许的邮箱：

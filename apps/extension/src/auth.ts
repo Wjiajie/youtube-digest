@@ -21,9 +21,59 @@ export function createExtensionAuthPort() {
   const supabaseUrl = requiredEnv(import.meta.env.WXT_PUBLIC_SUPABASE_URL, "WXT_PUBLIC_SUPABASE_URL");
   const clientId = requiredEnv(import.meta.env.WXT_PUBLIC_EXTENSION_OAUTH_CLIENT_ID, "WXT_PUBLIC_EXTENSION_OAUTH_CLIENT_ID");
   const publishableKey = requiredEnv(import.meta.env.WXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, "WXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
+  let refreshing: { token: string; promise: Promise<ExtensionSession | null> } | undefined;
+  let sessionEpoch = 0;
+  let sessionMutations = Promise.resolve();
+
+  function mutateSession<T>(operation: () => Promise<T>): Promise<T> {
+    const result = sessionMutations.then(operation);
+    sessionMutations = result.then(() => undefined, () => undefined);
+    return result;
+  }
+
+  async function invalidate(token: string): Promise<void> {
+    await mutateSession(async () => {
+      const session = await readSession();
+      if (session?.accessToken !== token) return;
+      ++sessionEpoch;
+      await browser.storage.local.remove([SESSION_KEY, `blueprint_cache:${session.userId}`, `blueprint_preferences:${session.userId}`]);
+    });
+  }
+
+  async function refreshSession(previous: ExtensionSession): Promise<ExtensionSession | null> {
+    const epoch = sessionEpoch;
+    let session: ExtensionSession;
+    try {
+      session = await exchangeToken(`${supabaseUrl}/auth/v1/oauth/token`, {
+        grant_type: "refresh_token", refresh_token: previous.refreshToken, client_id: clientId,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "AUTH_SESSION_EXPIRED") {
+        await invalidate(previous.accessToken);
+        return null;
+      }
+      // A transport/service failure can still display this session's offline
+      // cache. Any authenticated HTTP request must validate the token again.
+      await sessionMutations;
+      return epoch === sessionEpoch && (await readSession())?.accessToken === previous.accessToken ? previous : null;
+    }
+    return mutateSession(async () => {
+      if (epoch !== sessionEpoch || (await readSession())?.accessToken !== previous.accessToken || session.userId !== previous.userId) return null;
+      await browser.storage.local.set({ [SESSION_KEY]: session });
+      return epoch === sessionEpoch ? session : null;
+    });
+  }
 
   return {
+    async isCurrent(token: string): Promise<boolean> {
+      await sessionMutations;
+      return (await readSession())?.accessToken === token;
+    },
+
+    invalidate,
+
     async status(): Promise<AuthStatus> {
+      await sessionMutations;
       const session = await readSession();
       return session
         ? { connected: true, userId: session.userId, ...(session.email ? { email: session.email } : {}) }
@@ -31,6 +81,7 @@ export function createExtensionAuthPort() {
     },
 
     async connect(): Promise<AuthStatus> {
+      const epoch = ++sessionEpoch;
       const verifier = randomBase64Url(64);
       const state = randomBase64Url(32);
       const challenge = await sha256Base64Url(verifier);
@@ -59,30 +110,46 @@ export function createExtensionAuthPort() {
         redirect_uri: redirectUri,
         code_verifier: verifier,
       });
-      const previous = await readSession();
-      if (previous && previous.userId !== session.userId) {
-        await browser.storage.local.remove(`blueprint_cache:${previous.userId}`);
-      }
-      await browser.storage.local.set({ [SESSION_KEY]: session });
-      return { connected: true, userId: session.userId, ...(session.email ? { email: session.email } : {}) };
+      return mutateSession(async () => {
+        if (epoch !== sessionEpoch) return { connected: false };
+        const previous = await readSession();
+        if (previous && previous.userId !== session.userId) {
+          await browser.storage.local.remove([`blueprint_cache:${previous.userId}`, `blueprint_preferences:${previous.userId}`]);
+        }
+        await browser.storage.local.set({ [SESSION_KEY]: session });
+        return epoch === sessionEpoch
+          ? { connected: true, userId: session.userId, ...(session.email ? { email: session.email } : {}) }
+          : { connected: false };
+      });
     },
 
     async accessToken(): Promise<{ token: string; session: ExtensionSession } | null> {
+      await sessionMutations;
       let session = await readSession();
       if (!session) return null;
       if (session.expiresAt <= Date.now() + 60_000) {
-        session = await exchangeToken(`${supabaseUrl}/auth/v1/oauth/token`, {
-          grant_type: "refresh_token",
-          refresh_token: session.refreshToken,
-          client_id: clientId,
-        });
-        await browser.storage.local.set({ [SESSION_KEY]: session });
+        if (refreshing?.token !== session.accessToken) {
+          refreshing = { token: session.accessToken, promise: refreshSession(session) };
+        }
+        const pending = refreshing;
+        try {
+          session = await pending.promise;
+        } finally {
+          if (refreshing === pending) refreshing = undefined;
+        }
       }
-      return { token: session.accessToken, session };
+      return session ? { token: session.accessToken, session } : null;
     },
 
     async disconnect(): Promise<void> {
-      const session = await readSession();
+      // Invalidate in-flight authorization immediately, then remove the final
+      // stored session after any already-started write has completed.
+      ++sessionEpoch;
+      const session = await mutateSession(async () => {
+        const current = await readSession();
+        if (current) await browser.storage.local.remove([SESSION_KEY, `blueprint_cache:${current.userId}`, `blueprint_preferences:${current.userId}`]);
+        return current;
+      });
       if (session) {
         await fetch(`${supabaseUrl}/auth/v1/logout?scope=local`, {
           method: "POST",
@@ -90,7 +157,6 @@ export function createExtensionAuthPort() {
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         }).catch(() => undefined);
       }
-      await browser.storage.local.remove(SESSION_KEY);
     },
   };
 }
@@ -108,7 +174,8 @@ async function exchangeToken(endpoint: string, fields: Record<string, string>): 
     body: new URLSearchParams(fields),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-  if (!response.ok) throw new Error("AUTH_TOKEN_EXCHANGE_FAILED");
+  if (!response.ok) throw new Error(fields.grant_type === "refresh_token" && (response.status === 400 || response.status === 401)
+    ? "AUTH_SESSION_EXPIRED" : "AUTH_TOKEN_EXCHANGE_FAILED");
   const token = await response.json() as {
     access_token: string;
     refresh_token: string;

@@ -7,6 +7,7 @@ import { requestActor } from "@/lib/supabase/request";
 
 import { logoutAction } from "./actions";
 import { BlueprintEditor } from "./blueprint-editor";
+import { AccountThemeShell } from "./account-theme-shell";
 
 export default async function HomePage() {
   const context = await requestActor();
@@ -31,7 +32,7 @@ export default async function HomePage() {
     entityId: result.value.id,
   });
   return (
-    <main className="shell">
+    <AccountThemeShell accountId={context.actor.userId} client={context.client}><main className="shell">
       <header className="topbar">
         <div>
           <div className="brand">Blueprint / M1 Cloud Slice</div>
@@ -52,6 +53,6 @@ export default async function HomePage() {
         </aside>
         <BlueprintEditor initial={result.value} sessions={sessions.ok ? sessions.value : []} />
       </div>
-    </main>
+    </main></AccountThemeShell>
   );
 }

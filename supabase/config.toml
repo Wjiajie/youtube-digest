@@ -27,7 +27,9 @@ additional_redirect_urls = ["http://localhost:3000/**", "https://kipaapemlimhdkp
 enable_signup = false
 
 [auth.email]
-enable_signup = false
+# Keep the email provider enabled for existing invited users. Global
+# auth.enable_signup=false above remains the public-registration gate.
+enable_signup = true
 double_confirm_changes = true
 enable_confirmations = true
 
