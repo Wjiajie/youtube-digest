@@ -119,6 +119,40 @@ try {
       client_mutation_id
     ) values ($1, $2, $3, 0, $4, $5)
   `, [ids.proposal, ids.owner, blueprintId, snapshot, ids.createMutation]);
+  // Exercise the migrated public RPC, not just the TypeScript request validator.
+  // No extension client configuration exists in this upgrade fixture.
+  await db.query("select set_config('request.jwt.claims', $1, false)", [
+    JSON.stringify({ client_id: "unconfigured-oauth-client" }),
+  ]);
+  await assert.rejects(
+    () => db.query("select public.apply_blueprint_proposal($1, 0, $2)", [ids.proposal, ids.applyMutation]),
+    /BLUEPRINT_FORBIDDEN/,
+    "missing client configuration cannot promote an OAuth session into the Web flow",
+  );
+  const deniedPreference = await db.query("update public.profiles set theme_id = 'eastern' returning id");
+  assert.equal(deniedPreference.rows.length, 0, "OAuth sessions cannot modify Web-owned preferences");
+  await becomeUser(ids.owner);
+  await assert.rejects(
+    () => db.query("select public.apply_blueprint_proposal($1, null, $2)", [ids.proposal, ids.applyMutation]),
+    /PROPOSAL_ARGUMENTS_INVALID/,
+    "NULL expected_version cannot disable optimistic concurrency",
+  );
+  const missingIdentity = structuredClone(snapshot);
+  delete missingIdentity.id;
+  const missingGoals = structuredClone(snapshot);
+  delete missingGoals.goals;
+  for (const [malformed, message] of [
+    [missingIdentity, /BLUEPRINT_ID_MISMATCH/],
+    [missingGoals, /BLUEPRINT_SNAPSHOT_INVALID/],
+  ]) {
+    await db.query("update public.blueprint_proposals set proposed_snapshot = $1 where id = $2", [malformed, ids.proposal]);
+    await assert.rejects(
+      () => db.query("select public.apply_blueprint_proposal($1, 0, $2)", [ids.proposal, ids.applyMutation]),
+      message,
+      "incomplete snapshots cannot become formal revisions",
+    );
+  }
+  await db.query("update public.blueprint_proposals set proposed_snapshot = $1 where id = $2", [snapshot, ids.proposal]);
   const applied = await db.query(
     "select public.apply_blueprint_proposal($1, 0, $2) as version",
     [ids.proposal, ids.applyMutation],
@@ -194,7 +228,7 @@ try {
   const unchangedBlueprint = await db.query("select version from public.blueprints");
   assert.equal(Number(unchangedBlueprint.rows[0]?.version), 1, "preferences do not revise the Blueprint");
 
-  console.log("Migration contract passed: proposals, idempotency, ownership, RLS, and existing-account preferences upgrade.");
+  console.log("Migration contract passed: proposal input guards, OAuth restrictions, idempotency, ownership, RLS, and existing-account preferences upgrade.");
 } finally {
   await db.close();
 }
