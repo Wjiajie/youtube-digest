@@ -100,4 +100,6 @@ Vercel CLI 59.11.7 的 `curl` 将 `--global-config` 误传给底层 curl；自�
 
 ## 核对依据
 
+后续 P1 加固（2026-09-10，源码 `12f4419`）：上述配置丢失／NULL ID 缺口已经由独立增量迁移 `20260909170755` 在本地与托管数据库修复。数据库 Web 专属操作现在拒绝所有带顶层 `client_id` 的 OAuth 会话，不再依赖配置是否存在；profile 只读策略因此在配置丢失和未知客户端时也保持生效。公共提案 RPC 同时拒绝空参数和缺失路径数组，保留合法确认／重试及失败回滚。84 项 pgTAP、完整 `check:m1`、16 项生产 E2E 与云端 10 项事务回滚直接调用检查通过；两路独立复核无确认发现。11 张业务表摘要未变，未留测试账号、未发送邮件。迁移历史对齐、验证范围与剩余门槛详见[执行路线](execution-roadmap.md)。两项托管 Advisor 警告仍在，不因输入加固而宣称消失。
+
 本轮已核对 [Supabase 更新日志](https://supabase.com/changelog)、[RLS 文档](https://supabase.com/docs/guides/database/postgres/row-level-security)与[列级授权](https://supabase.com/docs/guides/database/postgres/column-level-security)。RLS 限制可访问的行，列级授权限制可修改的字段，两者同时使用；没有通过 SECURITY DEFINER 绕过用户权限。
