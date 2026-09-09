@@ -1,0 +1,49 @@
+.node-status-shell { padding-top: 22px; }
+.node-status-nav { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.node-status-nav a { text-decoration: none; }
+.node-status-intro { padding: 44px 0 32px; margin-bottom: 28px; border-bottom: 1px solid var(--bp-line); }
+.node-status-intro h1 { font-size: clamp(36px, 6vw, 60px); font-weight: 600; letter-spacing: -.03em; line-height: 1.2; margin: 16px 0; }
+.node-status-intro p { max-width: 760px; line-height: 1.8; }
+.node-status-workspace { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.node-status-panel { padding: clamp(20px, 3vw, 32px); min-width: 0; }
+.node-status-panel h2 { font-size: clamp(24px, 3vw, 30px); line-height: 1.4; margin: 14px 0; letter-spacing: -.02em; }
+.node-status-panel h3 { font-size: 20px; line-height: 1.5; margin: 0 0 8px; }
+.node-status-panel h4 { font-size: 13px; margin: 24px 0 8px; color: var(--bp-muted); letter-spacing: .06em; }
+.node-status-workspace p { line-height: 1.8; margin: 12px 0; }
+.node-status-workspace :is(p, h2, h3, h4, strong, button) { overflow-wrap: anywhere; }
+.node-status-workspace .field { display: grid; gap: 8px; margin: 24px 0; min-width: 0; }
+.node-status-workspace .field > span { font-size: 14px; color: var(--bp-text); }
+.node-status-workspace :is(select, textarea) { width: 100%; max-width: 100%; min-width: 0; }
+.node-status-workspace select { min-height: 46px; text-overflow: ellipsis; }
+.node-status-workspace textarea { resize: vertical; line-height: 1.7; }
+.node-status-workspace .bp-button { min-height: 46px; white-space: normal; text-align: center; }
+.node-status-workspace .primary { width: 100%; margin-top: 20px; }
+.node-status-context { padding: 24px; border: 1px solid var(--bp-line); border-inline-start: 3px solid var(--bp-progress); background: var(--bp-surface-strong); border-radius: var(--bp-radius-sm); }
+.node-status-context .subtle { font-size: 13px; }
+.node-status-criteria { white-space: pre-wrap; }
+.node-status-assessment { padding-top: 2px; border-top: 1px solid var(--bp-line); }
+.node-status-ack { display: flex; gap: 12px; align-items: flex-start; padding: 18px 0; line-height: 1.8; cursor: pointer; }
+.node-status-ack input { flex: 0 0 20px; width: 20px; height: 20px; min-height: 20px; margin: 5px 0 0; accent-color: var(--bp-accent); }
+.node-status-ack:has(input:disabled) { cursor: default; }
+.node-status-pending, .node-status-rebind, .node-status-recovery { margin: 20px 0; padding: 4px 0 4px 18px; border-inline-start: 3px solid var(--bp-warning); }
+.node-status-pending h4 { margin-top: 8px; color: var(--bp-warning); }
+.node-status-pending p { font-size: 14px; }
+.node-status-history > .bp-button { margin: 12px 0; }
+.node-status-history ol { list-style: none; margin: 28px 0 0; padding: 0 0 0 22px; border-inline-start: 1px solid var(--bp-line); }
+.node-status-history li { position: relative; padding: 0 0 28px 8px; }
+.node-status-history li:last-child { padding-bottom: 0; }
+.node-status-history li::before { content: ""; position: absolute; width: 9px; height: 9px; top: 6px; inset-inline-start: -27px; background: var(--bp-accent); border-radius: 50%; box-shadow: 0 0 0 4px var(--bp-surface); }
+.node-status-history time { font: 11px/1.6 var(--bp-font-mono); color: var(--bp-muted); }
+.node-status-history h3 { margin-top: 12px; }
+.node-status-history article > .subtle { font-size: 12px; }
+.node-status-history strong { display: inline-block; font-size: 13px; color: var(--bp-accent); border: 1px solid var(--bp-line); padding: 5px 10px; border-radius: var(--bp-radius-sm); }
+.node-status-history article > p { font-size: 14px; }
+[data-bp-theme="cyberpunk"] .node-status-context { background-image: linear-gradient(110deg, var(--bp-surface-strong), var(--bp-field)); }
+[data-bp-theme="cyberpunk"] .node-status-history li::before { border-radius: 1px; }
+[data-bp-theme="eastern"] .node-status-context { border-inline-start-width: 4px; background: var(--bp-field); }
+[data-bp-theme="eastern"] .node-status-history ol { border-inline-start-style: dashed; }
+[data-bp-theme="eastern"] .node-status-history h3 { font-family: var(--bp-heading-font); font-size: 22px; }
+@media (max-width: 800px) {
+  .node-status-workspace { grid-template-columns: 1fr; }
+  .node-status-context { padding: 18px; }
+}

@@ -60,9 +60,11 @@ try {
   for (const file of (await readdir(migrationDirectory)).filter((name) => name.endsWith(".sql")).sort()) {
     if (file === "202608260001_m1_cloud_slice.sql") continue;
     const legacy = file.endsWith("_node_planning_metadata.sql") ? await seedLegacyPlanningUpgrade() : null;
+    const statusUpgrade = file.endsWith("_node_status_confirmations.sql") ? await seedStatusUpgrade() : null;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
     if (legacy) await verifyLegacyPlanningUpgrade(legacy);
+    if (statusUpgrade) await verifyStatusUpgrade(statusUpgrade);
   }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
@@ -331,4 +333,61 @@ async function verifyLegacyPlanningUpgrade({ owner, proposal, pending, mutation,
   assert.deepEqual((await db.query("select to_jsonb(b) as root, (select jsonb_agg(to_jsonb(p) order by id) from public.blueprint_proposals p) as proposals, (select jsonb_agg(to_jsonb(r) order by id) from public.blueprint_revisions r) as revisions from public.blueprints b")).rows[0], before,
     "replaying and rejecting legacy requests do not change any existing state");
   await db.exec("reset role");
+}
+
+async function captureStatusUpgrade() {
+  await db.exec("reset role");
+  const before = {};
+  // Include existing legacy applied/pending proposal JSON, formal graph, account
+  // metadata and independent histories. No fixture data is recreated after DDL.
+  for (const table of ["profiles", "blueprints", "goals", "stages", "path_nodes", "resource_bindings",
+    "path_node_dependencies", "blueprint_proposals", "blueprint_revisions", "learning_sessions", "progress_evidence", "goal_briefs"]) {
+    before[table] = (await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb) as rows from public.${table} t`)).rows[0].rows;
+  }
+  return before;
+}
+
+async function seedStatusUpgrade() {
+  const owner = "d9000000-0000-4000-8000-000000000101";
+  const proposal = "d9000000-0000-4000-8000-000000000142";
+  await becomeUser(owner);
+  const snapshot = (await db.query("select public.read_blueprint_snapshot_v2($1) as value", [owner])).rows[0].value;
+  const node = snapshot.goals[0].stages[0].nodes[0];
+  node.estimatedMinutes = 90;
+  node.completionCriteria = "Explain the result and its limits";
+  await db.query("insert into public.blueprint_proposals(id,owner_id,blueprint_id,base_version,proposed_snapshot,client_mutation_id) values($1,$2,$3,1,$4,gen_random_uuid())", [proposal, owner, snapshot.id, snapshot]);
+  await db.query("select public.apply_blueprint_proposal($1,1,gen_random_uuid())", [proposal]);
+  await db.query("select public.record_progress_evidence($1,2,'Pre-status existing outcome',null,gen_random_uuid())", [node.id]);
+  return captureStatusUpgrade();
+}
+
+async function verifyStatusUpgrade(before) {
+  assert.deepEqual(await captureStatusUpgrade(), before, "status migration preserves existing accounts, planning metadata and exact formal histories");
+  const owner = "d9000000-0000-4000-8000-000000000101";
+  const node = "d9000000-0000-4000-8000-000000000130";
+  const mutation = "d9000000-0000-4000-8000-000000000170";
+  await becomeUser(owner);
+  const workspace = (await db.query("select public.read_node_status_workspace($1) as value", [owner])).rows[0].value;
+  assert.equal(workspace.blueprint.schemaVersion, 2, "status does not introduce a new Blueprint format");
+  assert.deepEqual(workspace.current, [], "existing nodes have no fabricated status records after upgrade");
+  assert.deepEqual(workspace.history, []);
+  const confirmation = (await db.query("select public.confirm_node_status($1,2,0,'completed',null,$2) as value", [node, mutation])).rows[0].value;
+  assert.equal(confirmation.revision, 1);
+  assert.equal(confirmation.estimated_minutes, 90);
+  assert.equal(confirmation.completion_criteria, "Explain the result and its limits");
+  assert.equal(confirmation.blueprint_version, 2);
+  assert.deepEqual((await db.query("select public.confirm_node_status($1,2,0,'completed',null,$2) as value", [node, mutation])).rows[0].value, confirmation,
+    "the generated status migration preserves exact public mutation receipts");
+  const after = (await db.query("select public.read_node_status_workspace($1) as value", [owner])).rows[0].value;
+  assert.deepEqual(after.blueprint, workspace.blueprint, "explicit status cannot revise the existing Blueprint");
+  assert.deepEqual(after.current, [confirmation]);
+  assert.deepEqual(after.history, [confirmation]);
+  await assert.rejects(() => db.query("update public.node_status_confirmations set status='not_started'"), /permission denied/);
+  const acl = (await db.query(`select
+    has_table_privilege('anon','public.node_status_confirmations','SELECT') as anon_read,
+    has_table_privilege('authenticated','private.node_status_mutations','SELECT') as ledger_read,
+    has_function_privilege('anon','public.confirm_node_status(uuid,integer,integer,text,uuid,uuid)','EXECUTE') as anon_write,
+    has_function_privilege('anon','public.read_node_status_workspace(uuid)','EXECUTE') as anon_workspace`)).rows[0];
+  assert.deepEqual(acl, { anon_read: false, ledger_read: false, anon_write: false, anon_workspace: false }, "status migration retains explicit narrow ACLs");
+  assert.deepEqual(await captureStatusUpgrade(), before, "status confirmation leaves all prior business rows and histories unchanged");
 }

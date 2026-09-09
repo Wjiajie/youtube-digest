@@ -48,6 +48,10 @@ _Avoid_: User evidence, activity content
 A user-owned record of learning, practice, checkpoint, or reflection outcomes associated with a path node; it supports the user's assessment of progress without itself proving mastery.
 _Avoid_: Product Event, mastery certificate
 
+**Node Status Confirmation**:
+A user's explicit assessment that a path node is not started, in progress, or completed against its stated completion criteria. It may cite Progress Evidence, but remains a self-assessment rather than proof of mastery.
+_Avoid_: Automatic completion, mastery certificate, Blueprint Proposal
+
 **Theme**:
 A coherent visual and expressive treatment of the user's Blueprint experience across the home, goals, and learning surfaces, without changing the meaning of their goals, progress, or decisions.
 _Avoid_: Color preset, separate product

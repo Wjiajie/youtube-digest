@@ -10,6 +10,8 @@
     "./theme-picker": "./src/theme-picker.tsx",
     "./evidence-journal": "./src/evidence-journal.tsx",
     "./evidence-journal.css": "./src/evidence-journal.css",
+    "./node-status-workspace": "./src/node-status-workspace.tsx",
+    "./node-status-workspace.css": "./src/node-status-workspace.css",
     ".": "./src/index.tsx"
   },
   "scripts": {
