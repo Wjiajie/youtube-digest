@@ -3,15 +3,20 @@ import Link from "next/link";
 
 import { blueprintApplication } from "@/lib/application";
 import { recordProductEvent } from "@/lib/product-events";
-import { requestActor } from "@/lib/supabase/request";
+import { resolveRequestActor } from "@/lib/supabase/request";
 
 import { logoutAction } from "./actions";
 import { BlueprintEditor } from "./blueprint-editor";
 import { AccountThemeShell } from "./account-theme-shell";
+import { AuthUnavailable } from "./auth-unavailable";
 
 export default async function HomePage() {
-  const context = await requestActor();
-  if (!context) redirect("/login");
+  const identity = await resolveRequestActor();
+  if (!identity.ok) {
+    if (identity.code === "unavailable") return <AuthUnavailable retryPath="/" />;
+    redirect("/login");
+  }
+  const context = identity.value;
   const application = blueprintApplication(context.client);
   const [result, sessions] = await Promise.all([
     application.getMainBlueprint(context.actor).catch(() => ({ ok: false as const, code: "unavailable" as const })),

@@ -16,13 +16,6 @@ type RequestActorResult =
   | { ok: true; value: RequestActorContext }
   | { ok: false; code: "unauthenticated" | "unavailable" };
 
-// Preserve the existing nullable contract for M1 callers. New recovery-aware
-// surfaces use the result contract instead of treating an outage as a logout.
-export async function requestActor(request?: NextRequest): Promise<RequestActorContext | null> {
-  const result = await resolveRequestActor(request);
-  return result.ok ? result.value : null;
-}
-
 export async function resolveRequestActor(request?: NextRequest): Promise<RequestActorResult> {
   const authorization = request?.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) {
@@ -59,9 +52,12 @@ function authFailure(error: { status?: number }): RequestActorResult {
   return { ok: false, code: invalidSession ? "unauthenticated" : "unavailable" };
 }
 
-export async function extensionRequestActor(request: NextRequest) {
-  const context = await requestActor(request);
-  return context?.actor.client === "extension" ? context : null;
+export async function resolveExtensionRequestActor(request: NextRequest): Promise<RequestActorResult> {
+  const context = await resolveRequestActor(request);
+  if (!context.ok) return context;
+  return context.value.actor.client === "extension"
+    ? context
+    : { ok: false, code: "unauthenticated" };
 }
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {

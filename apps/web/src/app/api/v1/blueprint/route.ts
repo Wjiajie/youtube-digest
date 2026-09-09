@@ -1,16 +1,16 @@
 import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
 
 import { blueprintApplication } from "@/lib/application";
 import { resultResponse } from "@/lib/http";
-import { extensionRequestActor } from "@/lib/supabase/request";
+import { resolveExtensionRequestActor } from "@/lib/supabase/request";
 
 export async function GET(request: NextRequest) {
-  const context = await extensionRequestActor(request);
-  if (!context) return NextResponse.json({ code: "unauthenticated" }, { status: 401 });
   try {
+    const identity = await resolveExtensionRequestActor(request);
+    if (!identity.ok) return resultResponse(identity);
+    const context = identity.value;
     return resultResponse(await blueprintApplication(context.client).getMainBlueprint(context.actor));
   } catch {
-    return NextResponse.json({ code: "unavailable" }, { status: 503 });
+    return resultResponse({ ok: false, code: "unavailable" });
   }
 }

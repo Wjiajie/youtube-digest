@@ -1,19 +1,20 @@
 import { redirect } from "next/navigation";
 
-import { createServerSupabase } from "@/lib/supabase/server";
+import { resolveRequestActor } from "@/lib/supabase/request";
 
 import { OAuthConsent } from "./oauth-consent";
 import { AccountThemeShell } from "@/app/account-theme-shell";
+import { AuthUnavailable } from "@/app/auth-unavailable";
 
 export default async function OAuthConsentPage({ searchParams }: { searchParams: Promise<{ authorization_id?: string }> }) {
   const { authorization_id: authorizationId } = await searchParams;
-  const supabase = await createServerSupabase();
-  const { data } = await supabase.auth.getUser();
-  if (authorizationId) {
-    if (!data.user) {
-      const continuation = `/oauth/consent?authorization_id=${encodeURIComponent(authorizationId)}`;
-      redirect(`/login?next=${encodeURIComponent(continuation)}`);
-    }
+  const identity = await resolveRequestActor();
+  const continuation = authorizationId
+    ? `/oauth/consent?authorization_id=${encodeURIComponent(authorizationId)}`
+    : "/oauth/consent";
+  if (!identity.ok) {
+    if (identity.code === "unavailable") return <AuthUnavailable retryPath={continuation} />;
+    if (authorizationId) redirect(`/login?next=${encodeURIComponent(continuation)}`);
   }
   const content = (
     <main className="login-shell">
@@ -24,5 +25,5 @@ export default async function OAuthConsentPage({ searchParams }: { searchParams:
       </section>
     </main>
   );
-  return data.user ? <AccountThemeShell accountId={data.user.id} client={supabase}>{content}</AccountThemeShell> : content;
+  return identity.ok ? <AccountThemeShell accountId={identity.value.actor.userId} client={identity.value.client}>{content}</AccountThemeShell> : content;
 }

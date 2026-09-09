@@ -1,17 +1,22 @@
 import { redirect } from "next/navigation";
 import { Status } from "@blueprint/ui";
 
-import { createServerSupabase } from "@/lib/supabase/server";
+import { resolveRequestActor } from "@/lib/supabase/request";
 import { safeInternalPath } from "@/lib/navigation";
 
 import { LoginForm } from "./login-form";
+import { AuthUnavailable } from "../auth-unavailable";
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   const { next, error } = await searchParams;
   const nextPath = safeInternalPath(next);
-  const supabase = await createServerSupabase();
-  const { data } = await supabase.auth.getUser();
-  if (data.user) redirect(nextPath);
+  const identity = await resolveRequestActor();
+  if (identity.ok) redirect(nextPath);
+  if (identity.code === "unavailable") {
+    const retryParams = new URLSearchParams({ next: nextPath });
+    if (error === "invalid_link") retryParams.set("error", error);
+    return <AuthUnavailable retryPath={`/login?${retryParams}`} />;
+  }
   return (
     <main className="login-shell">
       <section className="bp-panel login-card">
