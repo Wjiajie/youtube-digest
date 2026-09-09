@@ -24,6 +24,7 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .login-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
 .login-card { width: min(440px, 100%); padding: 28px; }
 .login-card h1 { margin: 8px 0 12px; font-size: clamp(32px, 7vw, 48px); }
+.auth-recovery-actions { margin-top: 16px; }
 .field { display: grid; gap: 7px; margin: 18px 0; }
 .field span { color: var(--bp-muted); font-size: 13px; }
 .field input, .field select, .field textarea {

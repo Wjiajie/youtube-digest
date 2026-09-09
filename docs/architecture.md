@@ -73,6 +73,8 @@ Blueprint（每个用户一份）
 
 公开的邮件登录请求接口先调用 `prepare-invited-login` Edge Function。该函数的管理员密钥由 Supabase 平台托管，仅在私有白名单命中时预创建 Auth 用户，并始终返回相同成功形态，避免暴露邮箱是否受邀。数据库触发器在创建用户时自动消耗邀请。随后 Web 使用 Supabase 默认 Magic Link，并在回调中以 PKCE code 建立 Cookie 会话。Next.js 请求代理负责校验访问令牌，并把 Supabase 轮换后的会话 Cookie 写回浏览器；Vercel 不持有 Supabase 管理员密钥。
 
+已登录请求的身份解析使用显式结果，不把 Auth 提供方 429／5xx 当成退出登录：HTTP 读取／写入入口返回 503 `unavailable`，提案 Action 返回可重试结果；主页、登录、连接设置与扩展授权页显示保留当前内部路径的重试入口，不要求再次申请邮件。真正缺失或失效的会话仍走未登录处理。一次性 code 回调与主动退出的故障恢复是不同流程，不能因本项接入而视为全部认证验收通过。
+
 ### 扩展
 
 扩展使用 Authorization Code + PKCE：
