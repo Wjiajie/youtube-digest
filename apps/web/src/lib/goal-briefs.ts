@@ -46,3 +46,16 @@ function fromRow(row: Record<string, unknown>, ownerId: string): GoalBrief {
   return goalBriefSchema.parse({ id: row.id, blueprintId: row.blueprint_id, revision: row.revision,
     status: row.status, content: row.content, updatedAt: row.updated_at });
 }
+
+export async function listGoalBriefs(client: SupabaseClient, actor: Actor, offset = 0): Promise<ApplicationResult<{ briefs: GoalBrief[]; hasMore: boolean }>> {
+  if (actor.client !== "web") return { ok: false, code: "forbidden" };
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000) return { ok: false, code: "invalid" };
+  const { data, error } = await client.from("goal_briefs")
+    .select("id,owner_id,blueprint_id,revision,status,content,updated_at")
+    .eq("owner_id", actor.userId).order("updated_at", { ascending: false }).order("id", { ascending: false })
+    .range(offset, offset + 50);
+  if (error) throw error;
+  if (!Array.isArray(data)) throw new Error("Invalid Goal Brief list");
+  const briefs = data.map(row => fromRow(row, actor.userId));
+  return { ok: true, value: { briefs: briefs.slice(0, 50), hasMore: briefs.length > 50 } };
+}

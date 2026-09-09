@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { saveGoalBriefAction, readGoalBriefAction } from "./goal-brief-actions";
+import { saveGoalBriefAction, readGoalBriefAction, listGoalBriefsAction } from "./goal-brief-actions";
 
 const { cookies } = vi.hoisted(() => ({ cookies: [] as Array<{ name: string; value: string }> }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ getAll: () => cookies, set: () => {} }) }));
@@ -13,8 +13,9 @@ let current: typeof row | null;
 let replyRow: typeof row;
 let authStatus: number;
 let databaseCode: string | null;
+let listing: Array<typeof row> | null;
 beforeEach(() => {
-  current = null; replyRow = structuredClone(row); authStatus = 200; databaseCode = null;
+  current = null; replyRow = structuredClone(row); authStatus = 200; databaseCode = null; listing = null;
   const token = ["eyJhbGciOiJIUzI1NiJ9", Buffer.from(JSON.stringify({ sub: owner })).toString("base64url"), "fixture"].join(".");
   cookies.splice(0, cookies.length, { name: "sb-brief-auth-token", value: `base64-${Buffer.from(JSON.stringify({
     access_token: token, refresh_token: "fixture-refresh", expires_at: Math.floor(Date.now() / 1000) + 3600,
@@ -33,6 +34,11 @@ beforeEach(() => {
     }
     if (url.pathname === "/rest/v1/goal_briefs") {
       expect(url.searchParams.get("owner_id")).toBe(`eq.${owner}`);
+      if (!url.searchParams.has("id")) {
+        expect(url.searchParams.get("order")).toBe("updated_at.desc,id.desc");
+        expect(url.searchParams.get("limit")).toBe("51");
+        return Response.json(listing ?? (current ? [current] : []));
+      }
       expect(url.searchParams.get("id")).toBe(`eq.${id}`);
       return Response.json(current ? [current] : []);
     }
@@ -40,6 +46,27 @@ beforeEach(() => {
   });
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+it("lists saved definitions for the current Web account without inventing a draft", async () => {
+  expect(await listGoalBriefsAction(owner)).toEqual({ ok: true, value: { briefs: [], hasMore: false } });
+  current = row;
+  expect(await listGoalBriefsAction(owner)).toEqual({ ok: true, value: { briefs: [{
+    id, blueprintId: row.blueprint_id, revision: 1, status: "confirmed", content, updatedAt: row.updated_at,
+  }], hasMore: false } });
+  expect(await listGoalBriefsAction("other-account")).toEqual({ ok: false, code: "forbidden" });
+  current = { ...row, owner_id: "other-account" };
+  expect(await listGoalBriefsAction(owner)).toEqual({ ok: false, code: "unavailable" });
+});
+
+it("bounds a listing to 50 rows and distinguishes an extra page from an empty result", async () => {
+  listing = Array.from({ length: 51 }, (_, index) => ({ ...row,
+    id: `c6000000-0000-4000-8000-${String(index + 100).padStart(12, "0")}` }));
+  const result = await listGoalBriefsAction(owner, 50);
+  expect(result.ok && result.value.briefs.length).toBe(50);
+  expect(result.ok && result.value.hasMore).toBe(true);
+  expect(await listGoalBriefsAction(owner, -1)).toEqual({ ok: false, code: "invalid" });
+  expect(await listGoalBriefsAction(owner, 1.5)).toEqual({ ok: false, code: "invalid" });
+});
 
 it("lets the Web account confirm a definition and read the same cloud revision", async () => {
   const expected = { ok: true, value: {
@@ -64,6 +91,7 @@ it("requires a current Web session for saving and reading", async () => {
   cookies.length = 0;
   expect(await saveGoalBriefAction(owner, command)).toEqual({ ok: false, code: "unauthenticated" });
   expect(await readGoalBriefAction(owner, id)).toEqual({ ok: false, code: "unauthenticated" });
+  expect(await listGoalBriefsAction(owner)).toEqual({ ok: false, code: "unauthenticated" });
   expect(current).toBeNull();
 });
 
@@ -71,6 +99,7 @@ it.each([429, 503])("preserves Auth provider failure %i as unavailable", async s
   authStatus = status;
   expect(await saveGoalBriefAction(owner, command)).toEqual({ ok: false, code: "unavailable" });
   expect(await readGoalBriefAction(owner, id)).toEqual({ ok: false, code: "unavailable" });
+  expect(await listGoalBriefsAction(owner)).toEqual({ ok: false, code: "unavailable" });
   expect(current).toBeNull();
 });
 
