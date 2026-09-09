@@ -62,8 +62,7 @@ beforeEach(() => {
     if (url.pathname === "/auth/v1/user") return authStatus === 200
       ? Response.json({ id: ownerId }) : Response.json({ message: "private auth detail" }, { status: authStatus });
     if (databaseCode) return Response.json({ code: databaseCode, message: "private database detail" }, { status: 400 });
-    if (url.pathname === "/rest/v1/blueprints") return Response.json([{ id: row.blueprint_id, title: "我的蓝图", version: 3 }]);
-    if (url.pathname === "/rest/v1/goals") return Response.json([]);
+    if (url.pathname === "/rest/v1/rpc/read_blueprint_snapshot") return Response.json({ schemaVersion: 1, id: row.blueprint_id, title: "我的蓝图", version: 3, goals: [] });
     if (url.pathname === "/rest/v1/rpc/record_progress_evidence" && req.method === "POST") {
       const body = await req.json();
       expect(body).toEqual({

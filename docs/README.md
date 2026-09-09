@@ -18,6 +18,7 @@
 12. [本地 3D 资产试装](scene-intake-preview.md)：真实模型的内部检查工具、运行时隔离、已验证行为与未通过的美术／性能门槛。
 13. [云端账号偏好](account-preferences.md)：独立主题修订、Web 保存与扩展只读、本地迁移验证及尚未接入的正式界面。
 14. [私人成果记录](progress-evidence.md)：独立历史上下文、幂等、四类节点与精确账号权限；双端共享成长档案、私人草稿恢复及待完成的真实托管门槛。
+15. [蓝图一致性读取](blueprint-read-consistency.md)：并发确认时完整快照、调用者权限、本地迁移、数据库并发检查及后续发布顺序。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 

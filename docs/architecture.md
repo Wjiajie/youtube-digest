@@ -93,6 +93,8 @@ Blueprint（每个用户一份）
 
 ## 6. 数据读取与写回
 
+当前源码的蓝图读取使用单次 `STABLE SECURITY INVOKER` RPC，将版本与完整层级固定在同一个数据库语句快照内，避免并发确认时拼接旧版本和新节点。它保留 owner RLS、精确扩展授权和现有写入版本保护；不修改实体或修订。本地迁移与真实并发已验证，尚未托管发布，先迁移后部署的要求及证据见[蓝图一致性读取](blueprint-read-consistency.md)。
+
 Web 直接调用应用层。扩展只访问 `/api/v1`：
 
 - 读取完整 Blueprint Snapshot；

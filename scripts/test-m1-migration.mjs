@@ -164,6 +164,14 @@ try {
   );
   assert.equal(replay.rows[0]?.version, 1, "proposal application is idempotent");
 
+  const coherentRead = await db.query("select public.read_blueprint_snapshot($1) as snapshot", [ids.owner]);
+  assert.deepEqual(coherentRead.rows[0]?.snapshot, { ...snapshot, version: 1 },
+    "upgraded existing accounts read one complete confirmed Blueprint snapshot");
+  assert.equal((await db.query("select public.read_blueprint_snapshot($1) as snapshot", [ids.outsider])).rows[0]?.snapshot, null,
+    "the new snapshot RPC cannot widen owner access");
+  const readPermissions = await db.query("select has_function_privilege('anon', 'public.read_blueprint_snapshot(uuid)', 'EXECUTE') as allowed");
+  assert.equal(readPermissions.rows[0]?.allowed, false, "generated migration explicitly denies anonymous snapshot reads");
+
   const evidence = await db.query(
     "select * from public.record_progress_evidence($1, 1, '已完成一次独立练习', null, $2)",
     [ids.node, ids.sessionMutation],

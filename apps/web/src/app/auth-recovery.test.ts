@@ -46,8 +46,8 @@ beforeEach(() => {
     if (url.pathname === "/auth/v1/user") return authStatus === 200
       ? Response.json({ id: ownerId })
       : Response.json({ message: "private provider failure details" }, { status: authStatus });
-    if (url.pathname === "/rest/v1/blueprints") return Response.json([{ id: blueprintId, title: "My path", version }]);
-    if (url.pathname === "/rest/v1/goals" || url.pathname === "/rest/v1/learning_sessions") return Response.json([]);
+    if (url.pathname === "/rest/v1/rpc/read_blueprint_snapshot") return Response.json({ schemaVersion: 1, id: blueprintId, title: "My path", version, goals: [] });
+    if (url.pathname === "/rest/v1/learning_sessions") return Response.json([]);
     if (url.pathname === "/rest/v1/rpc/apply_blueprint_proposal") {
       version = 1;
       return Response.json(1);

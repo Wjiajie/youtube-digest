@@ -3,7 +3,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   type ApplyProposalStoreResult,
   type BlueprintProposalRecord,
-  type BlueprintSnapshot,
   type BlueprintStore,
   type LearningSessionRecord,
   parseBlueprintSnapshot,
@@ -14,98 +13,10 @@ type LooseClient = SupabaseClient<any, "public", any>;
 export function createSupabaseBlueprintStore(client: LooseClient): BlueprintStore {
   const store: BlueprintStore = {
     async getMainBlueprint(userId) {
-      const { data: blueprint, error: blueprintError } = await client
-        .from("blueprints")
-        .select("id, title, version")
-        .eq("owner_id", userId)
-        .maybeSingle();
-      if (blueprintError) throw blueprintError;
-      if (!blueprint) return null;
-
-      const { data: goals, error: goalsError } = await client
-        .from("goals")
-        .select("id, title, description, position")
-        .eq("blueprint_id", blueprint.id)
-        .is("archived_at", null)
-        .order("position");
-      if (goalsError) throw goalsError;
-      const goalIds = (goals ?? []).map((goal: any) => goal.id);
-      const stages = goalIds.length
-        ? await selectMany(client, "stages", "id, goal_id, title, position", "goal_id", goalIds)
-        : [];
-      const stageIds = stages.map((stage: any) => stage.id);
-      const nodes = stageIds.length
-        ? await selectMany(
-            client,
-            "path_nodes",
-            "id, stage_id, node_type, title, description, position",
-            "stage_id",
-            stageIds,
-          )
-        : [];
-      const nodeIds = nodes.map((node: any) => node.id);
-      const dependencies = nodeIds.length
-        ? await selectMany(
-            client,
-            "path_node_dependencies",
-            "node_id, dependency_id",
-            "node_id",
-            nodeIds,
-            false,
-          )
-        : [];
-      const resources = nodeIds.length
-        ? await selectMany(
-            client,
-            "resource_bindings",
-            "id, node_id, kind, url, external_id, position",
-            "node_id",
-            nodeIds,
-          )
-        : [];
-
-      return parseBlueprintSnapshot({
-        schemaVersion: 1,
-        id: blueprint.id,
-        version: Number(blueprint.version),
-        title: blueprint.title,
-        goals: (goals ?? []).map((goal: any) => ({
-          id: goal.id,
-          title: goal.title,
-          ...(goal.description ? { description: goal.description } : {}),
-          position: goal.position,
-          stages: stages
-            .filter((stage: any) => stage.goal_id === goal.id)
-            .sort(byPosition)
-            .map((stage: any) => ({
-              id: stage.id,
-              title: stage.title,
-              position: stage.position,
-              nodes: nodes
-                .filter((node: any) => node.stage_id === stage.id)
-                .sort(byPosition)
-                .map((node: any) => ({
-                  id: node.id,
-                  type: node.node_type,
-                  title: node.title,
-                  ...(node.description ? { description: node.description } : {}),
-                  position: node.position,
-                  dependencyIds: dependencies
-                    .filter((dependency: any) => dependency.node_id === node.id)
-                    .map((dependency: any) => dependency.dependency_id),
-                  resources: resources
-                    .filter((resource: any) => resource.node_id === node.id)
-                    .sort(byPosition)
-                    .map((resource: any) => ({
-                      id: resource.id,
-                      kind: resource.kind,
-                      url: resource.url,
-                      externalId: resource.external_id,
-                    })),
-                })),
-            })),
-        })),
-      });
+      // Root version and every nested entity must come from one database snapshot.
+      const { data, error } = await client.rpc("read_blueprint_snapshot", { p_owner_id: userId });
+      if (error) throw error;
+      return data === null ? null : parseBlueprintSnapshot(data);
     },
 
     async getProposalByMutation(userId, mutationId) {
@@ -215,21 +126,6 @@ export function createSupabaseBlueprintStore(client: LooseClient): BlueprintStor
   return store;
 }
 
-async function selectMany(
-  client: LooseClient,
-  table: string,
-  columns: string,
-  foreignKey: string,
-  ids: string[],
-  activeOnly = true,
-): Promise<any[]> {
-  let query = client.from(table).select(columns).in(foreignKey, ids);
-  if (activeOnly) query = query.is("archived_at", null);
-  const { data, error } = await query;
-  if (error) throw error;
-  return data ?? [];
-}
-
 function proposalFromRow(row: any): BlueprintProposalRecord {
   return {
     id: row.id,
@@ -257,8 +153,4 @@ function sessionFromRow(row: any): LearningSessionRecord {
     clientMutationId: row.client_mutation_id,
     createdAt: row.created_at,
   };
-}
-
-function byPosition(left: any, right: any): number {
-  return left.position - right.position;
 }
