@@ -1,8 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   progressEvidenceSchema, recordProgressEvidenceSchema,
-  type Actor, type ApplicationResult, type ProgressEvidence,
+  type Actor, type ApplicationResult, type BlueprintSnapshot, type ProgressEvidence,
 } from "@blueprint/domain";
+import { blueprintApplication } from "./application";
+
+export type EvidenceWorkspace = { blueprint: BlueprintSnapshot; records: ApplicationResult<ProgressEvidence[]> };
+
+export async function readEvidenceWorkspace(client: SupabaseClient, actor: Actor): Promise<ApplicationResult<EvidenceWorkspace>> {
+  const [blueprint, records] = await Promise.all([
+    blueprintApplication(client).getMainBlueprint(actor).catch(() => ({ ok: false as const, code: "unavailable" as const })),
+    readRecentProgressEvidence(client, actor).catch(() => ({ ok: false as const, code: "unavailable" as const })),
+  ]);
+  return blueprint.ok ? { ok: true, value: { blueprint: blueprint.value, records } } : blueprint;
+}
 
 export async function recordProgressEvidence(
   client: SupabaseClient, actor: Actor, input: unknown,

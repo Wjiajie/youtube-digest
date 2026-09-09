@@ -107,7 +107,7 @@ Web 直接调用应用层。扩展只访问 `/api/v1`：
 
 ## 7. 隐私与观测
 
-P4 私人成果数据切片已进入源码并通过本地验证，未托管发布或接入界面：成果独立于 BlueprintSnapshot，由数据库捕获提交时的路径上下文，使用独立提交 ID 去重；不改变完成状态。Web 通过账号绑定 Action 写入，配置的扩展通过 Bearer API 写入，双方读取私人近期记录。精确 OAuth 白名单与 owner RLS 双重约束，客户端不能直接写表；尚不接入旧 outbox。边界、迁移和验证见[私人成果记录](progress-evidence.md)。
+P4 私人成果数据与 Web `/progress` 成长档案已通过本地验证，未托管发布，扩展成果 UI 待实现：成果独立于 BlueprintSnapshot，由数据库捕获提交时的路径上下文，使用独立提交 ID 去重；不改变完成状态。Web 通过账号绑定 Action 写入与重读工作区，配置的扩展通过 Bearer API 写入，双方可读取私人近期记录。Web 草稿按账号／蓝图缓存并用 Web Locks 防止多标签覆盖；回执不明重试原提交，版本变化需明确重绑定。缓存仅作短期恢复。精确 OAuth 白名单与 owner RLS 双重约束，客户端不能直接写表；尚不接入旧 outbox。边界、迁移和验证见[私人成果记录](progress-evidence.md)。
 
 Product Event 只允许固定事件名、surface、实体 ID、短 result code、duration bucket 和时间，不包含目标正文、提案 Snapshot、字幕或笔记。
 

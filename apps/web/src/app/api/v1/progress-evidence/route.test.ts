@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { GET, POST } from "./route";
-import { recordProgressEvidenceAction } from "@/app/progress-evidence-actions";
+import { recordProgressEvidenceAction, readEvidenceWorkspaceAction } from "@/app/progress-evidence-actions";
 
 const { cookieJar } = vi.hoisted(() => ({ cookieJar: [] as { name: string; value: string }[] }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ getAll: () => cookieJar, set: () => {} }) }));
@@ -62,6 +62,8 @@ beforeEach(() => {
     if (url.pathname === "/auth/v1/user") return authStatus === 200
       ? Response.json({ id: ownerId }) : Response.json({ message: "private auth detail" }, { status: authStatus });
     if (databaseCode) return Response.json({ code: databaseCode, message: "private database detail" }, { status: 400 });
+    if (url.pathname === "/rest/v1/blueprints") return Response.json([{ id: row.blueprint_id, title: "我的蓝图", version: 3 }]);
+    if (url.pathname === "/rest/v1/goals") return Response.json([]);
     if (url.pathname === "/rest/v1/rpc/record_progress_evidence" && req.method === "POST") {
       const body = await req.json();
       expect(body).toEqual({
@@ -189,4 +191,16 @@ it("keeps historical text and links readable without applying today's input norm
   const response = await GET(request());
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual([{ ...expected, text: records[0].evidence_text, artifactUrl: records[0].artifact_url }]);
+});
+
+it("refreshes the journal only for its bound Web account, without confusing Auth outages with logout", async () => {
+  signInWeb(); records = [row];
+  expect(await readEvidenceWorkspaceAction(ownerId)).toEqual({ ok: true, value: {
+    blueprint: { schemaVersion: 1, id: row.blueprint_id, title: "我的蓝图", version: 3, goals: [] },
+    records: { ok: true, value: [expected] },
+  } });
+  expect(await readEvidenceWorkspaceAction("a4000000-0000-4000-8000-000000000002"))
+    .toEqual({ ok: false, code: "forbidden" });
+  authStatus = 503;
+  expect(await readEvidenceWorkspaceAction(ownerId)).toEqual({ ok: false, code: "unavailable" });
 });

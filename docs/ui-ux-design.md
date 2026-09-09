@@ -1,4 +1,4 @@
-# Blueprint 当前 UI/UX（M1）
+# Blueprint 当前 UI/UX（M1 与后续已实现切片）
 
 ## 1. 本阶段体验目标
 
@@ -14,6 +14,8 @@ flowchart LR
   Web --> Review[提案差异审阅]
   Review -->|确认| Web
   Web --> Connections[扩展连接管理]
+  Web --> Journal[私人成长档案]
+  Journal --> Web
   Connections --> Consent[扩展授权确认]
   Consent --> Panel[YouTube Side Panel]
   Panel --> Session[明确开始学习]
@@ -48,6 +50,10 @@ flowchart LR
 
 用户可以查看扩展 OAuth grant 并撤销。授权页明确列出扩展获得的职责；已有 grant 可安全复用，拒绝不会创建扩展会话。
 
+### 成长档案（源码／本地已验证，未托管发布）
+
+独立 `/progress` 页面从正式路径节点记录私人文字和可选作品链接，显示最近 50 条及提交时的路径上下文，不自动判断完成。双主题共用相同表单和恢复语义：编辑中新草稿明确未保存，断网回执不明只能确认原提交结果，路径更新需明确重新关联。账号／蓝图隔离缓存、多标签只读保护和历史错误状态均避免静默丢失；外链经过安全锚点检查。完整边界与证据见[私人成果记录](progress-evidence.md)。
+
 ## 4. YouTube 扩展
 
 Side Panel 始终说明自己是 Blueprint 的 YouTube 子场景，而不是独立产品。
@@ -76,7 +82,7 @@ Side Panel 始终说明自己是 Blueprint 的 YouTube 子场景，而不是独�
 
 ## 6. 视觉系统
 
-Web 与扩展共享 `packages/ui/src/tokens.css` 的语义 Token 和少量基础组件。当前 M1 源码只有单一冷色科幻表现，尚无主题装配或正式 3D；这不是未来产品的单主题限制。双主题整体设计、公开示例和成果反馈见[目标 UI/UX 规划](target-ui-ux-plan.md)。
+Web 与扩展共享 `packages/ui/src/tokens.css` 的语义 Token 和基础组件，已接入赛博朋克与东方主题及云端账号偏好；扩展跟随 Web。成长档案采用网格切角／纸面圆印区分表现，不重置编辑状态。这些是双主题基础与页面切片，不代表正式双主题 3D、美术或整套商用品质门槛通过。双主题整体设计、公开示例和成果反馈见[目标 UI/UX 规划](target-ui-ux-plan.md)。
 
 必须保持：
 
@@ -93,4 +99,5 @@ M3 可以替换人物和目标表达层，但不能改变这些可操作语义�
 
 - 登录页已经在真实浏览器中验证邮箱→邮件已发送→更换邮箱的恢复流程。
 - Playwright 同时覆盖桌面 Chrome 和 Pixel 5 视口，并检查无横向溢出。
-- M1 尚未在真实托管环境完成邮件链接回调和扩展 OAuth 端到端验收，因此这两项不能写为已上线体验。
+- 已记录真实托管邮件链接回调、重新登录及扩展重新连接；第二账号、完整 consent／撤销及提供方旅程仍有待验项，详见[实时路线](execution-roadmap.md)，不将部分通过写成全部 M1 验收完成。
+- 成长档案的真实本地 Auth／保存／重载／离线恢复／多标签接手，以及双主题桌面与 320px 已验证；不等于该页面已经部署到线上。
