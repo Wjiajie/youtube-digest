@@ -172,6 +172,24 @@ try {
   const readPermissions = await db.query("select has_function_privilege('anon', 'public.read_blueprint_snapshot(uuid)', 'EXECUTE') as allowed");
   assert.equal(readPermissions.rows[0]?.allowed, false, "generated migration explicitly denies anonymous snapshot reads");
 
+  const briefContent = { schemaVersion: 1, outcome: "完成一次独立分析", startingPoint: "刚接触分析工具",
+    targetDate: null, weeklyMinutes: 180, constraints: "", successCriteria: "能够解释分析结论与限制" };
+  const brief = await db.query("select * from public.save_goal_brief($1, 0, $2, true, $3)", [ids.goal, briefContent, ids.createMutation]);
+  assert.equal(brief.rows[0]?.status, "confirmed", "existing accounts can explicitly confirm a Goal Brief after upgrade");
+  assert.equal(brief.rows[0]?.revision, 1);
+  const briefReplay = await db.query("select * from public.save_goal_brief($1, 0, $2, true, $3)", [ids.goal, briefContent, ids.createMutation]);
+  assert.deepEqual(briefReplay.rows, brief.rows, "Goal Brief upgrade preserves exact retry receipts");
+  await assert.rejects(() => db.query("update public.goal_briefs set status = 'draft'"), /permission denied/,
+    "Goal Brief state cannot bypass its guarded mutation");
+  assert.equal((await db.query("select version from public.blueprints")).rows[0]?.version, 1,
+    "confirming a definition does not create a Blueprint revision");
+  const briefPermissions = await db.query(`select
+    has_table_privilege('anon', 'public.goal_briefs', 'SELECT') as anon_read,
+    has_function_privilege('anon', 'public.save_goal_brief(uuid,integer,jsonb,boolean,uuid)', 'EXECUTE') as anon_rpc,
+    has_table_privilege('authenticated', 'private.goal_brief_mutations', 'SELECT') as client_receipts`);
+  assert.deepEqual(briefPermissions.rows[0], { anon_read: false, anon_rpc: false, client_receipts: false },
+    "the generated migration retains explicit privacy ACLs");
+
   const evidence = await db.query(
     "select * from public.record_progress_evidence($1, 1, '已完成一次独立练习', null, $2)",
     [ids.node, ids.sessionMutation],

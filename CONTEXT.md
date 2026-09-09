@@ -12,6 +12,10 @@ _Avoid_: Workspace, project collection
 A longer-term outcome the user intends to reach.
 _Avoid_: Task, project
 
+**Goal Brief**:
+A user's definition of an intended outcome, starting point, available time, constraints, and success criteria before path planning. Confirming this definition is distinct from confirming a Blueprint Proposal.
+_Avoid_: Formal Goal, saved path, Agent plan
+
 **Stage**:
 An ordered grouping that makes a goal path understandable in parts; it is not evidence that an outcome has been reached.
 _Avoid_: Milestone
