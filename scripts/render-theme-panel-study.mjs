@@ -147,6 +147,11 @@ try {
       }
       for (const width of [1440, 960, 390]) {
         await page.setViewportSize({ width, height: 1000 });
+        // Chromium's captureBeyondViewport path can resnap horizontal rails
+        // during fullPage capture. Lay out the full height explicitly first,
+        // then capture the ordinary viewport without mutating product CSS.
+        const captureHeight = await page.evaluate(() => document.documentElement.scrollHeight);
+        await page.setViewportSize({ width, height: captureHeight });
         await page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
         await buttons.nth(1).evaluate(element => element.scrollIntoView({ block: "nearest", inline: "start", behavior: "instant" }));
         await page.waitForFunction(() => {
@@ -171,9 +176,14 @@ try {
           assert.ok(report.skins>=10&&report.extendedSkins>0&&report.drawCalls>0);
           assert.equal(report.animations,24);assert.deepEqual(report.shaderErrors,[]);
           assert.ok(report.avatarHeightFraction>=.6&&report.avatarHeightFraction<=1.05,"Avatar must be a meaningful, unclipped panel subject");
-          reports.push({viewport:width,...report});
+          reports.push({viewport:width,captureHeight,...report});
         }
-        await page.screenshot({path:resolve(output,`${theme}-${fallback?'fallback':'scene'}-${width}.png`),fullPage:true});
+        await page.screenshot({path:resolve(output,`${theme}-${fallback?'fallback':'scene'}-${width}.png`),fullPage:false});
+        assert.ok(await page.evaluate(() => {
+          const rail=document.querySelector('.home-goal-rail').getBoundingClientRect();
+          const selected=document.querySelector('.home-goal-module[aria-pressed="true"]').getBoundingClientRect();
+          return selected.left>=rail.left-1&&selected.right<=rail.right+1;
+        }), "Selected goal must still be fully visible after screenshot capture");
       }
     }
     assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
