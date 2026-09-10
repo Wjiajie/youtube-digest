@@ -26,7 +26,9 @@ const requestSchema = z.strictObject({
   }),
   expectedSkillSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
-const prose = (max: number) => text(max).refine(value => !/(?:[a-z][a-z\d+.-]*:\/\/|www\.|(?:javascript|data|mailto):)/i.test(value));
+// This is an output-contract guard, not a substitute for safe rendering in a future UI.
+const linkSyntax = /(?:[a-z][a-z\d+.-]*:\/\/|\/\/[a-z\d]|www\.|(?:javascript|data|mailto):|\[[^\]]*\]\s*(?:\(|\[|:)|<\s*a\b)/i;
+const prose = (max: number) => text(max).refine(value => !linkSyntax.test(value));
 const answerSchema = z.strictObject({ summary: prose(600), assessments: z.array(z.strictObject({
   videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/), role: z.enum(["recommended", "alternative", "rejected"]),
   relevance: prose(400), levelFit: prose(400), languageFit: prose(400), timeFit: prose(400), freshness: prose(400),

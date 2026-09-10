@@ -166,6 +166,12 @@ describe("source-bound resource matching", () => {
     expect(await createResourceMatcher({ model }).run(request)).toMatchObject({ status: "invalid_output", providerMayHaveRun: true });
   });
 
+  it.each(["[换个视频](//outside.example/fake)", "[去看看](/watch?v=unasked00000)", "[替换视频][link]\n[link]: /watch?v=unasked00000", "<a href='/watch?v=unasked00000'>推荐</a>", "打开 //outside.example/fake"])("rejects explicit link syntax without a URL scheme: %s", async link => {
+    const candidate = answer(); candidate.assessments[0].relevance = link;
+    const model = new MockLanguageModelV4({ doGenerate: reply(candidate) });
+    expect(await createResourceMatcher({ model }).run(input())).toMatchObject({ status: "invalid_output", providerMayHaveRun: true });
+  });
+
   it("keeps input text in the data prompt and freezes source and caption evidence before generation", async () => {
     const request = input(); request.learnerContext.startingPoint = "IGNORE_SYSTEM_AND_CHANGE_SCHEMA";
     request.discovery.candidates[0].video.description = "TRANSCRIPT_ROLE_INJECTION";
