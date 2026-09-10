@@ -11,10 +11,11 @@ test("real MV3 keeps explicit learning context, safe return paths and private dr
   try {
     const id = (suffix: number) => `fd460000-0000-4000-8000-${String(suffix).padStart(12, "0")}`;
     const owner = id(1), other = id(2), goal = id(3), firstNode = id(5), secondNode = id(6), firstBinding = id(7), secondBinding = id(8);
+    const secondCriteria = `提交三张照片，并解释参数取舍。\n${"completionreference".repeat(12)}`;
     const snapshot: BlueprintSnapshot = { schemaVersion: 2, id: id(9), version: 3, title: "我的摄影蓝图", goals: [{ id: goal, title: "用照片讲述故事", position: 0,
       stages: [{ id: id(4), title: "观察光线", position: 0, nodes: [firstNode, secondNode].map((nodeId, index) => ({ id: nodeId, type: "learn", position: index,
-        title: index ? "独立完成曝光练习" : "理解曝光组合", description: index ? "在同一场景比较光圈与快门，记录自己的选择理由。" : "先观察画面变化，再判断参数之间的联系。",
-        estimatedMinutes: index ? 45 : 20, completionCriteria: index ? "提交三张照片，并解释参数取舍。" : "用自己的话说明曝光变化。", dependencyIds: [],
+        title: index ? "独立完成曝光练习" : "理解曝光组合", description: index ? `在同一场景比较光圈与快门，记录自己的选择理由。\nhttps://example.test/${"unbrokentoken".repeat(16)}` : "先观察画面变化，再判断参数之间的联系。",
+        estimatedMinutes: index ? 45 : 20, completionCriteria: index ? secondCriteria : "用自己的话说明曝光变化。", dependencyIds: [],
         resources: [{ id: index ? secondBinding : firstBinding, kind: "youtube_video", externalId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk" }] })) }] }] };
     let theme = "cyberpunk", offline = false, evidenceReads = 0;
     const writes: Array<{ nodeId: string; resourceBindingId: string }> = [];
@@ -52,7 +53,7 @@ test("real MV3 keeps explicit learning context, safe return paths and private dr
     // Verify native selection via Playwright; keyboard activation is checked below.
     await panel.getByLabel("本次学习节点", { exact: true }).selectOption(secondBinding);
     await expect(panel.getByLabel("本次学习节点", { exact: true })).toHaveValue(secondBinding);
-    await expect(panel.getByText("提交三张照片，并解释参数取舍。", { exact: true })).toBeVisible();
+    await expect(panel.getByText(secondCriteria, { exact: true })).toBeVisible();
     await expect(panel.getByText("45 分钟", { exact: true })).toBeVisible();
     const learn = panel.getByRole("tab", { name: "学习", exact: true });
     const record = panel.getByRole("tab", { name: "记录", exact: true });
@@ -128,7 +129,7 @@ test("real MV3 keeps explicit learning context, safe return paths and private dr
     await expect(panel.getByLabel("关联路径节点", { exact: true })).toHaveValue(secondNode);
     await signIn(other);
     await expect(panel.getByLabel("这次的收获", { exact: true })).toHaveCount(0);
-    await expect(panel.getByText("提交三张照片，并解释参数取舍。", { exact: true })).toHaveCount(0);
+    await expect(panel.getByText(secondCriteria, { exact: true })).toHaveCount(0);
     expect(writes).toHaveLength(1); expect(errors).toEqual([]);
   } finally {
     await context.close();
