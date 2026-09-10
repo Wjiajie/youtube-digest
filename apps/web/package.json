@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/deepseek": "3.0.42",
     "@blueprint/domain": "3.0.0",
     "@blueprint/ui": "3.0.0",
     "@react-three/drei": "10.7.8",
