@@ -4,6 +4,42 @@
 
 最新内部制作修订为 **v17**，增量固定点 `c066eec`。东方腰带改为贴合上衣的高腰织带与扣件，正式首页仍未装载这些资产。v15 袍片的 9 个动作交叉问题仍在，v17 腰带也未通过完整动作贴合门槛；旧修订保留，不把内部制作增量当作正式美术通过。
 
+## v18／v19 腰口接合试验：均未采用
+
+2026-09-11，固定点 `b67a646`。本批真实制作并导出了两个东方服装试验，但没有将静态改善写成成功修复：**保留的制作配方仍为 v17**，`build-dual-theme-study.py` 已恢复原样，赛博配方和正式首页均未修改。
+
+主线程首先检查 v17 人物近景与真实首页构图，确认腰带下仍露出旧裙腰。新增[只读接合检查](../scripts/check-study-waist-join.py)在实际资产上复现：四片上沿比腰带下沿低约 35.1 mm；到腰带面的最大最近距离约 86.7–120.3 mm。只把上沿抬高 45 mm 的单变量内存探针仍有约 77.0–113.5 mm 的轮廓距离，说明不只是高度问题。
+
+| 试验 | 真实修改 | 静止接合 | 805 个姿态袍片边／裤面交叉检查 |
+| --- | --- | --- | --- |
+| v17 基线（本批重跑） | 无 | 不符合接合包络 | 165 个姿态失败；高踢腿最多 48 条交叉边，翻滚最多 81 条 |
+| v18（未采用） | 用上衣实际表面及其插值权重替换袍片上沿，藏入腰带 | 上沿进入腰带高度范围，最近距离最大约 5.3–5.7 mm | 200 个姿态失败；新增长的上沿到下一排跨度使运行姿态更差 |
+| v19（未采用） | 在 v18 思路下保留旧腰口作支撑排，新增一排接合面；下方原网格和权重不变 | 满足同一静止距离／高度检查 | 165 个姿态失败，但高踢腿最多 64 条、翻滚最多 101 条交叉边；不能称为无退化或碰撞修复 |
+
+上表计数是网格边穿过裤面这一缺陷见证，不是全部三角面、亚帧或碰撞体的证明；增加拓扑后也不能仅比较总边数来衡量视觉严重度。新的静止检查仅验证上沿高度和最近距离，是必要的接合条件，**不证明整条缝被遮住、面朝向正确、动作贴合或商用质量**。两个[固定资产回归](../scripts/check-study-waist-join.test.mjs)刻意分别保留 v17 红灯和未采用 v19 的静止绿灯，防止把后者误作动作通过。
+
+### 运行证据与决定
+
+v18／v19 实际 GLB 均通过生产加载器的有限值、24 动作／62 骨骼和 WebGL 着色器检查；v19 另生成 24 动作各三姿态的 72 张采样图。主线程检查两个试验的近景和 v19 动作图集第 2／3 页：双腰线减少，但腰口向外扩得过急；高踢腿和翻滚仍可见服装变形问题。因此两个试验只保留在忽略目录，不接入真实首页或产品资产包，也没有为它们重跑双主题首页布局验收。没有把软件 GPU 截图当作真实硬件证明。
+
+| 内部试验文件 | SHA-256 |
+| --- | --- |
+| v18 eastern.blend | `a78ec0e8dcf1a07e502af8784cd49135ddc0b6c1a82d83d2eef8b7c831a16d3b` |
+| v18 eastern.glb | `0217401d985a58eef6e327d3094cbba2a8657daa9e15dac6bfa0d9e440a799e4` |
+| v19 eastern.blend | `4bcb5d11070938755ad38c2f8b009b8d5bd18eb1f61d2f42bf3f877f1e01c59f` |
+| v19 eastern.glb | `67812dcadebc0875325381ed1f4c1ceb3ab2d81d3bd969495956c9855b4e5e33` |
+
+制作件分别在 `.tools/asset-studies/dual-theme-v18/`、`dual-theme-v19/`；v19 配方差异保留为 `.goal-loop/debug/v19-waist-support-row.patch`，只用于继续研究，不自动应用。原始修复源与 v17 两个文件的哈希保持不变。11 项脚本回归通过，完整动作检查仍按预期退出 1；应用与数据库没有变更，本批未重跑其全量测试或构建，无费用、部署、push 或素材分发。
+
+```bash
+bash scripts/with-m1-runtime.sh node --test scripts/check-study-waist-join.test.mjs
+.tools/blender-4.5.13/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --offline-mode .tools/asset-studies/dual-theme-v19/eastern.blend --python-exit-code 1 --python scripts/check-study-robe-clearance.py -- --all-actions
+bash scripts/with-m1-runtime.sh node scripts/render-dual-theme-study.mjs 19 eastern
+bash scripts/with-m1-runtime.sh node scripts/render-study-actions.mjs 19 eastern
+```
+
+下一步必须把腰口到大腿的过渡面、版型与变形一起处理，先用这些失败姿态检查，再评估整体轮廓；不再单独抬上沿、接直线面或加宽腰带遮挡。现有证据并未证明任何后续版型或动画修正方案已可用，P2 正式人物、材质、环境和硬件门槛仍未通过。
+
 ## v17 高腰织带与扣件
 
 2026-09-11，固定点 `c066eec`。将旧配方只跟随 Hips 的方盒腰带替换为实际上衣表面取样、重心插值配重的连续织带；相较未采用的 v16，四行取样高度整体提高 30 mm，扣件同步提高。衣襟、身体、袍片、24 个动作与检查门槛保持不变。当前[内部制作脚本](../scripts/build-dual-theme-study.py)保留这个增量，**不是碰撞修复完成或商用发布版本**。
