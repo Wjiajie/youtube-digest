@@ -13,6 +13,8 @@ explainer-video/
 .augment/
 .claude/
 skills/
+# Application-owned runtime instructions are source, not a local agent workspace.
+!/apps/web/src/lib/agent/skills/
 skills-lock.json
 .playwright-mcp/
 node_modules/
