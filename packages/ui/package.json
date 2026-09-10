@@ -12,6 +12,8 @@
     "./evidence-journal.css": "./src/evidence-journal.css",
     "./node-status-workspace": "./src/node-status-workspace.tsx",
     "./node-status-workspace.css": "./src/node-status-workspace.css",
+    "./learning-notes": "./src/learning-notes.tsx",
+    "./learning-notes.css": "./src/learning-notes.css",
     ".": "./src/index.tsx"
   },
   "scripts": {

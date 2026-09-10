@@ -1,5 +1,5 @@
 .evidence-shell { padding-top: 22px; }
-.evidence-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.evidence-nav { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .evidence-nav a { text-decoration: none; }
 .evidence-intro { display: flex; align-items: center; justify-content: space-between; gap: 32px; padding: 48px 0 40px; border-bottom: 1px solid var(--bp-line); margin-bottom: 32px; }
 .evidence-intro h1 { font-size: clamp(38px, 6vw, 64px); font-weight: 600; letter-spacing: -.035em; line-height: 1.15; margin: 18px 0; }

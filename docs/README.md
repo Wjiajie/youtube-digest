@@ -48,6 +48,7 @@
 42. [执行入口上传防护](execution-upload-protection.md)：规划、澄清、资源共用实际字节限制与绝对读取期限，保留路由认证和独立恢复。
 43. [扩展学习与记录分区](extension-learning-workspace.md)：双主题任务页签、持续挂载的私人草稿／待确认提交、明确当前路径与键盘切换。
 44. [私人时间戳笔记](learning-notes.md)：云端原文、历史节点／视频归属、精确提交恢复与共享读写入口；本地数据切片，表单和播放器尚待接入。
+45. [双端笔记工作台](note-workspace.md)：Web／扩展共享表单、原提交恢复、独占编辑、两主题私人历史与手动位置链接；无自动播放追踪。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 

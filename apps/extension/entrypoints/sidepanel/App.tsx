@@ -8,6 +8,7 @@ import { resolveTheme, ThemeSurface } from "@blueprint/ui/theme";
 import type { BoundNodeContext } from "../../src/runtime";
 import { EvidencePanel } from "./EvidencePanel";
 import { StatusPanel } from "./StatusPanel";
+import { NotesPanel } from "./NotesPanel";
 import { LearningWorkspace } from "./LearningWorkspace";
 
 type BoundNodeListItem = {
@@ -331,6 +332,7 @@ export function App() {
           </>} record={<>
             <div className="record-introduction"><h2>把经历留作证据</h2><p className="muted">记录实际收获，再核对完成依据。观看不等于掌握，草稿也不会随当前视频改选节点。</p></div>
             {state.userId ? <EvidencePanel ownerId={state.userId} /> : null}
+            {state.userId ? <NotesPanel ownerId={state.userId} /> : null}
             {state.userId ? <StatusPanel ownerId={state.userId} /> : null}
           </>} />
           <Button className="web-link" onClick={() => void browser.runtime.sendMessage({ type: "OPEN_WEB" })}>打开 Web 蓝图</Button>

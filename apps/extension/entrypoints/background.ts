@@ -6,6 +6,7 @@ import { createExtensionAuthPort } from "../src/auth";
 import { initExtensionObservability } from "../src/observability";
 import { createEvidenceTransport } from "../src/evidence";
 import { createNodeStatusTransport } from "../src/node-status";
+import { createLearningNotesTransport } from "../src/learning-notes";
 import { findBoundNodes, flushOutbox, type BoundNodeContext, type OutboxCommand } from "../src/runtime";
 
 const OUTBOX_KEY = "blueprint_session_outbox_v1";
@@ -23,6 +24,7 @@ export default defineBackground(() => {
   const auth = createExtensionAuthPort();
   const evidence = createEvidenceTransport(auth, apiBase);
   const nodeStatus = createNodeStatusTransport(auth, apiBase);
+  const learningNotes = createLearningNotesTransport(auth, apiBase);
   void cleanupLegacyStorage();
   void auth.accessToken().then((current) => current && retryOutbox(auth, current.session.userId));
   if (globalThis.chrome?.sidePanel) {
@@ -50,6 +52,10 @@ export default defineBackground(() => {
         return nodeStatus.load(message.ownerId);
       case "CONFIRM_NODE_STATUS":
         return nodeStatus.confirm(message.ownerId, message.input);
+      case "LOAD_LEARNING_NOTES":
+        return learningNotes.load(message.ownerId);
+      case "SAVE_LEARNING_NOTE":
+        return learningNotes.save(message.ownerId, message.input);
       case "START_SESSION":
         return startSession(auth, message);
       case "OPEN_PATH":

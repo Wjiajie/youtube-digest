@@ -84,6 +84,37 @@ test("learning and records are separate keyboard task views without starting pri
   expect(panels.map(panel => panel.hidden)).toEqual([false, true]);
 });
 
+test("record view offers explicit video notes without automatically reading private notes", async () => {
+  await act(async () => root.render(<App />));
+  transport.sendMessage.mockClear();
+  await clickButton("记录");
+  expect([...host.querySelectorAll("button")].some(button => button.textContent === "记录视频笔记")).toBe(true);
+  expect(transport.sendMessage).not.toHaveBeenCalled();
+});
+
+test("video notes stay mounted across tasks, themes and active video changes but are hidden on account change", async () => {
+  localStorage.clear();
+  const original = transport.sendMessage.getMockImplementation()!;
+  transport.sendMessage.mockImplementation(async message => message.type === "LOAD_LEARNING_NOTES"
+    ? { ok: true, value: { blueprint: { schemaVersion: 2, id: "fd520000-0000-4000-8000-000000000001", version: 2, title: "私人笔记路径", goals: [] }, records: [] } }
+    : original(message));
+  await act(async () => root.render(<App />));
+  await clickButton("记录"); await clickButton("记录视频笔记");
+  const textarea = host.querySelector('[aria-label="笔记原文"]'); expect(textarea).not.toBeNull();
+  transport.sendMessage.mockClear();
+  await clickButton("学习"); expect(textarea!.closest<HTMLElement>('[role="tabpanel"]')!.hidden).toBe(true);
+  await clickButton("记录"); expect(host.querySelector('[aria-label="笔记原文"]')).toBe(textarea);
+  preferences = { theme: { id: "eastern", version: 1 }, revision: 2 };
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await act(async () => tabs.onActivated.addListener.mock.calls[0]![0]({ tabId: 8 }));
+  expect(host.querySelector('[aria-label="笔记原文"]')).toBe(textarea);
+  expect(transport.sendMessage.mock.calls.some(([message]) => message.type === "LOAD_LEARNING_NOTES" || message.type === "SAVE_LEARNING_NOTE")).toBe(false);
+  transport.sendMessage.mockResolvedValue({ connected: true, userId: "user-b", nodes: [], preferences });
+  await act(async () => storage.addListener.mock.calls[0]![0]({ blueprint_cloud_session_v1: { oldValue: { userId: "user-a" }, newValue: { userId: "user-b" } } }, "local"));
+  expect(host.querySelector('[aria-label="笔记原文"]')).toBeNull();
+  expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("学习");
+});
+
 test("record tasks retain the mounted private workspace across tabs, video and theme but reset for a different account", async () => {
   const original = transport.sendMessage.getMockImplementation()!;
   transport.sendMessage.mockImplementation(async message => message.type === "LOAD_NODE_STATUS"

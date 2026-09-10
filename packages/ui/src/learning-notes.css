@@ -1,0 +1,28 @@
+.note-workspace { display: grid; gap: 24px; min-width: 0; }
+.note-toolbar, .note-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; justify-content: space-between; }
+.note-compose { display: grid; gap: 16px; padding: clamp(16px, 2.5vw, 28px); border-top: 3px solid var(--bp-accent); }
+.note-compose h2, .note-history > h2 { font: 600 22px/1.4 var(--bp-heading-font); letter-spacing: -.02em; }
+.note-workspace p { line-height: 1.75; }
+.note-workspace .subtle, .note-source { font-size: 13px; color: var(--bp-muted); }
+.note-source { border-inline-start: 2px solid var(--bp-line-strong); padding-inline-start: 12px; }
+.note-compose label { display: grid; gap: 8px; min-width: 0; }
+.note-compose :is(input, textarea, select) { width: 100%; min-width: 0; max-width: 100%; min-height: 44px; font: inherit; color: var(--bp-text); background: var(--bp-field); border: 1px solid var(--bp-control-border); border-radius: var(--bp-radius-sm); padding: 12px; }
+.note-compose textarea { resize: vertical; }
+.note-compose :is(input, textarea, select):focus-visible { outline: 2px solid var(--bp-accent); outline-offset: 3px; }
+.note-compose :disabled { opacity: .65; }
+.note-workspace :is(p, label, h2, h3, a, span) { overflow-wrap: anywhere; }
+.note-text { white-space: pre-wrap; line-height: 1.8; }
+.note-history { display: grid; gap: 16px; min-width: 0; }
+.note-history .bp-panel { display: grid; gap: 12px; padding: 20px; border-inline-start: 3px solid var(--bp-accent); }
+.note-history .bp-button { min-height: 44px; justify-self: start; font-size: 13px; }
+.note-workspace .bp-button { white-space: normal; overflow-wrap: anywhere; }
+.note-history .note-text { padding-block: 8px; border-block: 1px solid var(--bp-line); }
+[data-bp-theme="eastern"] .note-compose { border-top: 4px double var(--bp-accent); }
+[data-bp-theme="eastern"] .note-history .bp-panel { border-inline-start: 4px double var(--bp-accent); }
+[data-bp-theme="eastern"] .note-compose h2 { font-family: var(--bp-heading-font); }
+.note-intro { margin-block: 32px; }
+.note-intro h1 { font: 600 clamp(36px, 5vw, 56px)/1.2 var(--bp-heading-font); letter-spacing: -.03em; margin: 16px 0; }
+.note-intro > p:last-child { max-width: 680px; line-height: 1.8; }
+.note-nav { display: flex; flex-wrap: wrap; gap: 12px; }
+@media (min-width: 1000px) { .note-shell .note-workspace { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; } .note-shell .note-toolbar { grid-column: 1 / -1; } }
+@media (forced-colors: active) { .note-compose, .note-history .bp-panel { border: 1px solid CanvasText; } }
