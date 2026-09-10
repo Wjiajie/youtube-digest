@@ -2,6 +2,8 @@
 
 固定点：`8883313`。此文保留云端批次的验证记录；该批连接[澄清引擎](agent-goal-clarification.md)与真实本地 Supabase，交付可恢复的云端编排。后续页面增量见[目标澄清工作台](agent-clarification-workbench.md)，不代表托管发布或真实模型质量已经验收。
 
+后续：下文提到的规划大页面 Gzip 警告已在 2026-09-11 定位并完成[本地限定版本修复](next-compression-repair.md)，不替代完整性能验收。
+
 ## 产品与数据边界
 
 - 会话保存一份独立的工作摘要及其来源 Goal Brief 修订。Agent 可以建议修改工作摘要，但不会自动保存或确认 Goal Brief，更不会修改正式蓝图。
