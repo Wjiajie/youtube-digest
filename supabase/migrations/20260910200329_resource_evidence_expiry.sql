@@ -568,4 +568,3 @@ revoke all on function private.assert_resource_content(text,timestamptz),
  private.expire_resource_content(uuid),private.sweep_resource_content(integer) from public,anon,authenticated,service_role;
 CREATE TRIGGER resource_adoption_content_lifetime BEFORE INSERT OR UPDATE ON public.resource_adoptions FOR EACH ROW EXECUTE FUNCTION private.assign_resource_content_lifetime();
 CREATE TRIGGER resource_run_content_lifetime BEFORE INSERT OR UPDATE ON public.resource_runs FOR EACH ROW EXECUTE FUNCTION private.assign_resource_content_lifetime();
-
