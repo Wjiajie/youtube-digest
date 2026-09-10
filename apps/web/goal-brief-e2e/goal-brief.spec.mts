@@ -30,7 +30,7 @@ test("real local user defines, confirms, resumes and reviews a goal in both them
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
     await page.goto("/goals");
     await expect(page.getByRole("heading", { name: "我的目标定义", exact: true })).toBeVisible();
-    await page.getByRole("link", { name: "定义一个新目标", exact: true }).click();
+    await page.getByRole("link", { name: "直接填写目标定义", exact: true }).click();
     await expect(page.getByRole("heading", { name: "目标定义卡", exact: true })).toBeVisible();
     const url = page.url();
     await expect(page.getByRole("button", { name: "保存草稿", exact: true })).toBeEnabled();

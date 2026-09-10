@@ -8,6 +8,7 @@ import { createClarificationAccess } from "../src/lib/agent/clarification-access
 import { readGoalBrief } from "../src/lib/goal-briefs";
 import { createCloudGoalClarifier } from "../src/lib/agent/cloud-goal-clarifier";
 import type { ClarificationWorker } from "../src/lib/agent/clarification-worker";
+import { createClarificationWorkspace } from "../src/lib/agent/clarification-workspace";
 
 const local = localSupabaseTestConfig();
 const auth = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
@@ -96,6 +97,29 @@ it("persists a separate working suggestion, then saves a Goal Brief only on expl
   expect(blueprint.data).toMatchObject({ version: 0, goals: [] });
 });
 
+it("starts an empty definition only on an explicit command and restores its minimal user-facing workspace", async () => {
+  const owner = await fixture(), briefId = randomUUID(), sessionId = randomUUID();
+  const workspace = createClarificationWorkspace(owner.client, owner.actor);
+  const command = { briefId, sessionId, expectedBriefRevision: 0 };
+  const started = await workspace.start(command);
+  expect(started).toMatchObject({ ok: true, value: { id: sessionId, briefId, revision: 1, sourceRevision: 1, status: "active" } });
+  expect(await workspace.start(command)).toEqual(started);
+  const restored = await workspace.read(sessionId);
+  expect(restored).toMatchObject({ ok: true, value: { session: { id: sessionId, content: { outcome: "" } }, turns: [], offset: 0, hasMore: false } });
+  expect(await readGoalBrief(owner.client, owner.actor, briefId)).toMatchObject({ ok: true, value: { status: "draft", revision: 1 } });
+  if (!restored.ok) throw new Error(restored.code);
+  expect(Object.keys(restored.value.session).sort()).toEqual(["id", "briefId", "sourceRevision", "revision", "updatedAt", "status", "mode", "question", "content"].sort());
+  if (!started.ok) throw new Error(started.code);
+  const edit = { sessionId, expectedRevision: 1, clientMutationId: randomUUID(), content: {
+    ...started.value.content, outcome: "做一个摄影集", startingPoint: "新手", weeklyMinutes: 120, successCriteria: "完成六张照片" } };
+  expect(await workspace.edit(edit)).toMatchObject({ ok: true, value: { revision: 2, content: edit.content } });
+  expect(await readGoalBrief(owner.client, owner.actor, briefId)).toMatchObject({ ok: true, value: { revision: 1, content: { outcome: "" } } });
+  const save = { sessionId, expectedRevision: 2, confirm: true, clientMutationId: randomUUID() };
+  const saved = await workspace.save(save);
+  expect(saved).toMatchObject({ ok: true, value: { briefId, confirmed: true, session: { status: "closed", revision: 3 } } });
+  expect(await workspace.save(save)).toEqual(saved);
+});
+
 it("recovers two real durable turns, preserves actual question-answer history and requires explicit confirmation", async () => {
   const owner = await fixture(), sessionId = randomUUID();
   expect((await owner.access.create({ sessionId, briefId: owner.briefId, expectedBriefRevision: 1 })).ok).toBe(true);
@@ -121,6 +145,12 @@ it("recovers two real durable turns, preserves actual question-answer history an
   expect(second.value).toMatchObject({ status: "ready", inputQuestion: "你会如何判断学有所获？",
     history: [{ question: "你希望实现什么目标？", answer: firstCommand.message }],
     result: { status: "reviewable", content: { startingPoint: "新手", weeklyMinutes: 180 }, source: { briefRevision: 1 } } });
+  const workspace = createClarificationWorkspace(owner.client, owner.actor);
+  const turn = await workspace.readTurn(secondCommand.turnId, sessionId);
+  expect(turn).toMatchObject({ ok: true, value: { id: secondCommand.turnId, question: "你会如何判断学有所获？", answer: secondCommand.message,
+    skillVersion: "1.0.0", suggestion: { mode: "reviewable", changes: [{ field: "outcome", quote: "完成六张家庭照片" }, { field: "successCriteria", quote: "请家人评价构图" }] } } });
+  if (!turn.ok) throw new Error(turn.code);
+  expect(Object.keys(turn.value).sort()).toEqual(["id", "ordinal", "createdAt", "status", "question", "answer", "skillVersion", "suggestion"].sort());
   expect(model.doGenerateCalls).toHaveLength(2);
   const currentInput = model.doGenerateCalls[1].prompt.find(item => item.role === "user");
   if (!currentInput || typeof currentInput.content === "string") throw new Error("Missing current conversation input");
@@ -148,7 +178,11 @@ it("deduplicates concurrent sends, rejects overlapping edits and discards a canc
     if (!session.ok) throw new Error(session.code);
     expect(await owner.access.edit({ sessionId: command.sessionId, expectedRevision: 1, content: session.value.content, clientMutationId: randomUUID() }))
       .toEqual({ ok: false, code: "busy" });
-    expect(await owner.access.cancelTurn(command.turnId)).toMatchObject({ ok: true, value: { status: "cancelled", result: { providerMayHaveRun: true } } });
+    const workspace = createClarificationWorkspace(owner.client, owner.actor), otherSession = randomUUID();
+    expect(await workspace.readTurn(command.turnId, otherSession)).toEqual({ ok: false, code: "not_found" });
+    expect(await workspace.cancelTurn(command.turnId, otherSession)).toEqual({ ok: false, code: "not_found" });
+    expect(await owner.access.readTurn(command.turnId)).toMatchObject({ ok: true, value: { status: "running" } });
+    expect(await workspace.cancelTurn(command.turnId, command.sessionId)).toMatchObject({ ok: true, value: { status: "cancelled", suggestion: null } });
   } finally { response.resolve(providerReply(followUp())); }
   expect(await running).toMatchObject({ ok: true, value: { status: "cancelled" } });
   expect(await owner.access.read(command.sessionId)).toMatchObject({ ok: true, value: { revision: 1, content: { outcome: "想学摄影" } } });
