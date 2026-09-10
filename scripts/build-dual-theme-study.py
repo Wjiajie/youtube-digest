@@ -301,12 +301,18 @@ scene.render.resolution_x, scene.render.resolution_y = 1440, 1000
 scene.render.resolution_percentage = 100
 scene.world.color = (.08, .08, .08)
 assert all(not mesh.shape_keys for mesh in bpy.data.meshes)
-bpy.ops.wm.save_as_mainfile(filepath=str(blend), copy=True)
 result = bpy.ops.export_scene.gltf(filepath=str(glb), export_format="GLB", export_apply=True,
     export_animations=True, export_animation_mode="ACTIONS", export_all_influences=True,
     export_cameras=True, export_lights=True, export_extras=True,
     export_import_convert_lighting_mode="COMPAT",
     export_unused_images=False, export_unused_textures=False, will_save_settings=False)
 assert result == {"FINISHED"}
+# Preserve all source actions for the GLB export, then save an editable startup
+# state that matches the neutral-idle study rather than the source's NLA stack.
+arm.animation_data.use_nla = False
+arm.animation_data.action = bpy.data.actions["Idle_Neutral"]
+scene.frame_set(0)
+bpy.context.view_layer.update()
+bpy.ops.wm.save_as_mainfile(filepath=str(blend), copy=True)
 assert hashlib.sha256(source.read_bytes()).hexdigest() == "216fc727182f827c9774d862e2f161c58d3d7e63367f43ad9c3984d386cc0395"
 print("BLUEPRINT_THEME_STUDY", theme, glb.stat().st_size, hashlib.sha256(glb.read_bytes()).hexdigest())
