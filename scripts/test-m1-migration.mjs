@@ -62,11 +62,13 @@ try {
     const legacy = file.endsWith("_node_planning_metadata.sql") ? await seedLegacyPlanningUpgrade() : null;
     const statusUpgrade = file.endsWith("_node_status_confirmations.sql") ? await seedStatusUpgrade() : null;
     const clarificationUpgrade = file.endsWith("_goal_clarification_sessions.sql") ? await seedClarificationUpgrade() : null;
+    const resourceUpgrade = file.endsWith("_resource_runs.sql") ? await captureResourceUpgrade() : null;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
     if (legacy) await verifyLegacyPlanningUpgrade(legacy);
     if (statusUpgrade) await verifyStatusUpgrade(statusUpgrade);
     if (clarificationUpgrade) await verifyClarificationUpgrade(clarificationUpgrade);
+    if (resourceUpgrade) await verifyResourceUpgrade(resourceUpgrade);
   }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
@@ -440,4 +442,36 @@ async function verifyClarificationUpgrade(before) {
     has_table_privilege('service_role','private.goal_clarification_quotas','DELETE') as quota_delete`)).rows[0];
   assert.deepEqual(acl, { anon_create: false, user_claim: false, admin_direct_write: false, user_lease: false, quota_delete: false },
     "clarification migration retains narrow explicit execution and quota privileges");
+}
+
+async function captureResourceUpgrade() {
+  await db.exec("reset role");
+  const tables = (await db.query(`select table_schema,table_name from information_schema.tables
+    where table_schema in ('public','private') and table_type='BASE TABLE' order by table_schema,table_name`)).rows;
+  const before = {};
+  for (const { table_schema: schema, table_name: table } of tables) {
+    before[`${schema}.${table}`] = (await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb) as rows from "${schema}"."${table}" t`)).rows[0].rows;
+  }
+  return before;
+}
+
+async function verifyResourceUpgrade(before) {
+  await db.exec("reset role");
+  for (const [table, rows] of Object.entries(before)) {
+    const [schema, name] = table.split(".");
+    assert.deepEqual((await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb) as rows from "${schema}"."${name}" t`)).rows[0].rows,
+      rows, `resource migration preserves exact existing ${table} rows`);
+  }
+  for (const table of ["public.resource_runs", "private.resource_quotas", "private.resource_leases"]) {
+    assert.equal((await db.query(`select count(*)::int as count from ${table}`)).rows[0].count, 0,
+      "resource upgrade fabricates neither provider history nor free allowance");
+  }
+  const acl = (await db.query(`select
+    has_function_privilege('anon','public.begin_resource_run(jsonb)','EXECUTE') as anon_begin,
+    has_function_privilege('authenticated','public.claim_resource_run(uuid,uuid,uuid,jsonb)','EXECUTE') as user_claim,
+    has_table_privilege('service_role','public.resource_runs','UPDATE') as admin_direct_write,
+    has_table_privilege('authenticated','private.resource_leases','SELECT') as user_lease,
+    has_table_privilege('service_role','private.resource_quotas','DELETE') as quota_delete`)).rows[0];
+  assert.deepEqual(acl, { anon_begin: false, user_claim: false, admin_direct_write: false, user_lease: false, quota_delete: false },
+    "resource migration retains narrow explicit execution and quota privileges");
 }

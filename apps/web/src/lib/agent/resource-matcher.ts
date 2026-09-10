@@ -4,6 +4,7 @@ import { blueprintSnapshotSchema } from "@blueprint/domain";
 import { createHash } from "node:crypto";
 import { loadResourceMatchingSkill } from "./resource-matching-skill";
 import { generateStructuredSkill, type SkillUsage } from "./structured-skill-generation";
+import { resourceAnswerSchema } from "./resource-match-contract";
 
 const text = (max: number) => z.string().min(1).max(max).refine(value => value.trim().length > 0);
 const language = z.string().regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,2}$/);
@@ -26,15 +27,6 @@ const requestSchema = z.strictObject({
   }),
   expectedSkillSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
-// This is an output-contract guard, not a substitute for safe rendering in a future UI.
-const linkSyntax = /(?:[a-z][a-z\d+.-]*:\/\/|\/\/[a-z\d]|www\.|(?:javascript|data|mailto):|\[[^\]]*\]\s*(?:\(|\[|:)|<\s*a\b)/i;
-const prose = (max: number) => text(max).refine(value => !linkSyntax.test(value));
-const answerSchema = z.strictObject({ summary: prose(600), assessments: z.array(z.strictObject({
-  videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/), role: z.enum(["recommended", "alternative", "rejected"]),
-  relevance: prose(400), levelFit: prose(400), languageFit: prose(400), timeFit: prose(400), freshness: prose(400),
-  limitations: z.array(prose(240)).max(3),
-  evidence: z.array(z.strictObject({ segmentIndex: z.int().nonnegative(), quote: prose(200) })).min(1).max(2),
-})).max(3) });
 const excerptText = (value: string, limit: number) => [...value].slice(0, limit).join("");
 
 /** Internal review suggestions only; the caller must authorize the current snapshot and discovery. */
@@ -75,7 +67,7 @@ export function createResourceMatcher(dependencies: { model: Exclude<LanguageMod
         return { status: "unavailable" as const, providerMayHaveRun, usage };
       }
       const result = await generateStructuredSkill({ model: dependencies.model, instructions: skill.instructions,
-        schema: answerSchema, maxOutputTokens: 8192, signal, prompt });
+        schema: resourceAnswerSchema, maxOutputTokens: 8192, signal, prompt });
       if (result.status !== "generated") return result;
       providerMayHaveRun = result.providerMayHaveRun; usage = result.usage;
       const selected = result.output.assessments;

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { blueprintSnapshotSchema } from "@blueprint/domain";
 import type { ResourceProvider, TranscriptResult, VideoMetadata } from "./types";
 
-const preferencesSchema = z.strictObject({
+export const resourcePreferencesSchema = z.strictObject({
   regionCode: z.string().regex(/^[A-Z]{2}$/),
   language: z.string().regex(/^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,2}$/),
   allowLanguageFallback: z.boolean(),
@@ -10,11 +10,11 @@ const preferencesSchema = z.strictObject({
   publishedAfter: z.iso.datetime({ offset: true }).nullable(),
 });
 const requestSchema = z.strictObject({
-  blueprint: blueprintSnapshotSchema, nodeId: z.uuid(), preferences: preferencesSchema, signal: z.instanceof(AbortSignal),
+  blueprint: blueprintSnapshotSchema, nodeId: z.uuid(), preferences: resourcePreferencesSchema, signal: z.instanceof(AbortSignal),
 });
 type Candidate = { video: VideoMetadata; url: string; transcript: TranscriptResult;
   languageFallback: boolean | null; eligibleForMatching: boolean; matching: "not_evaluated" };
-function exclusion(video: VideoMetadata, preferences: z.infer<typeof preferencesSchema>, checkedAt: string) {
+function exclusion(video: VideoMetadata, preferences: z.infer<typeof resourcePreferencesSchema>, checkedAt: string) {
   if (video.privacyStatus !== "public") return "not_public";
   if (video.uploadStatus !== "processed") return "not_processed";
   if (video.liveBroadcastContent !== "none") return "live_or_upcoming";
