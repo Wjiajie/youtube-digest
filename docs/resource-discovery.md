@@ -42,6 +42,8 @@ Supadata 请求固定为 `mode=native,text=false`。直接字幕、后台任务 
 
 ## 后续交付门槛
 
+真实内容权限与保留策略须先经过[发布前核查](resource-retention-research.md)。`mode=native`、关闭 HTTP 缓存及提供方能返回结果均不构成字幕使用授权；当前原生字幕适配继续只用离线夹具验收。
+
 - 资源匹配 Skill：已在[受控资源匹配](agent-resource-matching.md)中实现并接入持久编排，只从候选选择并引用字幕，允许无合格结果；托管启用与真实质量评测仍待完成。
 - 云端运行：所有权、当前蓝图版本、分项次数、持久任务来源与显式恢复已在[本地实现](agent-resource-runs.md)，客户端不能提供 jobId。[生产形态接口与 worker](agent-resource-entry.md)已接通，默认关闭；托管启用与人民币费用账务仍待完成。
 - 双主题界面：候选、未知／失败状态与推荐理由已在工作台展示；[明确采用／替换与采用前核验](resource-adoption.md)已本地实现，不直接由 Agent 修改正式路径；专门的移除体验及扩展学习工作台仍待完成。

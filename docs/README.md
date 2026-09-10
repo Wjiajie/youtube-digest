@@ -44,6 +44,7 @@
 38. [提案资源顺序一致性](resource-order.md)：手工／规划／采用的共用写入修复、已有数据不回填、历史会话与确认回执保留。
 39. [扩展目标学习上下文](extension-learning-context.md)：真实节点说明／完成依据、明确多绑定选择、返回原路径与草稿保留；本地双主题 MV3 切片。
 40. [扩展明确节点自评](extension-node-assessment.md)：复用 Web 确认规则、核对完成依据、原提交恢复及双主题私人历史；本地增量。
+41. [资源保留与访问核查](resource-retention-research.md)：官方内容权限、数据刷新／删除规则、当前副本清单与启用门槛；不是已实现的清理机制或法律结论。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 

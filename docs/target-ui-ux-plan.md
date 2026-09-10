@@ -314,6 +314,8 @@ YouTube 的 `favoriteCount` 自 2015 年起已废弃，当前始终返回 `0`，
 
 YouTube 默认政策限制自定义派生评分；自 2026-06-01 起，部分高级派生指标需要开发者接受额外政策并通过相应用例的合规审计。Blueprint 在完成合规审查前不展示由点赞、观看和外部 KOC 数据合成的数字评分。[YouTube Developer Policies](https://developers.google.com/youtube/terms/developer-policies-guide)、[Derived Metrics Policy](https://developers.google.com/youtube/terms/derived-metrics-policy)
 
+显示“适配理由”也不能代替内容权限审查。真实字幕获取、模型处理、引文再展示与保存须通过[资源保留与访问门槛](resource-retention-research.md)；过期或权利未确认的内容应明确不可用，不靠更换措辞继续使用。用户目标、独立成果及明确选择的资源关联与第三方证据分开维护，证据不可用时仍可记录实践和自评。
+
 ## 9. 视觉与多主题架构
 
 ### 两套首发主题：同一个产品，不同的表达
