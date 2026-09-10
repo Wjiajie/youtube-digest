@@ -64,6 +64,7 @@ try {
     const clarificationUpgrade = file.endsWith("_goal_clarification_sessions.sql") ? await seedClarificationUpgrade() : null;
     const resourceUpgrade = file.endsWith("_resource_runs.sql") ? await captureResourceUpgrade() : null;
     const adoptionUpgrade = file.endsWith("_resource_adoption.sql") ? await seedAdoptionUpgrade() : null;
+    const resourceOrderUpgrade = file.endsWith("_resource_order.sql") ? await seedResourceOrderUpgrade() : null;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
     if (legacy) await verifyLegacyPlanningUpgrade(legacy);
@@ -71,6 +72,7 @@ try {
     if (clarificationUpgrade) await verifyClarificationUpgrade(clarificationUpgrade);
     if (resourceUpgrade) await verifyResourceUpgrade(resourceUpgrade);
     if (adoptionUpgrade) await verifyAdoptionUpgrade(adoptionUpgrade);
+    if (resourceOrderUpgrade) await verifyResourceOrderUpgrade(resourceOrderUpgrade);
   }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
@@ -524,4 +526,57 @@ async function verifyAdoptionUpgrade(before) {
   assert.equal(Number((await db.query("select public.apply_blueprint_proposal('d9000000-0000-4000-8000-000000000140',0,'d9000000-0000-4000-8000-000000000160') as version")).rows[0].version), 1,
     "new adoption guard retains exact historical manual apply receipt");
   await db.exec("reset role");
+}
+
+async function seedResourceOrderUpgrade() {
+  const owner = "d8000000-0000-4000-8000-000000000001";
+  const oldProposal = "d8000000-0000-4000-8000-000000000030";
+  const pending = "d8000000-0000-4000-8000-000000000031";
+  await becomeUser(owner);
+  const draft = (await db.query("select public.read_blueprint_snapshot_v2($1) as value", [owner])).rows[0].value;
+  draft.goals[0].stages[0].nodes[0].resources.unshift({
+    id: "d8000000-0000-4000-8000-000000000014", kind: "youtube_video",
+    url: "https://www.youtube.com/watch?v=zzzzzzzzzzz", externalId: "zzzzzzzzzzz",
+  });
+  await db.query(`insert into public.blueprint_proposals(id,owner_id,blueprint_id,base_version,proposed_snapshot,client_mutation_id)
+    values($1,$2,$3,0,$4,$1)`, [oldProposal, owner, draft.id, draft]);
+  await db.query("select public.apply_blueprint_proposal($1,0,$1)", [oldProposal]);
+  const current = (await db.query("select public.read_blueprint_snapshot_v2($1) as value", [owner])).rows[0].value;
+  assert.equal(current.goals[0].stages[0].nodes[0].resources[0].externalId, "abcdefghijk",
+    "upgrade fixture preserves the pre-fix UUID order rather than hiding the existing defect");
+  draft.version = 1;
+  await db.query(`insert into public.blueprint_proposals(id,owner_id,blueprint_id,base_version,proposed_snapshot,client_mutation_id)
+    values($1,$2,$3,1,$4,$1)`, [pending, owner, draft.id, draft]);
+  return { owner, oldProposal, pending, draft, before: await captureResourceUpgrade() };
+}
+
+async function verifyResourceOrderUpgrade({ owner, oldProposal, pending, draft, before }) {
+  assert.deepEqual(await captureResourceUpgrade(), before,
+    "ordering upgrade is forward-only: all existing formal positions, sessions, sources, proposals and revisions remain byte-for-byte unchanged");
+  await becomeUser(owner);
+  assert.equal(Number((await db.query("select public.apply_blueprint_proposal($1,0,$1) as version", [oldProposal])).rows[0].version), 1,
+    "old exact confirmation still recovers its historical receipt");
+  assert.deepEqual(await captureResourceUpgrade(), before, "historical replay never silently backfills old order");
+  await becomeUser(owner);
+  assert.equal(Number((await db.query("select public.apply_blueprint_proposal($1,1,$1) as version", [pending])).rows[0].version), 2,
+    "only a future explicit confirmation persists intended order");
+  const expected = structuredClone(draft);
+  expected.version = 2;
+  assert.deepEqual((await db.query("select public.read_blueprint_snapshot_v2($1) as value", [owner])).rows[0].value, expected,
+    "post-upgrade public read equals confirmed resource array order");
+  assert.deepEqual((await db.query("select snapshot from public.blueprint_revisions where proposal_id=$1", [pending])).rows[0].snapshot, expected,
+    "post-upgrade revision equals formal order");
+  assert.equal(Number((await db.query("select public.apply_blueprint_proposal($1,0,$1) as version", [oldProposal])).rows[0].version), 1);
+  assert.deepEqual((await db.query("select public.read_blueprint_snapshot_v2($1) as value", [owner])).rows[0].value, expected,
+    "historical replay after newer confirmation does not revert order");
+  await db.exec("reset role");
+  const after = await captureResourceUpgrade();
+  assert.deepEqual(after["public.learning_sessions"], before["public.learning_sessions"], "future reorder preserves all learning attribution");
+  const acl = (await db.query(`select p.prosecdef,
+    has_function_privilege('authenticated',p.oid,'EXECUTE') as user_execute,
+    has_function_privilege('service_role',p.oid,'EXECUTE') as service_execute,
+    has_function_privilege('anon',p.oid,'EXECUTE') as anon_execute
+    from pg_proc p where p.oid='private.apply_blueprint_proposal_core(uuid,bigint,uuid)'::regprocedure`)).rows[0];
+  assert.deepEqual(acl, { prosecdef: false, user_execute: false, service_execute: false, anon_execute: false },
+    "shared writer remains invoker-only and inaccessible outside existing guards");
 }

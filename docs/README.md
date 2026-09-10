@@ -41,6 +41,7 @@
 35. [资源执行入口](agent-resource-entry.md)：独立开关、生产 Node 接口、真实身份核验的 Edge worker 与三步本地 HTTP 链路；默认关闭，真实服务尚待验收。
 36. [节点资源工作台](resource-workbench.md)：双主题节点入口、运行历史、候选与字幕依据、显式继续和恢复。
 37. [明确采用与替换资源](resource-adoption.md)：单视频重新核验、不可变提案、用户确认／拒绝、新增／替换和历史学习归属；本地已接通，真实服务及托管仍待验收。
+38. [提案资源顺序一致性](resource-order.md)：手工／规划／采用的共用写入修复、已有数据不回填、历史会话与确认回执保留。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 

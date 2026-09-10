@@ -172,8 +172,10 @@ for (const theme of ["cyberpunk", "eastern"] as const) test(`resource workbench 
   const owner = await account(context), actor = { userId: owner.id, client: "web" as const };
   const store = createSupabaseBlueprintStore(owner.client), current = await store.getMainBlueprint(owner.id);
   if (!current) throw new Error("Missing Blueprint");
-  const nodeId = randomUUID(), goalId = randomUUID(), oldBindingId = randomUUID();
-  const originalResources = theme === "eastern" ? [{ id: oldBindingId, kind: "youtube_video" as const, externalId: "lmnopqrstuv", url: "https://www.youtube.com/watch?v=lmnopqrstuv" }] : [];
+  const nodeId = randomUUID(), goalId = randomUUID();
+  const [keptBindingId, oldBindingId] = [randomUUID(), randomUUID()].sort().reverse();
+  const keptResource = { id: keptBindingId, kind: "youtube_video" as const, externalId: "12345678901", url: "https://www.youtube.com/watch?v=12345678901" };
+  const originalResources = theme === "eastern" ? [keptResource, { id: oldBindingId, kind: "youtube_video" as const, externalId: "lmnopqrstuv", url: "https://www.youtube.com/watch?v=lmnopqrstuv" }] : [];
   const app = createBlueprintApplication({ store, newId: randomUUID, now: () => new Date() });
   const proposed = await app.createProposal(actor, { baseVersion: 0, clientMutationId: randomUUID(), draft: { ...current,
     goals: [{ id: goalId, title: "用照片讲一个真实的故事", position: 0, stages: [{ id: randomUUID(), title: "掌握光线与曝光", position: 0,
@@ -189,6 +191,8 @@ for (const theme of ["cyberpunk", "eastern"] as const) test(`resource workbench 
   page.on("pageerror", error => errors.push(error.message));
   await context.request.post("http://127.0.0.1:3166/fixture/reset");
   await page.goto(`${origin}/paths/${goalId}`);
+  expect(await page.locator("a.path-resource-link").evaluateAll(links => links.map(link => link.getAttribute("href")))).toEqual(theme === "eastern"
+    ? ["https://www.youtube.com/watch?v=12345678901", "https://www.youtube.com/watch?v=lmnopqrstuv"] : []);
   if (theme === "eastern") {
     await page.getByRole("combobox", { name: "界面主题", exact: true }).selectOption(theme);
     await page.getByRole("button", { name: "保存到账号", exact: true }).click();
@@ -274,8 +278,12 @@ for (const theme of ["cyberpunk", "eastern"] as const) test(`resource workbench 
   await expect(adoptionPage.getByText("资源已写入正式蓝图 v2；没有将节点标记为完成。", { exact: true })).toBeVisible();
   const formal = await store.getMainBlueprint(owner.id);
   expect(formal?.version).toBe(2);
-  expect(formal?.goals[0].stages[0].nodes[0].resources).toEqual([{ id: expect.any(String), kind: "youtube_video", externalId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk" }]);
-  expect(formal?.goals[0].stages[0].nodes[0].resources[0].id).not.toBe(oldBindingId);
+  const adoptedResource = { id: expect.any(String), kind: "youtube_video", externalId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk" };
+  expect(formal?.goals[0].stages[0].nodes[0].resources).toEqual(theme === "eastern" ? [keptResource, adoptedResource] : [adoptedResource]);
+  expect(formal?.goals[0].stages[0].nodes[0].resources.at(-1)?.id).not.toBe(oldBindingId);
+  await page.goto(`${origin}/paths/${goalId}`);
+  expect(await page.locator("a.path-resource-link").evaluateAll(links => links.map(link => link.getAttribute("href")))).toEqual(theme === "eastern"
+    ? ["https://www.youtube.com/watch?v=12345678901", "https://www.youtube.com/watch?v=abcdefghijk"] : ["https://www.youtube.com/watch?v=abcdefghijk"]);
   if (theme === "eastern") expect(await app.listLearningSessions(actor)).toMatchObject({ ok: true, value: [{ resourceBindingId: oldBindingId }] });
   await matchPage.reload();
   await expect(matchPage.locator(`a[href="${new URL(adoptionPage.url()).pathname}"]`)).toHaveCount(1);
