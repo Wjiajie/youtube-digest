@@ -166,9 +166,10 @@ function Workspace({ accountId, initial, reloadAction, saveAction, capturePositi
     } catch { if (active.current && generation === epoch.current) { if (automatically) stopAutomatic(); setMessage("尚未确认保存结果，请核对原位置提交；不会自动重发。"); } }
     finally { if (active.current && generation === epoch.current) { flight.current = false; setBusy(false); } }
   }
-  const unchangedInput = draft.position === "" || workspace.records.some(record => record.resource.bindingId === draft.bindingId
+  const confirmedPosition = workspace.records.find(record => record.resource.bindingId === draft.bindingId
     && record.resource.videoId === draft.videoId && record.context.nodeId === draft.nodeId
-    && record.positionVersion === draft.positionVersion && String(record.positionSeconds) === draft.position);
+    && record.positionVersion === draft.positionVersion);
+  const unchangedInput = draft.position === "" || (confirmedPosition !== undefined && String(confirmedPosition.positionSeconds) === draft.position);
   const canStartAutomatic = Boolean(capturePosition && automaticCaptureVideoId === draft.videoId && automaticCaptureBindingId === draft.bindingId && draft.bindingId && selection === draft.bindingId
     && editable && !busy && !draft.attempt && !draft.reviewRequired && !sourceChanged && !identityLost && unchangedInput);
   useEffect(() => {
@@ -187,7 +188,7 @@ function Workspace({ accountId, initial, reloadAction, saveAction, capturePositi
         }
         const position = result.value;
         if (position.videoId !== draft.videoId || !Number.isInteger(position.positionSeconds) || position.positionSeconds < 0 || position.positionSeconds > 2147483647) throw new Error("Invalid position");
-        if (draft.position === String(position.positionSeconds)) return;
+        if (confirmedPosition?.positionSeconds === position.positionSeconds) return;
         flight.current = false;
         await save({ ...draft, position: String(position.positionSeconds) }, true);
       } catch {

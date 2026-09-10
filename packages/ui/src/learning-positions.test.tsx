@@ -76,6 +76,22 @@ test("automatic positions require opt-in, save changed positions with advancing 
   await act(async () => vi.advanceTimersByTimeAsync(60_000)); expect(writes).toHaveLength(2); expect(reader).toHaveBeenCalledTimes(3);
 });
 
+test.each([0, 42])("clearing input does not resave unchanged confirmed cloud position %s", async seconds => {
+  vi.useFakeTimers(); automaticVideo = "abcdefghijk";
+  let captured = seconds;
+  capture = async videoId => ({ ok: true, value: { videoId, positionSeconds: captured } });
+  await save({ nodeId: id(5), resourceBindingId: binding, expectedVersion: 1, expectedPositionVersion: 0, positionSeconds: seconds, clientMutationId: id(30) });
+  await render(owner, "cyberpunk", structuredClone(workspace)); await prepare();
+  await fill("继续学习位置（秒）", "");
+  await act(async () => button("开启自动保存位置").click());
+  await act(async () => vi.advanceTimersByTimeAsync(60_000));
+  expect(writes).toHaveLength(1);
+  captured = seconds + 10;
+  await act(async () => vi.advanceTimersByTimeAsync(30_000));
+  expect(writes).toHaveLength(2);
+  expect(writes[1]).toMatchObject({ positionSeconds: captured, expectedPositionVersion: 1 });
+});
+
 test.each(["stop", "hidden", "video", "binding", "account"])("late automatic capture cannot save after %s", async reason => {
   vi.useFakeTimers(); automaticVideo = "abcdefghijk";
   let resolve!: (value: ApplicationResult<{videoId: string; positionSeconds: number}>) => void;
