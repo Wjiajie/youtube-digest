@@ -2,8 +2,10 @@ import { z } from "zod";
 import { canonicalYouTubeUrl, type BlueprintSnapshot } from "./index";
 import { NODE_TYPES } from "./node-types";
 
+// PostgreSQL returns canonical lowercase UUIDs; input case is not identity.
+const noteCommandId = z.uuid().transform(value => value.toLowerCase());
 export const recordLearningNoteSchema = z.object({
-  nodeId: z.uuid(), resourceBindingId: z.uuid(), expectedVersion: z.int().nonnegative(), clientMutationId: z.uuid(),
+  nodeId: noteCommandId, resourceBindingId: noteCommandId, expectedVersion: z.int().nonnegative(), clientMutationId: noteCommandId,
   text: z.string().max(16_000).refine(value => value.trim().length > 0 && Array.from(value).length <= 8000
     && !/[\u0000\uD800-\uDFFF]/u.test(value), "Note text must contain 1–8000 Unicode characters"),
   positionSeconds: z.int().nonnegative().max(2_147_483_647).nullable(),

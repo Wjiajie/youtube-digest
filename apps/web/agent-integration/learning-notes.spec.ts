@@ -104,3 +104,19 @@ it("nullable positions, zero, Unicode length and raw whitespace agree across dom
   const workspace = await readLearningNoteWorkspace(owner.client, owner.actor);
   expect(workspace.ok && workspace.value.records).toHaveLength(3);
 });
+
+it("UUID letter case does not turn a successful save or exact replay into an unavailable receipt", async () => {
+  const owner = await fixture();
+  for (const field of ["nodeId", "resourceBindingId", "clientMutationId"] as const) {
+    const original = { ...owner.input, clientMutationId: randomUUID() };
+    const input = { ...original, [field]: original[field].toUpperCase() };
+    const saved = await recordLearningNote(owner.client, owner.actor, input);
+    expect(saved.ok).toBe(true); if (!saved.ok) throw new Error("Note not saved");
+    expect(saved.value).toMatchObject({ clientMutationId: original.clientMutationId, context: { nodeId: original.nodeId },
+      resource: { bindingId: original.resourceBindingId }, text: original.text });
+    expect(await recordLearningNote(owner.client, owner.actor, input)).toEqual(saved);
+    expect(await recordLearningNote(owner.client, owner.actor, original)).toEqual(saved);
+  }
+  const workspace = await readLearningNoteWorkspace(owner.client, owner.actor);
+  expect(workspace.ok && workspace.value.records).toHaveLength(3);
+});

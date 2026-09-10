@@ -90,4 +90,3 @@ returns jsonb language sql stable security invoker set search_path='' as $$
 $$;
 revoke all on function public.read_learning_note_workspace(uuid) from public,anon,authenticated,service_role;
 grant execute on function public.read_learning_note_workspace(uuid) to authenticated;
-
