@@ -2,7 +2,60 @@
 
 固定点 `04a5f0d`，2026-09-10，P2 实际资产加工切片。两套内部制作件已生成并通过导出／WebGL 检查，**正式美术未通过**。目的：验证现有真实人物能否通过造型、服装与环境加工形成两种身份表达；不新建通用编辑器，不把样片当作正式首页。
 
-最新制作修订为 **v14**，增量固定点 `a1780aa`。已重新制作工作舱／园景轮廓、贴合衣襟及共享光照配方；继续使用真实 HomeDashboard 做本地构图检查。旧修订保留为历史证据，正式首页仍未装载这些资产。
+最新制作修订为 **v15**，增量固定点 `3688ae4`。已实际检查双主题全部 24 个动作，并修复东方袍片在站姿、交互和行走中的明显穿插；仍有 9 个动作的采样帧存在交叉，**完整动作门槛不通过**。旧修订保留为历史证据，正式首页仍未装载这些资产。
+
+## v15 动作检查与袍片变形修复
+
+2026-09-11，固定点 `3688ae4`。本批只修改内部制作配方、真实资产检查和证据记录，不修改首页业务、不把战斗动作加入产品需求，也不分发候选素材。
+
+### 发现与修复
+
+[全动作图集](../scripts/render-study-actions.mjs)通过生产八影响加载器和真实 Three/WebGL，检查两主题各 24 个动作的起点、中点与最终保持帧（不循环回起点）。v14 共 144 张实际帧、8 页图集；所有场景和服装保留。主线程查看全部图集后，发现东方前袍片在站姿、交互、挥手及行走中出现裤腿穿出的深色破口。
+
+[几何交叉检查](../scripts/check-study-robe-clearance.py)在重新打开的真实 Blender 工程上，以袍片边线与裤腿表面的射线交点构成缺陷证据。`Idle_Sword` 第 0 帧复现 18 处交叉；仅改为裤腿表面插值配重剩 4 处，仅增加腰部余量也剩 4 处，两者组合后为 0。穿插已在源工程复现，不是仅由浏览器阴影造成。
+
+配方改为从实际裤腿表面插值完整骨骼权重，并增加向下衰减的腰部余量；保留袍片、褶皱、开衩与裤腿，不用删除裤腿、隐藏动作或放宽断言消除红灯。新衍生件 v15 的 `Idle_Sword` 0、`Walk` 20 帧分别通过同一检查。赛博重新导出的 GLB 与 v14 **逐字节相同**，没有借此宣称赛博美术有新改进。
+
+### 当前动作门槛：仍有明确失败
+
+同一检查遍历 24 个动作全部整数帧及区间端点，共 805 个姿态。v14 的 805 个姿态都有边线交叉；v15 降为 165 个。这个计数只表示该几何见证是否出现，不是感知质量百分比或完整碰撞检测。
+
+| v15 动作范围 | 检查结果 |
+| --- | --- |
+| Idle_Neutral、Idle、Idle_Gun、Idle_Gun_Pointing、Idle_Gun_Shoot、Idle_Sword、Gun_Shoot、HitRecieve、HitRecieve_2、Interact、Punch_Left、Punch_Right、Sword_Slash、Walk、Wave | 各自所有整数帧未发现袍边／裤腿表面交叉 |
+| Death | 12/33 帧仍交叉 |
+| Kick_Left、Kick_Right | 各 18/29 帧仍交叉 |
+| Roll | 41/41 帧仍交叉，最差单帧 81 处 |
+| Run、Run_Back、Run_Left、Run_Right、Run_Shoot | 分别 16/25、11/26、16/25、16/25、17/26 帧仍交叉 |
+
+因此 `--all-actions` 在 v14 和 v15 **都按失败退出**。不能将站姿修复称为全动作服装安全；不把未碰到边线的面内穿插、手／配饰碰撞、亚帧或其他视角算作通过。跑步、踢腿及翻滚仍需进一步版型／配重或独立服装变形处理，不能用统一继续加宽代替制作判断。
+
+### 实际运行与画面
+
+[袖根检查](../scripts/check-study-sleeve-joins.py)新增 `--all-actions`：两主题 v14 以及东方 v15 各 805 个姿态，16 个袖根最大误差为 0，所有蒙皮顶点坐标有限、拓扑数量不变；旧 v5 仍会因 31.744 mm 接缝错位失败。检查先暴露并修复了脚本中的局部变量遮蔽错误，没有把该脚本错误记成人物缺陷。
+
+东方 v15 全部 24 动作重新生成 72 张实际帧和 4 页图集，无页面／着色器错误或外部请求。图集单动作固定镜头，由三帧人物包围盒共同取景；主线程已看全部四页：原站姿和行走破口明显消失，开衩随腿分离；跑步与大幅动作仍有挤压和硬板感。中性近景、双主题真实 HomeDashboard 的 1440／960／390 宽度及二维回退共 12 场景检查通过，但这些内部渲染不替代美术验收。
+
+东方 GLB 保留 62 骨骼、24 动作、完整影响和自含资源，219,937 个浮点 accessor 值有限、16,072 个几何三角形；导出器既有矩阵／烘焙和树木采样器警告仍存在。软件 GPU 为 SwiftShader，不代表用户硬件帧率或显存预算。935 项应用测试、四工作区类型检查和渲染脚本语法检查通过；没有重跑线上构建、数据库、Auth 或托管旅程。
+
+| v15 输出 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| cyberpunk.blend | 6,391,812 | `73c2f7e7fe25c2028a55fb3ce9b91343f5fc1b9ec95619cfb850f5fe50eae14c` |
+| cyberpunk.glb | 1,599,244 | `0a03a23eeef21cf14b8fdd87387beb7fc8b938f383561866831d55652aa7352d` |
+| eastern.blend | 8,261,152 | `d6fa555d9f9121c36a1c4bedecd8d89ca2f8659eae97b4d5551d4eeb92e2e72c` |
+| eastern.glb | 2,918,424 | `d5eea54fbd24f489c71ce256f3c3e6cecaf4b0daf546896ab0484a95cc3242df` |
+
+新件在 `.tools/asset-studies/dual-theme-v15/`，图集／元数据在 `.goal-loop/evidence/study-actions-v14/`、`study-actions-v15/`，独立中性场景和真实面板分别在 `.goal-loop/evidence/dual-theme-v15/`、`dual-theme-panel-v15/`。旧件与下载原件不覆盖；临时配重对照脚本已移除，方法和结果保留在上文。全部资产和图集仍 Git 忽略，不随源码分发。
+
+```bash
+bash scripts/with-m1-runtime.sh node scripts/render-study-actions.mjs 14
+bash scripts/with-m1-runtime.sh node scripts/render-study-actions.mjs 15 eastern
+.tools/blender-4.5.13/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --offline-mode .tools/asset-studies/dual-theme-v15/eastern.blend --python-exit-code 1 --python scripts/check-study-robe-clearance.py -- Idle_Sword 0
+# 整套动作仍失败，保留此门槛，不改为只检已通过动作：
+.tools/blender-4.5.13/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --offline-mode .tools/asset-studies/dual-theme-v15/eastern.blend --python-exit-code 1 --python scripts/check-study-robe-clearance.py -- --all-actions
+```
+
+人物表情、腰封和服装质感、背景细节密度、许可对应、完整动作与硬件性能仍未通过。此批是可复现的局部修复，不是正式美术通过或完整 P2 交付；没有下载、费用、部署、数据库变更或 push。
 
 ## v14 空间轮廓与贴合服装
 

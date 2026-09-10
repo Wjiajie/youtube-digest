@@ -153,12 +153,12 @@ def surface_sampler(obj, surface):
     """Sample the real surface and its normalized skinning, not guessed offsets."""
     obj.data.calc_loop_triangles()
     triangles = [tuple(face.vertices) for face in obj.data.loop_triangles
-                 if obj.data.materials[face.material_index] == surface]
+                 if surface is None or obj.data.materials[face.material_index] == surface]
     points = [obj.matrix_world @ vertex.co for vertex in obj.data.vertices]
     tree = BVHTree.FromPolygons(points, triangles, all_triangles=True)
 
     def sample(origin, direction, offset):
-        hit, normal, triangle, _ = tree.ray_cast(Vector(origin), Vector(direction))
+        hit, normal, triangle, _ = tree.find_nearest(Vector(origin)) if direction is None else tree.ray_cast(Vector(origin), Vector(direction))
         assert hit is not None, f"Authored feature must lie on the actual source surface: {obj.name} {origin}"
         indices = triangles[triangle]
         factors = barycentric_transform(hit, *(points[index] for index in indices),
@@ -344,8 +344,9 @@ if theme == "cyberpunk":
     box("Cyber / device indicator", (-.09, -.210, 1.36), (.042, .005, .008), palette["light"], .001, "Chest")
     box("Cyber / ear receiver", (.105, -.037, 1.675), (.027, .06, .092), palette["dark"], .008, "Head")
 else:
-    # Four tailored skirt panels leave front/back movement slits. Idle-only art
-    # evidence does not claim these panels are safe in the full combat clip set.
+    # Keep four movement slits, but transfer actual local trouser deformation.
+    # A guessed Hips/UpperLeg ramp lets the knee and thigh pierce the panels.
+    sample_leg_skin = surface_sampler(bpy.data.objects["Casual_Legs"], None)
     for side, sign in (("L", 1), ("R", -1)):
         for front, direction in (("front", -1), ("back", 1)):
             vertices, weights = [], []
@@ -357,14 +358,17 @@ else:
                 z = 1.11 - .63 * drop
                 width = .172 + .10 * drop
                 depth = .116 + .058 * math.sin(drop * math.pi / 2)
-                leg_weight = .85 * drop
                 for column in range(columns):
                     fraction = .10 + .90 * column / (columns - 1)
                     fold = .014 * math.sin(fraction * math.pi * 6 + .25 * drop) * math.sin(drop * math.pi / 2)
                     hem = .022 * drop ** 5 * (1 - fraction) ** 2
-                    vertices.append((sign * width * fraction,
-                                     -.052 + direction * (depth * (1 - .27 * fraction ** 2) + fold), z + hem))
-                    weights.append({"Hips": 1 - leg_weight, "UpperLeg." + side: leg_weight})
+                    # Extra ease near the waist prevents the rest-shape edge
+                    # already sitting inside the trousers. Hem volume is kept.
+                    waist_ease = .02 * ((z + hem - .48) / .63) ** 2
+                    point = (sign * width * fraction,
+                             -.052 + direction * (depth * (1 - .27 * fraction ** 2) + fold + waist_ease), z + hem)
+                    vertices.append(point)
+                    weights.append(sample_leg_skin(point, None, 0)[1])
             faces = [(row * columns + column, row * columns + column + 1,
                       (row + 1) * columns + column + 1, (row + 1) * columns + column)
                      for row in range(rows - 1) for column in range(columns - 1)]
