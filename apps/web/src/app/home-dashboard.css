@@ -22,6 +22,7 @@
 .home-empty-module p { color: var(--bp-muted); font-size: 13px; line-height: 1.9; }
 .home-empty-module a { display: inline-flex; align-items: center; min-height: 44px; font-size: 13px; }
 .home-identity { min-width: 0; position: relative; min-height: 520px; display: flex; flex-direction: column; justify-content: space-between; border-block: 1px solid var(--bp-line); background: radial-gradient(ellipse at 50% 48%, var(--bp-surface-strong), transparent 65%); }
+.home-identity-scene { min-width: 0; width: 100%; flex: 1; display: flex; flex-direction: column; }
 .home-identity-coordinate { font: 9px/1.8 var(--bp-font-mono); color: var(--bp-muted); letter-spacing: .15em; padding: 22px 12px 0; }
 .home-identity-figure { display: block; width: min(100%, 350px); height: 420px; margin: -12px auto 0; }
 .home-identity-orbit { stroke: var(--bp-line-strong); stroke-width: 1; opacity: .65; }

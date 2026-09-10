@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { ApplicationResult, GoalProgressView, ProgressEvidence } from "@blueprint/domain";
 import { Status } from "@blueprint/ui";
 import "./home-dashboard.css";
 
-type Props = { goals: GoalProgressView[]; evidence: ApplicationResult<ProgressEvidence[]> };
+type Props = { goals: GoalProgressView[]; evidence: ApplicationResult<ProgressEvidence[]>; identityScene?: ReactNode };
 const nodeKinds = { learn: "学习", practice: "实践", checkpoint: "检查点", reflection: "复盘" };
 const pathHref = (goalId: string, nodeId?: string) => `/paths/${encodeURIComponent(goalId)}${nodeId ? `?node=${encodeURIComponent(nodeId)}` : ""}`;
 
-export function HomeDashboard({ goals, evidence }: Props) {
+export function HomeDashboard({ goals, evidence, identityScene }: Props) {
   const [focusId, setFocusId] = useState(goals[0]?.goal.id ?? "");
   const visibleGoals = goals.slice(0, 5);
   const focused = visibleGoals.find(item => item.goal.id === focusId) ?? visibleGoals[0];
@@ -27,7 +27,8 @@ export function HomeDashboard({ goals, evidence }: Props) {
             <span className="home-goal-next">{item.next?.node.title ?? (item.allSelfConfirmed ? "全部节点已自确认" : "查看目标路径")}</span><small>已自确认检查点 {item.confirmedCheckpoints}{item.needsReviewCount ? ` · ${item.needsReviewCount} 项待复核` : ""}</small></span>
         </button>)}
       </section>
-      <section className="home-identity" aria-label="个人身份静态回退">
+      <section className="home-identity" aria-label={identityScene ? "个人身份场景" : "个人身份静态回退"}>
+        {identityScene ? <div className="home-identity-scene">{identityScene}</div> : <>
         <div className="home-identity-coordinate" aria-hidden="true">PERSONAL ATLAS<br />OWN YOUR DIRECTION</div>
         <svg className="home-identity-figure" viewBox="0 0 320 450" aria-hidden="true" focusable="false">
           <g className="home-identity-orbit" fill="none"><ellipse cx="160" cy="390" rx="116" ry="29" /><ellipse cx="160" cy="390" rx="85" ry="19" /><path d="M38 300V154l46-47M282 300V154l-46-47M105 39h110" /></g>
@@ -35,6 +36,7 @@ export function HomeDashboard({ goals, evidence }: Props) {
           <g className="home-identity-trace" fill="none"><path d="m139 145 21 44 21-44M160 189v90m-30-47 30 18 30-18M139 91h42M115 178l-16 66M205 178l16 66" /><circle cx="160" cy="208" r="7" /></g>
         </svg>
         <div className="home-identity-caption"><span className="home-identity-seal" aria-hidden="true">行</span><div><strong>沿着自己的方向</strong><p>静态身份轮廓 · 二维回退</p><small>正式 3D 形象仍待完成；你的路径与记录不受影响。</small></div></div>
+        </>}
       </section>
       <section className="home-current-focus" aria-label="当前重点">
         <span className="brand">Current focus / 当前重点</span>

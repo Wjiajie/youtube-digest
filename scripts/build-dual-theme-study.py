@@ -56,8 +56,8 @@ palette = {
     "skin": material("Identity / warm skin", "CDA484", .74),
     "hair": material("Identity / hair", "3D3742" if theme == "cyberpunk" else "222F30", .6),
     "eyes": material("Identity / eyes", "292428", .6),
-    "cloth": material(theme + " / outer cloth", "253943" if theme == "cyberpunk" else "BDC9BD", .83),
-    "lining": material(theme + " / lining", "16252E" if theme == "cyberpunk" else "324C49", .9),
+    "cloth": material(theme + " / outer cloth", "304B59" if theme == "cyberpunk" else "C7C7AF", .94),
+    "lining": material(theme + " / lining", "192C37" if theme == "cyberpunk" else "354C47", .96),
     "accent": material(theme + " / accent", "DDA26D" if theme == "cyberpunk" else "B39560", .45, .35),
     "dark": material(theme + " / dark structure", "18252C" if theme == "cyberpunk" else "43534B", .68, .25 if theme == "cyberpunk" else 0),
     "light": material(theme + " / light detail", "76BFC2" if theme == "cyberpunk" else "DFD5B9", .42, .2, .8 if theme == "cyberpunk" else 0),
@@ -69,7 +69,10 @@ for obj in list(bpy.context.scene.objects):
     for index, original in enumerate(obj.data.materials):
         obj.data.materials[index] = palette[replacements[original.name]]
     for polygon in obj.data.polygons:
-        polygon.use_smooth = obj.data.materials[polygon.material_index] in (palette["skin"], palette["hair"], palette["cloth"])
+        # Garment panels retain their source positions/weights but no longer
+        # read as faceted metal plates. This applies only to the source avatar.
+        polygon.use_smooth = obj.data.materials[polygon.material_index] in (
+            palette["skin"], palette["hair"], palette["cloth"], palette["lining"], palette["dark"])
     bpy.context.view_layer.objects.active = obj
     for modifier in list(obj.modifiers):
         if modifier.type == "MIRROR":
@@ -285,14 +288,35 @@ else:
     for side, sign in (("L", 1), ("R", -1)):
         for front, direction in (("front", -1), ("back", 1)):
             vertices, weights = [], []
-            for z, width, depth, leg_weight in [(1.11, .172, .116, 0), (.98, .195, .142, .12), (.77, .24, .164, .55), (.48, .275, .17, .85)]:
-                for fraction in (.10, .52, 1):
-                    vertices.append((sign * width * fraction, -.052 + direction * depth * (1 - .27 * fraction ** 2), z))
+            # Cloth folds grow out of the fitted waist, taper toward the slit,
+            # and carry a curved hem instead of four flat rectangular boards.
+            columns, rows = 13, 13
+            for row in range(rows):
+                drop = row / (rows - 1)
+                z = 1.11 - .63 * drop
+                width = .172 + .10 * drop
+                depth = .116 + .058 * math.sin(drop * math.pi / 2)
+                leg_weight = .85 * drop
+                for column in range(columns):
+                    fraction = .10 + .90 * column / (columns - 1)
+                    fold = .014 * math.sin(fraction * math.pi * 6 + .25 * drop) * math.sin(drop * math.pi / 2)
+                    hem = .022 * drop ** 5 * (1 - fraction) ** 2
+                    vertices.append((sign * width * fraction,
+                                     -.052 + direction * (depth * (1 - .27 * fraction ** 2) + fold), z + hem))
                     weights.append({"Hips": 1 - leg_weight, "UpperLeg." + side: leg_weight})
-            faces = [(row * 3 + column, row * 3 + column + 1, (row + 1) * 3 + column + 1, (row + 1) * 3 + column) for row in range(3) for column in range(2)]
+            faces = [(row * columns + column, row * columns + column + 1,
+                      (row + 1) * columns + column + 1, (row + 1) * columns + column)
+                     for row in range(rows - 1) for column in range(columns - 1)]
             if (sign * direction) < 0:
                 faces = [tuple(reversed(face)) for face in faces]
-            mesh_object("Eastern / split robe " + side + " " + front, vertices, faces, palette["cloth"], weights)
+            robe = mesh_object("Eastern / split robe " + side + " " + front, vertices, faces, palette["cloth"], weights)
+            robe.data.materials.append(palette["lining"])
+            for face in robe.data.polygons:
+                face.use_smooth = True
+                # The hem is part of the same surface, not a nearly coincident
+                # overlay that self-shadows or flickers during skinning.
+                if face.index >= (rows - 2) * (columns - 1):
+                    face.material_index = 1
     ribbon("Eastern / crossing collar", [(-.08, -.168, 1.50), (.055, -.210, 1.34), (.11, -.172, 1.12)], .037, palette["lining"], "Torso")
     ribbon("Eastern / inner collar", [(.077, -.17, 1.49), (-.008, -.206, 1.39)], .025, palette["lining"], "Chest")
     box("Eastern / sash", (0, -.067, 1.115), (.345, .24, .055), palette["lining"], .020, "Hips")
@@ -328,7 +352,7 @@ def import_nature(name, path, height, position, turn=0):
                 tint.data_type = "RGBA"
                 tint.blend_type = "MULTIPLY"
                 tint.inputs[0].default_value = 1
-                tint.inputs[7].default_value = (.36, .62, .72, 1)
+                tint.inputs[7].default_value = (.10, .28, .80, 1) if surface.name == "BirchTree_Leaves" else (.72, .68, .58, 1)
                 surface.node_tree.links.new(original, tint.inputs[6])
                 surface.node_tree.links.new(tint.outputs[2], bsdf.inputs["Base Color"])
     points = [obj.matrix_world @ Vector(corner) for obj in meshes for corner in obj.bound_box]
@@ -355,17 +379,17 @@ assert hashlib.sha256(tree_path.read_bytes()).hexdigest() == "8bb157df6f49a8db04
 assert hashlib.sha256(rock_path.read_bytes()).hexdigest() == "6dd15390fd96501dcd1454765a17ba61dbbd8d47705dfe5149c8dd92b353ce25"
 stone = material(theme + " / stone", "59616A" if theme == "cyberpunk" else "777E74", .9)
 if theme == "cyberpunk":
-    box("Cyber / quiet work deck", (0, .2, -.13), (4.7, 4.3, .26), palette["dark"], .15)
+    box("Cyber / quiet work deck", (0, .2, -.13), (3.9, 3.3, .26), palette["dark"], .15)
     box("Cyber / avatar step", (.28, -.5, .03), (1.35, 1.05, .08), stone, .05)
     for sign in (-1, 1):
-        box("Cyber / portal upright", (sign * 1.3, 1.44, 1.48), (.15, .18, 2.96), palette["dark"], .025)
-        box("Cyber / portal inset", (sign * 1.235, 1.337, 1.57), (.018, .012, 2.34), palette["light"], .004)
-    box("Cyber / portal lintel", (0, 1.44, 2.93), (2.6, .18, .16), palette["dark"], .03)
+        box("Cyber / portal upright", (sign * 1.18, 1.44, 1.06), (.10, .14, 2.12), palette["dark"], .025)
+        box("Cyber / portal inset", (sign * 1.135, 1.357, 1.09), (.012, .008, 1.84), palette["light"], .003)
+    # Open above the shoulders: architecture frames, rather than dwarfs, the person.
     # Broad oblique panels leave quiet space behind the face; repeated vertical
     # bars previously overpowered the identity silhouette.
-    mesh_object("Cyber / oblique rear panel", [(-1.08,1.64,.30),(.90,1.64,.30),(.90,1.64,2.38),(.38,1.64,2.72),(-1.08,1.64,2.72)],
+    mesh_object("Cyber / oblique rear panel", [(-1.08,1.64,.20),(.90,1.64,.20),(.90,1.64,.88),(.38,1.64,1.12),(-1.08,1.64,1.12)],
                 [(0,1,2,3,4)], palette["lining"])
-    mesh_object("Cyber / bevel light seam", [(.37,1.625,2.70),(.91,1.625,2.35),(.91,1.625,2.38),(.38,1.625,2.73)],
+    mesh_object("Cyber / bevel light seam", [(.37,1.625,1.10),(.91,1.625,.85),(.91,1.625,.88),(.38,1.625,1.13)],
                 [(0,1,2,3)], palette["light"])
     for z in (.48, .56, .64):
         box("Cyber / quiet vent", (-.67,1.62,z), (.51,.025,.014), palette["dark"], .003)
@@ -373,20 +397,20 @@ if theme == "cyberpunk":
     mesh_object("Cyber / angled console top", [(1.40,.30,.92),(2.02,.30,.92),(2.02,1.05,1.15),(1.40,1.05,1.15)], [(0,1,2,3)], palette["lining"])
     box("Cyber / amber console strip", (1.72, .408, .69), (.24, .013, .03), palette["accent"], .004)
     box("Cyber / planted recess", (-1.36, .9, .14), (.78, .70, .28), stone, .05)
-    import_nature("Cyber / living canopy", tree_path, 1.90, (-1.36, .9, .28), .45)
+    import_nature("Cyber / living canopy", tree_path, 1.48, (-1.36, .9, .28), .45)
     for index in range(3):
         box("Cyber / deck inlay", (-.5 + index * .5, -.93, .007), (.17, .008, .007), palette["accent"], .002)
     arm.location = (.28, -.5, .08)
 else:
     water = material("Eastern / still water", "436D68", .22, .25)
-    box("Eastern / water field", (0, .2, -.16), (5.2, 4.6, .08), water, .06)
+    box("Eastern / water field", (0, .2, -.16), (4.2, 3.7, .08), water, .06)
     box("Eastern / terrace", (.35, -.55, -.03), (2.12, 2.02, .22), stone, .10)
     box("Eastern / standing slab", (.35, -.6, .12), (1.25, .92, .1), material("Eastern / light stone", "A4ACA0", .92), .065)
     for index in range(3):
         box("Eastern / stepping stone", (-.6 - .43 * index, -1.4 - .15 * index, -.06), (.39, .36, .1), stone, .055)
-    import_nature("Eastern / layered stone bank", rock_path, .62, (-1.30, 1.15, -.06), .8)
+    import_nature("Eastern / layered stone bank", rock_path, .42, (-1.30, 1.15, -.06), .8)
     import_nature("Eastern / low stone bank", rock_path, .34, (1.6, 1.4, -.08), 2.1)
-    import_nature("Eastern / sheltering tree", tree_path, 2.1, (-1.40, 1.30, .42), -.7)
+    import_nature("Eastern / sheltering tree", tree_path, 1.85, (-1.40, 1.30, .28), -.7)
     # A short open timber screen gives a human scale without a full temple set.
     for sign in (-1, 1):
         box("Eastern / screen post", (.6 + sign * .7, 1.35, .65), (.07, .07, 1.45), palette["lining"], .012)
@@ -411,8 +435,8 @@ light("Study / edge", "SUN", (3, 2, 4), .7 if theme == "eastern" else 1.4, "CFDB
 camera_data = bpy.data.cameras.new("Study / composed camera")
 camera = bpy.data.objects.new("Study / composed camera", camera_data)
 bpy.context.collection.objects.link(camera)
-camera.location = (3.2, -6.8, 2.9) if theme == "cyberpunk" else (3.7, -7.6, 3.15)
-camera.rotation_euler = (Vector((0, .1, 1.28)) - camera.location).to_track_quat("-Z", "Y").to_euler()
+camera.location = (2.65, -5.8, 2.5) if theme == "cyberpunk" else (2.8, -6.1, 2.6)
+camera.rotation_euler = (Vector((.1, -.15, 1.08)) - camera.location).to_track_quat("-Z", "Y").to_euler()
 camera.data.type = "PERSP"
 camera.data.lens = 48
 bpy.context.scene.camera = camera

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { ApplicationResult, GoalProgressView, ProgressEvidence } from "@blueprint/domain";
@@ -17,9 +17,33 @@ function goal(index: number): GoalProgressView {
 let host: HTMLDivElement, root: Root;
 beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
-async function render(goals: GoalProgressView[], theme: "cyberpunk" | "eastern" = "cyberpunk", evidence: ApplicationResult<ProgressEvidence[]> = { ok: true, value: [] }) {
-  await act(async () => root.render(<ThemeSurface theme={theme}><HomeDashboard goals={goals} evidence={evidence} /></ThemeSurface>));
+async function render(goals: GoalProgressView[], theme: "cyberpunk" | "eastern" = "cyberpunk", evidence: ApplicationResult<ProgressEvidence[]> = { ok: true, value: [] }, identityScene?: ReactNode) {
+  await act(async () => root.render(<ThemeSurface theme={theme}><HomeDashboard goals={goals} evidence={evidence} identityScene={identityScene} /></ThemeSurface>));
 }
+
+function TrustedScene() {
+  const [posed, setPosed] = useState(false);
+  return <button onClick={() => setPosed(true)}>{posed ? "身份姿态已调整" : "调整身份姿态"}</button>;
+}
+
+test("trusted identity scene retains its own state across goal focus and theme changes, and removal restores the default 2D fallback", async () => {
+  const goals = [goal(0), goal(1)];
+  await render(goals, "cyberpunk", { ok: true, value: [] }, <TrustedScene />);
+  const identity = host.querySelector('[aria-label="个人身份场景"]');
+  expect(identity).not.toBeNull();
+  expect(host.textContent).not.toContain("静态身份轮廓 · 二维回退");
+  const pose = identity!.querySelector<HTMLButtonElement>("button")!;
+  await act(async () => pose.click());
+  await act(async () => host.querySelector<HTMLButtonElement>('button[aria-label="关注目标：我的目标 1"]')!.click());
+  await render(goals, "eastern", { ok: true, value: [] }, <TrustedScene />);
+  expect(pose.isConnected).toBe(true); expect(pose.textContent).toBe("身份姿态已调整");
+  expect(host.querySelector('[aria-label="当前重点"] a')?.getAttribute("href")).toBe("/paths/goal-1?node=node-1");
+  expect(host.querySelector('[aria-label="最近成果"]')?.textContent).toContain("还没有成果记录");
+  await render(goals, "eastern", { ok: true, value: [] }, null);
+  expect(host.querySelector('[aria-label="个人身份场景"]')).toBeNull();
+  expect(host.querySelector('[aria-label="个人身份静态回退"]')?.textContent).toContain("静态身份轮廓 · 二维回退");
+  expect(host.querySelector('[aria-label="当前重点"] a')?.getAttribute("href")).toBe("/paths/goal-1?node=node-1");
+});
 
 test("home limits goal modules to five and preserves a user-selected focus across themes without writing a preference", async () => {
   const goals = Array.from({ length: 6 }, (_, index) => goal(index));

@@ -19,7 +19,11 @@ for (const [theme, bytes] of assets) {
   const document = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString());
   const binary = bytes.subarray(28 + jsonLength);
   const leaves = document.materials.find(material => material.name === "BirchTree_Leaves");
-  assert.deepEqual(leaves?.pbrMetallicRoughness?.baseColorFactor?.map(value => Math.round(value * 100)), [36, 62, 72, 100], `${theme}: authored canopy tint must survive export`);
+  assert.deepEqual(leaves?.pbrMetallicRoughness?.baseColorFactor?.map(value => Math.round(value * 100)), Number(revision) >= 10 ? [10, 28, 80, 100] : [36, 62, 72, 100], `${theme}: authored canopy tint must survive export`);
+  if (Number(revision) >= 11) {
+    const bark = document.materials.find(material => material.name === "BirchTree_Bark");
+    assert.deepEqual(bark?.pbrMetallicRoughness?.baseColorFactor?.map(value => Math.round(value * 100)), [72, 68, 58, 100], `${theme}: bark must retain its separate neutral tint`);
+  }
   let finiteFloatValues = 0;
   for (const accessor of document.accessors.filter(accessor => accessor.componentType === 5126)) {
     const view = document.bufferViews[accessor.bufferView];
