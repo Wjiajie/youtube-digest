@@ -34,6 +34,10 @@
 - [完整本地 HTTP 旅程](../apps/web/src/lib/agent/resource-matcher.integration.test.ts)：真实 YouTube／Supadata 适配器 → 候选发现 → 官方 DeepSeek SDK → 校验后的建议。所有外部响应由本地服务提供；验证数据隔离与结构约束，不代表模型真的抵抗了提示注入。
 - Skill 的三组独立人工构造试题检查默认／备选／拒绝、全部拒绝、未知条件、抽样和嵌入指令分支。这是指令可读性检查，不是 DeepSeek 的跨领域质量评测。
 
-本批 27 项运行与集成测试通过。复现：`bash scripts/with-m1-runtime.sh npx vitest run apps/web/src/lib/agent/resource-matcher.test.ts apps/web/src/lib/agent/resource-matcher.integration.test.ts`。
+本批 32 项运行与集成测试通过。复现：`bash scripts/with-m1-runtime.sh npx vitest run apps/web/src/lib/agent/resource-matcher.test.ts apps/web/src/lib/agent/resource-matcher.integration.test.ts`。
+
+源码 `d783df4`；独立需求复核发现相对 Markdown 链接未被拒绝，已用五项公共运行器失败测试复现并在 `9460cd5` 修复，同时覆盖引用式链接、HTML anchor 和裸协议相对地址。这是输出契约修复，不是声称已发生页面利用，也不替代未来 UI 安全渲染。
+
+最终完整 `check:m1` 和生产浏览器回归通过：591 项应用测试、41 项 Edge 测试、40 项浏览器测试、四工作区类型检查、既有账号迁移契约、向导、Next.js／WXT 构建与扩展安全检查。124 个本地文档链接有效；42 个客户端产物未含新增 Skill 正文或夹具标记。两位非作者的规范／需求复核最终均为 0 项剩余确认问题，各自重跑了相应资源测试；这不构成真实服务质量验收。
 
 后续仍需：持久保存原始检索与匹配依据、账号次数／费用、唯一执行权、任务归属与显式恢复；来源失效及采用前重新验证；Skill 的生产打包；双主题审阅／采用／替换界面；真实 API、至少 20 项跨领域模型评测和实际成本检查。本批不变更数据库、既有规划／澄清运行或正式蓝图，没有托管发布和付费调用。
