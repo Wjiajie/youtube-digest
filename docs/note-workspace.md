@@ -27,6 +27,10 @@ Web 从成长档案或正式路径进入 `/progress/notes`；扩展从“记录 
 
 ## 验证与边界
 
+源码 `e291e55`，恢复校验修复 `6e2a99e`。最终回归通过：818 项应用测试、79 项 Edge 测试、四工作区类型检查、迁移升级契约、安装向导检查、Next／WXT 构建与扩展安全检查；另有 48 项默认 Web 回归、一条真实本地账号笔记页面旅程及四条隔离 MV3 旅程通过。新增浏览器测试独立严格类型检查通过，两主题桌面／320px 截图已人工检查；不把这些局部检查称为全产品无障碍或真实设备性能验收。
+
+规范复核发现损坏的视频标识会让恢复草稿滞留在无法确认的提交状态。先增加失败回归，再收紧已选来源校验，使损坏内容进入原文复制／显式重置流程；未选来源的正常草稿仍可恢复。两位非作者最终分别完成规范与需求复核，各自独立通过 40 项针对性测试，均无剩余确认问题。
+
 - [共享表单](../packages/ui/src/learning-notes.test.tsx)：真实 React、浏览器存储／锁夹具与两端远程调用接口，覆盖保存、原提交恢复、标签接手、冲突重绑、损坏内容、存储失败、身份隔离及旧回执顺序。
 - [扩展适配器](../apps/extension/src/learning-notes.test.ts)、[笔记入口](../apps/extension/entrypoints/sidepanel/NotesPanel.test.tsx)及 [App](../apps/extension/entrypoints/sidepanel/App.test.tsx)：严格读写结果、账号绑定、按需打开及挂载生命周期，不模拟内部共享表单。
 - [真实本地账号 Web 旅程](../apps/web/note-workspace-e2e/notes.spec.mts)：生产 Next → Action → PostgreSQL，验证原文、125 秒、离线恢复、两主题桌面／320px、第二标签接手及退出后的私人页面门禁。测试账号由夹具退出并删除，无邮件。
