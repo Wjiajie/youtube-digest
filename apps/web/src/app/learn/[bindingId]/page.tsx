@@ -27,7 +27,8 @@ export default async function LearningTranscriptPage({ params }: { params: Promi
   if (!selection) notFound();
   return <AccountThemeShell accountId={actor.userId} client={client}><main className="shell transcript-shell">
     <nav className="transcript-page-nav" aria-label="字幕阅读导航"><Link className="bp-button" href={`/paths/${selection.goal.id}`}>← 返回目标路径</Link>
-      <Link className="bp-button" href="/progress/notes">私人笔记</Link><Link className="bp-button" href={`/resources/nodes/${selection.node.id}`}>节点资源</Link></nav>
+      <Link className="bp-button" href="/progress/notes">私人笔记</Link>
+      {selection.node.type === "learn" ? <Link className="bp-button" href={`/resources/nodes/${selection.node.id}`}>节点资源</Link> : null}</nav>
     <LearningTranscriptReader accountId={actor.userId} bindingId={selection.binding.id} videoId={selection.binding.externalId}
       loadAction={readLearningTranscriptAction.bind(null, actor.userId)} />
   </main></AccountThemeShell>;

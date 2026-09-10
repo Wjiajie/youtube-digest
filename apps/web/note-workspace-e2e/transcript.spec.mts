@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { createServerClient } from "@supabase/ssr";
+import { randomUUID } from "node:crypto";
 import { transcriptFixture } from "../transcript-e2e/fixture";
 
 test("real account reads original captions from its path across two themes and loses body after clearing", async ({ page, context }, info) => {
@@ -42,6 +43,18 @@ test("real account reads original captions from its path across two themes and l
     await page.getByRole("button", { name: "重新读取字幕", exact: true }).click();
     await expect(page.getByText("这份字幕材料已清除。", { exact: true })).toBeVisible(); await expect(page.locator(".transcript-segments")).toHaveCount(0);
     await page.screenshot({ path: info.outputPath("eastern-transcript-cleared.png"), fullPage: true });
+    // A generic node can retain its optional video after a confirmed path change.
+    const snapshot = await fixture.client.rpc("read_blueprint_snapshot_v2", { p_owner_id: fixture.ownerId });
+    expect(snapshot.error).toBeNull();
+    snapshot.data.goals[0].stages[0].nodes[0].type = "practice";
+    const proposalId = randomUUID();
+    expect((await fixture.client.from("blueprint_proposals").insert({ id: proposalId, owner_id: fixture.ownerId,
+      blueprint_id: snapshot.data.id, base_version: snapshot.data.version, proposed_snapshot: snapshot.data, client_mutation_id: randomUUID() })).error).toBeNull();
+    expect((await fixture.client.rpc("apply_blueprint_proposal", { proposal_id: proposalId, expected_version: snapshot.data.version, mutation_id: randomUUID() })).error).toBeNull();
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "原始字幕", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "私人笔记", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "节点资源", exact: true })).toHaveCount(0);
     expect(errors).toEqual([]);
     await context.clearCookies();
     const anonymous = await page.request.get(`/api/v1/learning-transcript?bindingId=${fixture.bindingId}&videoId=${fixture.videoId}`);
