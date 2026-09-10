@@ -212,6 +212,35 @@ select is(public.finish_resource_adoption(pg_temp.aid(1),pg_temp.aid(48),pg_temp
 select is(public.finish_resource_adoption(pg_temp.aid(1),pg_temp.aid(48),pg_temp.aid(48),'{"status":"changed"}')->>'status','failed','lost failure response exact retry recovers receipt');
 reset role;
 select ok((select proposal_id is null from public.resource_adoptions where id=pg_temp.aid(48)),'failed verification cannot create proposal');
+select set_config('adoption_test.quota_before',(select available_attempts::text from private.resource_adoption_quotas where owner_id=pg_temp.aid(1)),true);
+set local role authenticated;
+select lives_ok($$select public.begin_resource_adoption(pg_temp.request(60))$$,'running source reconciliation begins real operation');
+reset role;
+set local role service_role;
+select is(public.claim_resource_adoption(pg_temp.aid(1),pg_temp.aid(60),pg_temp.aid(60))->'acquired','true'::jsonb,'running source reconciliation claims real lease');
+reset role;
+set local role authenticated;
+insert into public.blueprint_proposals(id,owner_id,blueprint_id,base_version,proposed_snapshot,client_mutation_id)
+ select pg_temp.aid(62),auth.uid(),id,version,jsonb_set(public.read_blueprint_snapshot_v2(auth.uid()),'{title}','"Updated while verifying"'),pg_temp.aid(62) from public.blueprints where owner_id=auth.uid();
+select is(public.apply_blueprint_proposal(pg_temp.aid(62),3,pg_temp.aid(62)),4::bigint,'concurrent formal edit changes source through public confirmation');
+select is(public.read_resource_adoption(pg_temp.aid(60))->>'status','stale','read reconciles obsolete running verification immediately');
+select is(public.read_resource_adoption(pg_temp.aid(60))->'result','{"status":"invalid_input"}'::jsonb,'obsolete running receipt explains invalid source without provider evidence');
+select set_config('adoption_test.current_snapshot',public.read_blueprint_snapshot_v2(auth.uid())::text,true);
+reset role;
+select is((select available_attempts from private.resource_adoption_quotas where owner_id=pg_temp.aid(1)),current_setting('adoption_test.quota_before')::integer-1,'running source reconciliation never refunds potential provider usage');
+insert into public.resource_runs(id,owner_id,blueprint_id,blueprint_version,node_id,kind,preferences,learner_context,input_blueprint,result,status,expires_at)
+ select pg_temp.aid(70),owner_id,blueprint_id,4,node_id,kind,preferences,learner_context,current_setting('adoption_test.current_snapshot')::jsonb,result,status,expires_at from public.resource_runs where id=pg_temp.aid(20);
+insert into public.resource_runs(id,owner_id,blueprint_id,blueprint_version,node_id,kind,source_run_id,preferences,learner_context,input_blueprint,input_discovery,result,status,expires_at)
+ select pg_temp.aid(71),owner_id,blueprint_id,4,node_id,kind,pg_temp.aid(70),preferences,learner_context,current_setting('adoption_test.current_snapshot')::jsonb,input_discovery,result,status,expires_at from public.resource_runs where id=pg_temp.aid(21);
+set local role authenticated;
+select lives_ok($$select public.begin_resource_adoption(pg_temp.request(61)||jsonb_build_object('sourceRunId',pg_temp.aid(71)))$$,'obsolete running lease does not block new current request');
+reset role;
+set local role service_role;
+select is(public.finish_resource_adoption(pg_temp.aid(1),pg_temp.aid(60),pg_temp.aid(60),current_setting('adoption_test.verified')::jsonb)->>'status','stale','late finish cannot revive read-reconciled stale operation');
+select is(public.finish_resource_adoption(pg_temp.aid(1),pg_temp.aid(60),pg_temp.aid(60),current_setting('adoption_test.verified')::jsonb)->'result','{"status":"invalid_input"}'::jsonb,'exact finish retry preserves original stale receipt');
+select throws_ok($$select public.finish_resource_adoption(pg_temp.aid(1),pg_temp.aid(60),pg_temp.aid(60),'{"status":"not_found"}')$$,'22023','RESOURCE_ADOPTION_COMPLETION_REUSED','stale completion still binds exact immutable digest');
+reset role;
+select ok((select proposal_id is null and verified_at is null from public.resource_adoptions where id=pg_temp.aid(60)),'obsolete running work never creates proposal');
 set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"fc000000-0000-4000-8000-000000000002"}',true);
 select is_empty($$select id from public.resource_adoptions$$,'RLS hides another account history');

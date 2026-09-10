@@ -194,6 +194,31 @@ it("retains a failed fresh verification for recovery and cancels a queued verifi
   expect((await owner.store.getMainBlueprint(owner.id))?.version).toBe(1);
 });
 
+it("reading a running verification immediately exposes source invalidation and never revives it on a late receipt", async () => {
+  const owner = await fixture(), external = await externalFixture();
+  const resources = createCloudResourceRunner({ ...owner, ...external });
+  expect((await resources.run(owner.command, signal())).ok).toBe(true);
+  const sourceRunId = randomUUID();
+  expect((await resources.run({ kind: "match", runId: sourceRunId, sourceRunId: owner.command.runId }, signal())).ok).toBe(true);
+  localSql(`insert into private.resource_adoption_quotas(owner_id,available_attempts) values ('${owner.id}',1);`);
+  const command = { adoptionId: randomUUID(), sourceRunId, videoId, replaceBindingId: null }, leaseId = randomUUID();
+  expect((await owner.client.rpc("begin_resource_adoption", { p_request: command })).error).toBeNull();
+  const worker = adoptionWorker(owner.id);
+  expect((await worker.claim({ adoptionId: command.adoptionId, leaseId })).data).toMatchObject({ acquired: true, adoption: { status: "running" } });
+  const workspace = createResourceAdoptionWorkspace(owner.client, owner.actor);
+  expect(await workspace.read(command.adoptionId)).toMatchObject({ ok: true, value: { status: "running" } });
+  const current = await owner.store.getMainBlueprint(owner.id);
+  if (!current) throw new Error("Missing current Blueprint");
+  const proposal = await owner.application.createProposal(owner.actor, { baseVersion: 1, clientMutationId: randomUUID(), draft: { ...current,
+    goals: current.goals.map(goal => ({ ...goal, title: "已调整的摄影目标" })) } });
+  if (!proposal.ok) throw new Error("Missing revised proposal");
+  expect((await owner.application.applyProposal(owner.actor, { proposalId: proposal.value.id, expectedVersion: 1, clientMutationId: randomUUID() })).ok).toBe(true);
+  expect(await workspace.read(command.adoptionId)).toMatchObject({ ok: true, value: { status: "stale", outcome: "invalid_input", proposal: null } });
+  expect((await worker.finish({ adoptionId: command.adoptionId, leaseId, result: { status: "unavailable" } })).data).toMatchObject({ status: "stale", result: { status: "invalid_input" }, proposal_id: null });
+  expect(await workspace.read(command.adoptionId)).toMatchObject({ ok: true, value: { status: "stale" } });
+  expect(external.calls).toHaveLength(4);
+});
+
 it("persists an account's discovery → explicit native-job read → grounded match and recovers each without new external calls", async () => {
   const owner = await fixture(), external = await externalFixture({ pending: true });
   const runner = createCloudResourceRunner({ ...owner, ...external });

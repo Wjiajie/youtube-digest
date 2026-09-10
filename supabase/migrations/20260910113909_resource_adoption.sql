@@ -58,10 +58,10 @@ begin
    result=jsonb_build_object('status',case when a.status='queued' then 'cancelled' else 'timed_out' end) where id=a.id;
   if a.status='queued' then update private.resource_adoption_quotas set available_attempts=available_attempts+1 where owner_id=p_owner_id; end if;
  end loop;
- for a in select pending.* from public.resource_adoptions pending where pending.owner_id=p_owner_id and pending.status='queued'
+ for a in select pending.* from public.resource_adoptions pending where pending.owner_id=p_owner_id and pending.status in ('queued','running')
   and not private.resource_adoption_source_current(pending) order by pending.id for update loop
   update public.resource_adoptions set status='stale',result='{"status":"invalid_input"}' where id=a.id;
-  update private.resource_adoption_quotas set available_attempts=available_attempts+1 where owner_id=p_owner_id;
+  if a.status='queued' then update private.resource_adoption_quotas set available_attempts=available_attempts+1 where owner_id=p_owner_id; end if;
  end loop;
  update public.resource_adoptions ready set status='stale' where ready.owner_id=p_owner_id and ready.status='ready'
   and (ready.valid_until<=clock_timestamp() or not private.resource_adoption_source_current(ready));
@@ -276,4 +276,3 @@ revoke all on function public.begin_resource_adoption(jsonb),public.read_resourc
  public.claim_resource_adoption(uuid,uuid,uuid),public.finish_resource_adoption(uuid,uuid,uuid,jsonb) from public,anon,authenticated,service_role;
 grant execute on function public.begin_resource_adoption(jsonb),public.read_resource_adoption(uuid),public.cancel_resource_adoption(uuid),public.reject_resource_adoption(uuid) to authenticated;
 grant execute on function public.claim_resource_adoption(uuid,uuid,uuid),public.finish_resource_adoption(uuid,uuid,uuid,jsonb) to service_role;
-
