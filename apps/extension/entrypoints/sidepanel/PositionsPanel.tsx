@@ -5,11 +5,11 @@ import { Button, Panel, Status } from "@blueprint/ui";
 import { LearningPositionWorkspace } from "@blueprint/ui/learning-positions";
 import "@blueprint/ui/learning-positions.css";
 
-export function PositionsPanel({ ownerId }: { ownerId: string }) {
-  return <AccountPositions key={ownerId} ownerId={ownerId} />;
+export function PositionsPanel({ ownerId, currentVideoId = null, currentBindingId = null }: { ownerId: string; currentVideoId?: string | null; currentBindingId?: string | null }) {
+  return <AccountPositions key={ownerId} ownerId={ownerId} currentVideoId={currentVideoId} currentBindingId={currentBindingId} />;
 }
 
-function AccountPositions({ ownerId }: { ownerId: string }) {
+function AccountPositions({ ownerId, currentVideoId, currentBindingId }: { ownerId: string; currentVideoId: string | null; currentBindingId: string | null }) {
   const [open, setOpen] = useState(false), [started, setStarted] = useState(false), [attempt, setAttempt] = useState(0);
   const [initial, setInitial] = useState<PositionWorkspace | null>(null);
   const [loading, setLoading] = useState(false), [failed, setFailed] = useState(false), [identityLost, setIdentityLost] = useState(false);
@@ -36,12 +36,14 @@ function AccountPositions({ ownerId }: { ownerId: string }) {
   return <div className="extension-positions">
     <Button className="web-link" aria-expanded={open} aria-controls="extension-positions-content" onClick={() => { setOpen(!open); setStarted(true); }}>{open ? "收起继续学习" : "继续学习"}</Button>
     <section id="extension-positions-content" aria-label="继续学习位置" hidden={!open}>
-      <p className="muted">明确保存下次继续的位置。切换视频不会移动输入，也不会自动记录观看、完成或掌握。</p>
+      <p className="muted">明确保存下次继续的位置，或主动开启当前视频的位置同步。切换视频会停止同步，不移动输入、不推算观看时长或掌握。</p>
       {identityLost ? <Status tone="warning">账号连接已变化，私人学习位置已隐藏。请重新连接账号。</Status> : <>
         {loading ? <Status>正在读取私人学习位置…</Status> : null}
         {failed ? <Panel><Status tone="warning">暂时无法读取学习位置，不能据此判断历史为空。</Status>
           <Button disabled={loading} onClick={() => setAttempt(value => value + 1)}>重新读取学习位置</Button></Panel> : null}
         {initial ? <LearningPositionWorkspace accountId={ownerId} initial={initial}
+          automaticCaptureVideoId={currentVideoId}
+          automaticCaptureBindingId={currentBindingId}
           saveAction={input => request<LearningPosition>("SAVE_LEARNING_POSITION", { input })}
           capturePosition={videoId => request<{ videoId: string; positionSeconds: number }>("READ_LEARNING_POSITION", { input: { videoId } })}
           reloadAction={resourceBindingId => request<PositionWorkspace>("LOAD_LEARNING_POSITIONS", resourceBindingId === undefined ? {} : { resourceBindingId })} /> : null}

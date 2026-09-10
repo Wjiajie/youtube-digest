@@ -313,7 +313,7 @@ export function App() {
             </Panel>
           )}
           <LearningWorkspace key={state.userId} learn={<>
-          {state.userId ? <PositionsPanel ownerId={state.userId} /> : null}
+          {state.userId ? <PositionsPanel ownerId={state.userId} currentVideoId={context?.videoId ?? null} currentBindingId={context?.resourceBindingId ?? null} /> : null}
           {context ? <div className="learning-brief">
             <div className="learning-purpose"><h3>为什么学习</h3><p>{context.description || "路径尚未填写学习说明。请结合目标与完成依据，判断本次学习的用途。"}</p></div>
             <dl className="learning-facts">

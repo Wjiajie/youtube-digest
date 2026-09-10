@@ -14,8 +14,10 @@ const initial: Workspace = { blueprint: { schemaVersion: 2, id: id(2), version: 
 let host: HTMLDivElement, root: Root, workspace: Workspace, writes: unknown[], reads: (string | undefined)[];
 let save: (input: unknown) => Promise<ApplicationResult<LearningPosition>>, read: (binding?: string) => Promise<ApplicationResult<Workspace>>;
 let capture: ((videoId: string) => Promise<ApplicationResult<{ videoId: string; positionSeconds: number }>>) | undefined;
+let automaticVideo: string | null | undefined;
+let automaticBinding: string;
 beforeEach(() => {
-  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); localStorage.clear(); workspace = structuredClone(initial); writes = []; reads = []; capture = undefined;
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); localStorage.clear(); workspace = structuredClone(initial); writes = []; reads = []; capture = undefined; automaticVideo = undefined; automaticBinding = binding;
   const held = new Set<string>();
   Object.defineProperty(navigator, "locks", { configurable: true, value: { request: async (key: string, _: unknown, callback: (lock: object | null) => Promise<void>) => {
     if (held.has(key)) return callback(null); held.add(key); try { await callback({}); } finally { held.delete(key); }
@@ -31,9 +33,9 @@ beforeEach(() => {
   };
   read = async bindingId => { reads.push(bindingId); return { ok: true, value: structuredClone(workspace) }; };
 });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 async function render(accountId = owner, theme: "cyberpunk" | "eastern" = "cyberpunk", start = initial) {
-  await act(async () => root.render(<ThemeSurface theme={theme}><LearningPositionWorkspace accountId={accountId} initial={start} saveAction={save} reloadAction={read} capturePosition={capture} /></ThemeSurface>));
+  await act(async () => root.render(<ThemeSurface theme={theme}><LearningPositionWorkspace accountId={accountId} initial={start} saveAction={save} reloadAction={read} capturePosition={capture} automaticCaptureVideoId={automaticVideo} automaticCaptureBindingId={automaticBinding} /></ThemeSurface>));
 }
 function button(label: string) { return Array.from(host.querySelectorAll("button")).find(button => button.textContent === label)!; }
 async function fill(label: string, value: string) {
@@ -53,6 +55,101 @@ test("explicitly choose, read, confirm and save zero without manufacturing watch
   expect(writes).toHaveLength(1); expect(writes[0]).toMatchObject({ nodeId: id(5), resourceBindingId: binding, expectedVersion: 1, expectedPositionVersion: 0, positionSeconds: 0 });
   expect(host.textContent).toContain("位置已保存");
   expect(host.querySelector('.position-history a[target="_blank"]')?.getAttribute("href")).toBe("https://www.youtube.com/watch?v=abcdefghijk&t=0s");
+});
+
+test("automatic positions require opt-in, save changed positions with advancing versions and stop explicitly", async () => {
+  vi.useFakeTimers(); automaticVideo = "abcdefghijk";
+  let seconds = 42;
+  const reader = vi.fn(async (videoId: string) => ({ ok: true as const, value: { videoId, positionSeconds: seconds } })); capture = reader;
+  await render(); await prepare();
+  await act(async () => vi.advanceTimersByTimeAsync(60_000)); expect(reader).not.toHaveBeenCalled();
+  expect(button("开启自动保存位置")).toBeDefined();
+  await act(async () => button("开启自动保存位置").click());
+  await act(async () => vi.advanceTimersByTimeAsync(30_000));
+  expect(writes).toHaveLength(1); expect(writes[0]).toMatchObject({ positionSeconds: 42, expectedPositionVersion: 0 });
+  await act(async () => vi.advanceTimersByTimeAsync(30_000)); expect(writes).toHaveLength(1);
+  seconds = 10;
+  await act(async () => vi.advanceTimersByTimeAsync(30_000));
+  expect(writes).toHaveLength(2); expect(writes[1]).toMatchObject({ positionSeconds: 10, expectedPositionVersion: 1 });
+  expect(host.textContent).toContain("不代表观看时长");
+  await act(async () => button("停止自动保存位置").click());
+  await act(async () => vi.advanceTimersByTimeAsync(60_000)); expect(writes).toHaveLength(2); expect(reader).toHaveBeenCalledTimes(3);
+});
+
+test.each(["stop", "hidden", "video", "binding", "account"])("late automatic capture cannot save after %s", async reason => {
+  vi.useFakeTimers(); automaticVideo = "abcdefghijk";
+  let resolve!: (value: ApplicationResult<{videoId: string; positionSeconds: number}>) => void;
+  const reader = vi.fn(() => new Promise<ApplicationResult<{videoId: string; positionSeconds: number}>>(done => { resolve = done; })); capture = reader;
+  await render(); await prepare(); await act(async () => button("开启自动保存位置").click());
+  await act(async () => vi.advanceTimersByTimeAsync(30_000)); expect(reader).toHaveBeenCalledTimes(1);
+  if (reason === "stop") await act(async () => button("停止自动保存位置").click());
+  if (reason === "hidden") await act(async () => { host.hidden = true; });
+  if (reason === "video") { automaticVideo = "lmnopqrstuv"; await render(); }
+  if (reason === "binding") { automaticBinding = id(7); await render(); }
+  if (reason === "account") await render(id(99));
+  await act(async () => resolve({ok:true,value:{videoId:"abcdefghijk",positionSeconds:100}}));
+  await act(async () => { host.hidden = false; });
+  await act(async () => vi.advanceTimersByTimeAsync(60_000));
+  expect(writes).toEqual([]); expect(reader).toHaveBeenCalledTimes(1);
+});
+
+test("unknown automatic save stops and retains one exact request for explicit recovery", async () => {
+  vi.useFakeTimers(); automaticVideo = "abcdefghijk";
+  const reader = vi.fn(async (videoId: string) => ({ok:true as const,value:{videoId,positionSeconds:75}})); capture=reader;
+  const actualSave=save; let receipt!: ApplicationResult<LearningPosition>;
+  save=async input=> { receipt=await actualSave(input); return {ok:false,code:"unavailable"}; };
+  await render(); await prepare(); await act(async()=>button("开启自动保存位置").click());
+  await act(async()=>vi.advanceTimersByTimeAsync(30_000));
+  const sent=writes[0]; expect(sent).toMatchObject({positionSeconds:75});
+  expect(JSON.parse(localStorage.getItem(storageKey)!).attempt).toEqual(sent);
+  await act(async()=>vi.advanceTimersByTimeAsync(90_000)); expect(writes).toHaveLength(1); expect(reader).toHaveBeenCalledTimes(1);
+  save=async input=>{ writes.push(input); return receipt; }; await render();
+  await act(async()=>button("确认原位置提交").click()); expect(writes[1]).toEqual(sent);
+  expect(host.textContent).toContain("位置已保存");
+});
+
+test("automatic save refuses dirty manual input, stops on conflict and never rebases itself", async () => {
+  vi.useFakeTimers(); automaticVideo="abcdefghijk";
+  capture=async videoId=>({ok:true,value:{videoId,positionSeconds:88}});
+  await render(); await prepare(); await fill("继续学习位置（秒）","42");
+  expect(button("开启自动保存位置").disabled).toBe(true);
+  await fill("继续学习位置（秒）","");
+  save=async input=> {writes.push(input);return {ok:false,code:"version_conflict"};}; await render();
+  await act(async()=>button("开启自动保存位置").click()); await act(async()=>vi.advanceTimersByTimeAsync(30_000));
+  expect(host.textContent).toContain("本次保存已被拒绝"); expect(button("开启自动保存位置").disabled).toBe(true);
+  expect(host.querySelector<HTMLInputElement>('[aria-label="继续学习位置（秒）"]')!.value).toBe("88");
+  await act(async()=>vi.advanceTimersByTimeAsync(90_000)); expect(writes).toHaveLength(1); expect(reads).toEqual([binding]);
+});
+
+test.each(["capture", "storage", "visibility", "pagehide"])("automatic positions stop safely on %s without a write", async reason => {
+  vi.useFakeTimers(); automaticVideo="abcdefghijk";
+  const reader=vi.fn(async (videoId:string):Promise<ApplicationResult<{videoId:string;positionSeconds:number}>>=>reason==="capture"
+    ? {ok:false,code:"unavailable"} : {ok:true,value:{videoId,positionSeconds:88}}); capture=reader;
+  await render(); await prepare(); await act(async()=>button("开启自动保存位置").click());
+  if(reason==="storage") vi.spyOn(Storage.prototype,"setItem").mockImplementation(()=>{throw new Error("full");});
+  if(reason==="visibility") {
+    vi.spyOn(document,"visibilityState","get").mockReturnValue("hidden");
+    await act(async()=>document.dispatchEvent(new Event("visibilitychange")));
+  }
+  if(reason==="pagehide") await act(async()=>window.dispatchEvent(new Event("pagehide")));
+  await act(async()=>vi.advanceTimersByTimeAsync(90_000)); expect(writes).toEqual([]);
+  expect(reader).toHaveBeenCalledTimes(reason==="capture"||reason==="storage"?1:0);
+  expect(button("停止自动保存位置")).toBeUndefined();
+});
+
+test("stopping an already sent automatic save lets its receipt settle but never restarts or resends", async () => {
+  vi.useFakeTimers(); automaticVideo="abcdefghijk";
+  const reader=vi.fn(async(videoId:string)=>({ok:true as const,value:{videoId,positionSeconds:60}})); capture=reader;
+  const actualSave=save; let finish!:(result:ApplicationResult<LearningPosition>)=>void, receipt!:ApplicationResult<LearningPosition>;
+  save=async input=>{receipt=await actualSave(input);return new Promise(resolve=>{finish=resolve;});};
+  await render(); await prepare(); await act(async()=>button("开启自动保存位置").click());
+  await act(async()=>vi.advanceTimersByTimeAsync(30_000)); expect(writes).toHaveLength(1);
+  await act(async()=>button("停止自动保存位置").click());
+  await act(async()=>finish(receipt)); expect(host.textContent).toContain("位置已保存");
+  await act(async()=>vi.advanceTimersByTimeAsync(90_000)); expect(writes).toHaveLength(1);expect(reader).toHaveBeenCalledTimes(1);
+  await act(async()=>root.unmount()); root=createRoot(host); await render();
+  await act(async()=>vi.advanceTimersByTimeAsync(60_000)); expect(writes).toHaveLength(1);expect(reader).toHaveBeenCalledTimes(1);
+  expect(button("开启自动保存位置").disabled).toBe(true);
 });
 
 test("response loss freezes a durable original request across remount and requires explicit exact recovery", async () => {
