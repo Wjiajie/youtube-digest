@@ -6,13 +6,14 @@ import type { ResourceCandidateView, ResourceNodeView, ResourceRunReviewProps, R
 import "./resource-workbench.css";
 import { AdoptionStart } from "./adoption-review";
 import { ClearedEvidence } from "./cleared-evidence";
+import { EvidenceDeadlineNotice, useEvidenceDeadline } from "./evidence-deadline";
 
 const kindLabels = { discover: "视频检索", captions: "字幕核对", match: "匹配建议" };
 const dateLabel = (value: string) => `${value.slice(0, 10)} ${value.slice(11, 16)} UTC`;
 const statusLabels = { queued: "等待执行", running: "正在处理", ready: "结果已保存", stale: "来源已变化", cancelled: "已取消", interrupted: "执行已中断", failed: "本次未完成", cleared: "资源证据已清除" };
 const errorLabels: Record<string, string> = { disabled: "资源服务暂未启用。", quota_exhausted: "本类操作次数不足。", busy: "已有资源操作正在处理，请核对运行记录。",
   version_conflict: "蓝图版本已变化，请返回路径核对。", invalid: "检索条件未通过检查，请核对输入。", not_found: "没有找到可访问的来源，请核对账号与路径。",
-  input_too_large: "本次材料超出处理容量。", cancelled: "请求已取消，请核对记录。", unavailable: "服务暂时不可用。" };
+  input_too_large: "本次材料超出处理容量。", cancelled: "请求已取消，请核对记录。", unavailable: "服务暂时不可用。", retention_unavailable: "证据保留策略尚未配置或证据期限已失效，不能执行本次操作。" };
 type Attempt = { id: string; state: "pending" | "unknown" | "saved"; message: string };
 function useResourceAttempt(accountId: string, hideIdentity: () => void) {
   const [attempt, setAttempt] = useState<Attempt | null>(null), locked = useRef(false), mounted = useRef(true);
@@ -109,6 +110,7 @@ function RunReview({ accountId, initial, enabled, adoptionEnabled = false, readA
   const [reading, setReading] = useState(false), [cancelling, setCancelling] = useState(false), [needsRead, setNeedsRead] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false), [clearing, setClearing] = useState(false), [concealed, setConcealed] = useState(false);
   const revision = useRef(0), mounted = useRef(true), locks = useRef({ read: false, cancel: false, clear: false });
+  const lifetime = useEvidenceDeadline(run.status === "cleared" ? null : run.contentExpiresAt);
   const { attempt, submit } = useResourceAttempt(accountId, () => setHidden(true));
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; revision.current++; }; }, []);
   async function perform(kind: "read" | "cancel" | "clear", action: () => Promise<ResourceUiResult<ResourceRunView>>) {
@@ -137,11 +139,12 @@ function RunReview({ accountId, initial, enabled, adoptionEnabled = false, readA
     <Status tone={clearing || reading ? "progress" : "warning"}>{message || "已隐藏旧材料，正在清除这条检索链的证据…"}</Status>
     <div className="resource-actions"><Button disabled={clearing || reading} onClick={() => void perform("read", readAction)}>读取最新状态</Button><a className="bp-button" href="/paths">返回路径</a></div></Panel></div>;
   if (run.status === "cleared") return <ClearedEvidence receipt={run} />;
+  if (lifetime !== "available") return <EvidenceDeadlineNotice state={lifetime} busy={reading || cancelling || clearing} message={message} onRead={() => void perform("read", readAction)} />;
   const active = run.status === "queued" || run.status === "running";
   const canContinue = run.status === "ready" && run.nextKind !== null && run.childId === null;
   const result = run.result;
   function next() {
-    if (!enabled || !canContinue || !run.nextKind || attempt || needsRead || reading || cancelling) return;
+    if (!enabled || !canContinue || !run.nextKind || attempt || needsRead || reading || cancelling || Date.parse(run.contentExpiresAt) <= Date.now()) return;
     void submit({ kind: run.nextKind, runId: crypto.randomUUID(), sourceRunId: run.id });
   }
   return <div className="resource-workbench"><Heading title={run.nodeTitle} goal={run.goalTitle} version={run.blueprintVersion} />
@@ -149,6 +152,7 @@ function RunReview({ accountId, initial, enabled, adoptionEnabled = false, readA
     <Panel className="resource-card resource-run-status"><div><p className="resource-eyebrow">RUN / REVIEW ONLY</p><h2>{statusLabels[run.status]}</h2><p>这是可审阅的资源记录。匹配建议不会自动绑定到节点，也不证明学习已完成。</p></div>
       <div className="resource-actions"><Button disabled={reading || cancelling} onClick={() => void perform("read", readAction)}>读取最新状态</Button>{active && <Button disabled={cancelling} onClick={() => void perform("cancel", cancelAction)}>取消本次运行</Button>}</div>
       {reading || cancelling ? <Status tone="progress">正在核对云端记录…</Status> : null}{message && <Status tone={needsRead ? "warning" : "neutral"}>{message}</Status>}
+      <p className="resource-muted">证据使用期限：<time dateTime={run.contentExpiresAt}>{dateLabel(run.contentExpiresAt)}</time>。后续匹配与核验不会延长期限。</p>
       {run.status === "stale" && <Status tone="warning">蓝图来源已变化。以下是历史版本的材料与建议，不能作为当前节点的匹配结果。</Status>}
       {active && <p className="resource-muted">本页不会轮询。可保存本页地址稍后返回；取消已开始的操作不保证供应商停止计费。</p>}
       {run.status === "interrupted" && <Status tone="warning">执行已中断，结果不完整。不会自动重新检索、读取字幕或调用模型。</Status>}

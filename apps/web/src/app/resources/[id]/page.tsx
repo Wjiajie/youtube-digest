@@ -10,6 +10,7 @@ import { AccountThemeShell } from "../../account-theme-shell";
 import { AuthUnavailable } from "../../auth-unavailable";
 import { readResourceRunAction, cancelResourceRunAction, clearResourceEvidenceAction } from "../../resource-actions";
 import { ResourceRunReview } from "../resource-workbench";
+import { UnmanagedEvidence } from "../unmanaged-evidence";
 import "../resource-workbench.css";
 
 export const metadata = { title: "资源运行记录 · Blueprint" };
@@ -27,6 +28,7 @@ export default async function ResourceRunPage({ params }: { params: Promise<{ id
     <nav aria-label="资源导航"><Link className="bp-button" prefetch={false} href="/paths">← 全部路径</Link></nav>
     {result.ok ? <ResourceRunReview key={`${actor.userId}:${id}`} accountId={actor.userId} initial={result.value} enabled={resourceConfiguration() !== null} adoptionEnabled={resourceAdoptionConfiguration() !== null}
       readAction={readResourceRunAction.bind(null, actor.userId, id)} cancelAction={cancelResourceRunAction.bind(null, actor.userId, id)} clearAction={clearResourceEvidenceAction.bind(null, actor.userId, id)} />
+      : result.code === "retention_unavailable" ? <UnmanagedEvidence key={`${actor.userId}:${id}`} accountId={actor.userId} runId={id} clearAction={clearResourceEvidenceAction.bind(null, actor.userId, id)} />
       : <Panel><h1>暂时无法打开运行记录</h1><Status tone="warning">{result.code === "not_found" || result.code === "forbidden"
         ? "没有找到可访问的记录；新提交可能尚未创建，请核对原页面和账号，不要重复消费。" : "读取服务暂时不可用，没有删除已有结果，也不会重新执行。"}</Status><a className="bp-button" href={path}>重新读取</a></Panel>}
   </main></AccountThemeShell>;

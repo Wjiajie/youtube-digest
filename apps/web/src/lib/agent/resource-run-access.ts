@@ -3,7 +3,7 @@ import type { Actor } from "@blueprint/domain";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseResourceRun, type ResourceRun } from "./resource-run";
 
-type FailureCode = "forbidden" | "invalid" | "not_found" | "version_conflict" | "quota_exhausted" | "busy" | "unavailable" | "cancelled" | "input_too_large";
+type FailureCode = "forbidden" | "invalid" | "not_found" | "version_conflict" | "quota_exhausted" | "busy" | "unavailable" | "retention_unavailable" | "cancelled" | "input_too_large";
 export type ResourceRunResponse = { ok: true; run: ResourceRun } | { ok: false; code: FailureCode };
 export function resourceRunFailure(error: { code?: string; message?: string }): { ok: false; code: FailureCode } {
   if (error.code === "42501") return { ok: false, code: "forbidden" };
@@ -12,6 +12,7 @@ export function resourceRunFailure(error: { code?: string; message?: string }): 
   if (["22023", "23514"].includes(error.code ?? "")) return { ok: false, code: "invalid" };
   if (error.code === "P0001" && error.message === "RESOURCE_QUOTA_EXHAUSTED") return { ok: false, code: "quota_exhausted" };
   if (error.code === "P0001" && error.message === "RESOURCE_BUSY") return { ok: false, code: "busy" };
+  if (error.code === "P0001" && error.message === "RESOURCE_RETENTION_UNAVAILABLE") return { ok: false, code: "retention_unavailable" };
   return { ok: false, code: "unavailable" };
 }
 /** Recovery never invokes a provider or requires a worker credential. */

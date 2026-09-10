@@ -3,7 +3,7 @@ import type { ClearedEvidenceView } from "./resource-view";
 
 /** A receipt only: never reconstruct provider content from official path history. */
 export function ClearedEvidence({ receipt }: { receipt: ClearedEvidenceView }) {
-  return <div className="resource-workbench resource-evidence-notice"><Panel className="resource-card"><p className="resource-eyebrow">EVIDENCE / CLEARED</p><h1>资源证据已清除</h1>
+  return <div className="resource-workbench resource-evidence-notice"><Panel className="resource-card"><p className="resource-eyebrow">EVIDENCE / {receipt.clearReason === "expired" ? "EXPIRED" : "CLEARED"}</p><h1>{receipt.clearReason === "expired" ? "资源证据已到期清除" : "资源证据已清除"}</h1>
     <Status tone="neutral">这条检索链的材料与核验正文已清除，不能恢复或继续匹配。未确认的资源变更已拒绝。</Status>
     <p>正式路径、资源绑定、笔记与学习历史仍保留。旧运行编号只用于恢复清除回执，不会再次执行。</p>
     <p className="resource-muted">清除时间：<time dateTime={receipt.clearedAt}>{new Date(receipt.clearedAt).toISOString().slice(0, 16).replace("T", " ")} UTC</time><br />蓝图来源 v{receipt.blueprintVersion}</p>

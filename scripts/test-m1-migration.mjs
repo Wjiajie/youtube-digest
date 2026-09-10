@@ -68,6 +68,7 @@ try {
     const notesUpgrade = file.endsWith("_learning_notes.sql") ? await captureResourceUpgrade() : null;
     const clearingUpgrade = file.endsWith("_resource_evidence_clearing.sql") ? await seedResourceClearingUpgrade() : null;
     const positionsUpgrade = file.endsWith("_learning_positions.sql") ? await captureResourceUpgrade() : null;
+    const expiryUpgrade = file.endsWith("_resource_evidence_expiry.sql") ? await captureResourceUpgrade() : null;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
     if (legacy) await verifyLegacyPlanningUpgrade(legacy);
@@ -79,6 +80,7 @@ try {
     if (notesUpgrade) await verifyLearningNotesUpgrade(notesUpgrade);
     if (clearingUpgrade) await verifyResourceClearingUpgrade(clearingUpgrade);
     if (positionsUpgrade) await verifyLearningPositionsUpgrade(positionsUpgrade);
+    if (expiryUpgrade) await verifyResourceExpiryUpgrade(expiryUpgrade);
   }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
@@ -499,6 +501,32 @@ async function verifyResourceClearingUpgrade(before) {
   assert.equal(Number((await db.query("select public.apply_blueprint_proposal('d8000000-0000-4000-8000-000000000030',0,'d8000000-0000-4000-8000-000000000030') as version")).rows[0].version), 1,
     "old applied proposal continues to recover its historical revision after clearing schema upgrade");
   assert.deepEqual(await captureResourceUpgrade(), expected, "historical replay does not clear or rewrite any upgraded row");
+}
+
+async function verifyResourceExpiryUpgrade(before) {
+  const expected = structuredClone(before);
+  for (const table of ["public.resource_runs", "public.resource_adoptions"])
+    expected[table] = expected[table].map(row => ({ ...row, source_started_at: null,
+      content_expires_at: null, retention_policy_ref: null, clear_reason: null }));
+  expected["private.resource_retention_policies"] = [];
+  assert.deepEqual(await captureResourceUpgrade(), expected,
+    "expiry upgrade preserves every legacy payload, receipt, lease, quota, formal history and learning record; no invented policy or timestamp");
+  const acl = (await db.query(`select
+    has_function_privilege('authenticated','private.sweep_resource_content(integer)','EXECUTE') as user_sweep,
+    has_function_privilege('service_role','private.sweep_resource_content(integer)','EXECUTE') as worker_sweep,
+    has_function_privilege('anon','private.sweep_resource_content(integer)','EXECUTE') as anon_sweep,
+    has_function_privilege('authenticated','private.clear_resource_chain(uuid,uuid,text)','EXECUTE') as user_core,
+    has_table_privilege('authenticated','private.resource_retention_policies','SELECT') as policy_read,
+    has_table_privilege('service_role','private.resource_retention_policies','UPDATE') as worker_policy`)).rows[0];
+  assert.deepEqual(acl, { user_sweep: false, worker_sweep: false, anon_sweep: false,
+    user_core: false, policy_read: false, worker_policy: false }, "expiry maintenance and policy are not exposed to API roles");
+  await becomeUser("d8000000-0000-4000-8000-000000000001");
+  await assert.rejects(() => db.query("select public.read_resource_run('d8000000-0000-4000-8000-000000000020')"),
+    /RESOURCE_RETENTION_UNAVAILABLE/, "legacy definer read cannot return unmanaged body");
+  assert.deepEqual((await db.query("select id from public.resource_runs")).rows, [], "legacy Data API read fails closed");
+  assert.equal(Number((await db.query("select public.apply_blueprint_proposal('d8000000-0000-4000-8000-000000000030',0,'d8000000-0000-4000-8000-000000000030') as version")).rows[0].version), 1,
+    "historical applied proposal still recovers its immutable version");
+  assert.deepEqual(await captureResourceUpgrade(), expected, "failed legacy read and old applied retry erase or rewrite no rows");
 }
 
 async function verifyLearningNotesUpgrade(before) {

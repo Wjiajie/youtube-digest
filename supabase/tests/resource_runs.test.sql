@@ -2,6 +2,7 @@ begin;
 select no_plan();
 select has_function('public','begin_resource_run',array['jsonb'],'authenticated durable resource entry exists');
 insert into auth.users(id,email) values ('fb000000-0000-4000-8000-000000000001','resource-owner@example.test'),('fb000000-0000-4000-8000-000000000002','resource-other@example.test');
+insert into private.resource_retention_policies values('fb000000-0000-4000-8000-000000000001',86400,'local-fixture-only');
 insert into public.goals(id,owner_id,blueprint_id,title,position) select 'fb000000-0000-4000-8000-000000000010',owner_id,id,'Learn',0 from public.blueprints where owner_id='fb000000-0000-4000-8000-000000000001';
 insert into public.stages(id,owner_id,goal_id,title,position) values('fb000000-0000-4000-8000-000000000011','fb000000-0000-4000-8000-000000000001','fb000000-0000-4000-8000-000000000010','First',0);
 insert into public.path_nodes(id,owner_id,stage_id,node_type,title,position) values('fb000000-0000-4000-8000-000000000012','fb000000-0000-4000-8000-000000000001','fb000000-0000-4000-8000-000000000011','learn','Basics',0);

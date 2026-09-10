@@ -11,6 +11,7 @@ import { loadResourceMatchingSkill } from "./resource-matching-skill";
 import { parseResourceRun, resourceResultSchema, startResourceRunSchema, type ResourceCommand, type ResourceRun } from "./resource-run";
 import { createResourceRunAccess, resourceRunFailure as failure, type ResourceRunResponse } from "./resource-run-access";
 import type { ResourceFinish, ResourceWorker } from "./resource-worker";
+import { resourceExecutionSignal } from "./resource-lifetime";
 
 function commandMatches(run: ResourceRun, command: ResourceCommand) {
   return run.kind === command.kind && (command.kind === "discover"
@@ -69,7 +70,8 @@ export function createCloudResourceRunner(dependencies: { client: SupabaseClient
       const current = parseResourceRun(receipt.run, actor.userId, started.id);
       if (!receipt.acquired) return { ok: true, run: current };
       if (current.status !== "running" || !commandMatches(current, command) || JSON.stringify(current.skill) !== JSON.stringify(skill)) return { ok: false, code: "unavailable" };
-      const result = await execute(current, signal);
+      const executionSignal = resourceExecutionSignal(current, signal);
+      const result = executionSignal.aborted ? { status: signal.aborted ? "cancelled" as const : "timed_out" as const } : await execute(current, executionSignal);
       const args = { runId: current.id, leaseId, result };
       const finished = await finish(args);
       // Only the identical storage receipt can retry; not discovery, jobs, model or claim.

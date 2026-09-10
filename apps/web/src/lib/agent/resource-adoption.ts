@@ -1,11 +1,13 @@
 import { z } from "zod";
 import { videoVerificationSchema, type VideoVerification } from "../resources/verification";
+import { resourceLifetimeFields, readResourceLifetime } from "./resource-lifetime";
 
 export const resourceAdoptionCommandSchema = z.strictObject({ adoptionId: z.uuid(), sourceRunId: z.uuid(),
   videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/), replaceBindingId: z.uuid().nullable() });
 export type ResourceAdoptionCommand = z.infer<typeof resourceAdoptionCommandSchema>;
 const date = z.iso.datetime({ offset: true });
 const rowSchema = z.strictObject({ id: z.uuid(), owner_id: z.uuid(), source_run_id: z.uuid(), blueprint_id: z.uuid(),
+  ...resourceLifetimeFields,
   cleared_at: z.null().optional(),
   blueprint_version: z.int().nonnegative(), node_id: z.uuid(), video_id: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
   replace_binding_id: z.uuid().nullable(), new_binding_id: z.uuid(),
@@ -29,7 +31,7 @@ const clearedRowSchema = z.strictObject({ ...rowSchema.shape, status: z.literal(
 export function parseResourceAdoption(input: unknown, ownerId: string, id: string) {
   const row = z.union([rowSchema, clearedRowSchema]).parse(input);
   if (row.owner_id !== ownerId || row.id !== id) throw new Error("Unexpected adoption identity");
-  return { id: row.id, ownerId: row.owner_id, sourceRunId: row.source_run_id, blueprintId: row.blueprint_id, blueprintVersion: row.blueprint_version,
+  return { ...readResourceLifetime(row), id: row.id, ownerId: row.owner_id, sourceRunId: row.source_run_id, blueprintId: row.blueprint_id, blueprintVersion: row.blueprint_version,
     nodeId: row.node_id, videoId: row.video_id, replaceBindingId: row.replace_binding_id, newBindingId: row.new_binding_id,
     status: row.status, createdAt: row.created_at, expiresAt: row.expires_at, verifiedAt: row.verified_at, validUntil: row.valid_until,
     result: row.result, proposalId: row.proposal_id, clearedAt: row.cleared_at ?? null };

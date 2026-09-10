@@ -5,6 +5,7 @@ import type { AdoptionReviewProps, AdoptionView, ResourceBindingView } from "./a
 import type { ResourceUiResult } from "./resource-view";
 import "./resource-workbench.css";
 import { ClearedEvidence } from "./cleared-evidence";
+import { EvidenceDeadlineNotice, useEvidenceDeadline } from "./evidence-deadline";
 
 const labels = { queued: "等待核验", running: "正在重新核验视频", ready: "请确认资源变更", failed: "本次核验未通过", cancelled: "已取消核验",
   interrupted: "核验已中断", stale: "这份核验已过期", applied: "已绑定到正式路径", rejected: "已拒绝这份变更", cleared: "资源证据已清除" };
@@ -64,6 +65,7 @@ export function AdoptionReview(props: AdoptionReviewProps) {
 function Review({ initial, readAction, cancelAction, rejectAction, applyAction }: AdoptionReviewProps) {
   const [view, setView] = useState(initial), [hidden, setHidden] = useState(false), [busy, setBusy] = useState(false), [uncertain, setUncertain] = useState(false), [message, setMessage] = useState("");
   const lock = useRef(false), mounted = useRef(true);
+  const lifetime = useEvidenceDeadline(view.status === "cleared" ? null : view.contentExpiresAt);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   async function perform(action: () => Promise<ResourceUiResult<AdoptionView>>) {
     if (lock.current || hidden) return;
@@ -81,10 +83,12 @@ function Review({ initial, readAction, cancelAction, rejectAction, applyAction }
   }
   if (hidden) return <IdentityLost />;
   if (view.status === "cleared") return <ClearedEvidence receipt={view} />;
+  if (lifetime !== "available") return <EvidenceDeadlineNotice state={lifetime} busy={busy} message={message} onRead={() => void perform(readAction)} />;
   return <div className="resource-workbench"><header className="resource-heading"><div><p className="resource-eyebrow">RESOURCE / YOUR DECISION</p><p>{view.goalTitle} · 蓝图 v{view.blueprintVersion}</p><h1>{view.nodeTitle}</h1><p>先核对变更，再决定是否放进路径。</p></div><span className="resource-seal" aria-hidden="true">择学</span></header>
     <nav className="resource-toolbar" aria-label="采用导航"><a href={`/resources/${view.sourceRunId}`}>返回匹配依据</a><a href={`/paths/${view.goalId}?node=${view.nodeId}`}>返回对应目标路径</a></nav>
     <Panel className="resource-card"><p className="resource-eyebrow">VERIFICATION / CONFIRMATION</p><h2>{labels[view.status]}</h2>
       <h3>{view.selected.title}</h3><p>{view.selected.channel} · YouTube {view.selected.videoId}</p>
+      <p className="resource-muted">证据使用期限：<time dateTime={view.contentExpiresAt}>{verificationTime.format(new Date(view.contentExpiresAt))}</time>（北京时间）。重新核验不会延长期限。</p>
       <p>{view.replaceBindingId ? "将替换你选择的绑定；旧学习记录仍保留原视频归属。" : "将新增一个可选视频；其他资源与学习状态保持不变。"}</p>
       {view.status === "stale" && <Status tone="warning">蓝图来源已变化或十分钟核验窗口已结束，不能确认旧提案。重新核验必须由你另行发起，不会自动消费。</Status>}
       {view.outcome && outcomes[view.outcome] && <Status tone="warning">{outcomes[view.outcome]}</Status>}

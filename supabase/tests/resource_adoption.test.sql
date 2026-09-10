@@ -3,6 +3,7 @@ select no_plan();
 select has_function('public','begin_resource_adoption',array['jsonb'],'resource adoption begins through authenticated RPC');
 select is((select provolatile::text from pg_proc where oid='private.resource_adoption_result_valid(jsonb)'::regprocedure),'s','timestamp-validating receipt checker is STABLE rather than immutable');
 insert into auth.users(id,email) values('fc000000-0000-4000-8000-000000000001','adoption-owner@example.test'),('fc000000-0000-4000-8000-000000000002','adoption-other@example.test');
+insert into private.resource_retention_policies values('fc000000-0000-4000-8000-000000000001',86400,'local-fixture-only');
 insert into public.goals(id,owner_id,blueprint_id,title,position) select 'fc000000-0000-4000-8000-000000000010',owner_id,id,'Goal',0 from public.blueprints where owner_id='fc000000-0000-4000-8000-000000000001';
 insert into public.stages(id,owner_id,goal_id,title,position) values('fc000000-0000-4000-8000-000000000011','fc000000-0000-4000-8000-000000000001','fc000000-0000-4000-8000-000000000010','Stage',0);
 insert into public.path_nodes(id,owner_id,stage_id,node_type,title,position) values('fc000000-0000-4000-8000-000000000012','fc000000-0000-4000-8000-000000000001','fc000000-0000-4000-8000-000000000011','learn','Node',0);

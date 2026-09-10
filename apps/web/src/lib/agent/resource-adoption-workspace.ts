@@ -16,14 +16,16 @@ export function createResourceAdoptionWorkspace(client: SupabaseClient, actor: A
     if (!response.ok) return response;
     const record = response.adoption;
     try {
-      const cleared = (clearedAt: string): ResourceUiResult<AdoptionView> => ({ ok: true, value: { id: record.id, sourceRunId: record.sourceRunId,
-        nodeId: record.nodeId, blueprintVersion: record.blueprintVersion, status: "cleared", clearedAt, result: null } });
-      if (record.status === "cleared" && record.clearedAt) return cleared(record.clearedAt);
+      const cleared = (clearedAt: string, clearReason: "manual" | "expired" | null): ResourceUiResult<AdoptionView> => ({ ok: true, value: { id: record.id, sourceRunId: record.sourceRunId,
+        nodeId: record.nodeId, blueprintVersion: record.blueprintVersion, status: "cleared", clearedAt, clearReason: clearReason ?? "manual", result: null } });
+      if (record.status === "cleared" && record.clearedAt) return cleared(record.clearedAt, record.clearReason);
       const source = await createResourceRunAccess(client, actor).read(record.sourceRunId);
       if (!source.ok) return source;
       const run = source.run;
       if (run.blueprintId !== record.blueprintId || run.blueprintVersion !== record.blueprintVersion || run.nodeId !== record.nodeId) throw new Error("Source mismatch");
-      if (run.status === "cleared") return cleared(run.clearedAt);
+      if (run.status === "cleared") return cleared(run.clearedAt, run.clearReason);
+      if (!record.contentExpiresAt || record.contentExpiresAt !== run.contentExpiresAt || record.sourceStartedAt !== run.sourceStartedAt
+        || record.retentionPolicyRef !== run.retentionPolicyRef) throw new Error("Evidence lifetime mismatch");
       if (record.status === "cleared" || record.videoId === null) throw new Error("Invalid adoption content");
       const goal = run.blueprint.goals.find(goal => goal.stages.some(stage => stage.nodes.some(node => node.id === record.nodeId)))!;
       const node = goal.stages.flatMap(stage => stage.nodes).find(node => node.id === record.nodeId)!;
@@ -48,7 +50,8 @@ export function createResourceAdoptionWorkspace(client: SupabaseClient, actor: A
         }
         proposal = { id: row.id, status: row.status, appliedVersion };
       }
-      return { ok: true, value: { id: record.id, sourceRunId: run.id, nodeId: node.id, nodeTitle: node.title, goalId: goal.id, goalTitle: goal.title,
+      if (Date.parse(record.contentExpiresAt) <= Date.now()) return { ok: false, code: "retention_unavailable" };
+      return { ok: true, value: { id: record.id, sourceRunId: run.id, nodeId: node.id, nodeTitle: node.title, goalId: goal.id, goalTitle: goal.title, contentExpiresAt: record.contentExpiresAt,
         blueprintVersion: record.blueprintVersion, status: record.status,
         selected: { videoId: record.videoId, title: candidate.video.title, channel: candidate.video.channelTitle }, replaceBindingId: record.replaceBindingId,
         outcome: record.result?.status ?? null, verifiedAt: record.verifiedAt, validUntil: record.validUntil, before: bindings(node.resources), after, proposal } };

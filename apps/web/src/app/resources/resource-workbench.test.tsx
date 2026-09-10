@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ResourceNodeWorkbench, ResourceRunReview } from "./resource-workbench";
+import { UnmanagedEvidence } from "./unmanaged-evidence";
 import type { ResourceNodeView, ResourceRunView, ResourceRunReviewProps } from "./resource-view";
 
 const accountId = "10000000-0000-4000-8000-000000000001", nodeId = "10000000-0000-4000-8000-000000000002", runId = "10000000-0000-4000-8000-000000000003";
@@ -11,15 +12,26 @@ const node: ResourceNodeView = { nodeId, nodeTitle: "PRIVATE_NODE", goalId: acco
   records: [{ id: runId, kind: "discover", createdAt: "2026-09-10T03:00:00Z" }], offset: 0, hasMore: false };
 const run: Exclude<ResourceRunView, { status: "cleared" }> = { id: runId, nodeId, nodeTitle: node.nodeTitle, goalId: node.goalId, goalTitle: node.goalTitle,
   blueprintVersion: 3, kind: "discover", sourceRunId: null, childId: null, nextKind: null, status: "running",
-  createdAt: "2026-09-10T03:00:00Z", expiresAt: "2026-09-10T03:02:00Z", preferences: { regionCode: "US", language: "zh", allowLanguageFallback: false,
+  createdAt: "2026-09-10T03:00:00Z", expiresAt: "2026-09-10T03:02:00Z", contentExpiresAt: "2099-01-01T00:00:00Z", preferences: { regionCode: "US", language: "zh", allowLanguageFallback: false,
     maxDurationSeconds: 1800, publishedAfter: null }, learnerContext: { startingPoint: null, constraints: null }, skillVersion: null, result: null };
 function props(overrides: Partial<ResourceRunReviewProps> = {}): ResourceRunReviewProps {
   return { accountId, initial: run, enabled: true, readAction: async () => ({ ok: true, value: run }), cancelAction: async () => ({ ok: true, value: { ...run, status: "cancelled" } }), ...overrides };
 }
 let host: HTMLDivElement, root: Root;
 beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers(); });
 const button = (text: string) => [...host.querySelectorAll("button")].find(element => element.textContent === text)!;
+it("lets an owner explicitly clear an unmanaged legacy record without loading its body", async () => {
+  const clearAction = vi.fn(async () => ({ ok: true as const, value: { id: runId, nodeId, blueprintVersion: 3, sourceRunId: null,
+    status: "cleared" as const, clearedAt: "2026-09-11T01:00:00Z", result: null } }));
+  await act(async () => root.render(<UnmanagedEvidence accountId={accountId} runId={runId} clearAction={clearAction} />));
+  expect(host.textContent).toContain("无法验证证据期限"); expect(clearAction).not.toHaveBeenCalled();
+  await act(async () => button("清除这条检索链的证据").click());
+  expect(clearAction).not.toHaveBeenCalled();
+  await act(async () => button("确认清除证据").click());
+  expect(clearAction).toHaveBeenCalledTimes(1); expect(host.textContent).toContain("资源证据已清除");
+  expect(host.textContent).not.toContain("PRIVATE_VIDEO");
+});
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 async function enter(label: string, value: string) {
   await act(async () => { const element = host.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[aria-label="${label}"]`)!;
@@ -72,6 +84,20 @@ const candidate: NonNullable<ResourceRunView["result"]>["candidates"][number] = 
   title: "<img src=x onerror=alert(1)>PRIVATE_VIDEO", channel: "[channel](https://untrusted.example)", publishedAt: "2025-01-02T00:00:00Z", durationSeconds: 300,
   transcriptStatus: "ready", language: "zh", languageFallback: false, eligible: true, assessment: null };
 const discovered: ResourceRunView = { ...run, status: "ready", nextKind: "match", result: { status: "discovered", summary: null, candidates: [candidate], rejected: [], uninspectedCount: 2 } };
+it("hides expired provider content without a network call and cannot restore it from a late read", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-09-11T01:00:00Z"));
+  const dated = { ...discovered, contentExpiresAt: "2026-09-11T01:00:01Z" };
+  const pending = deferred<Awaited<ReturnType<ResourceRunReviewProps["readAction"]>>>();
+  const readAction = vi.fn(() => pending.promise), fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+  await act(async () => root.render(<ResourceRunReview {...props({ initial: dated, readAction })} />));
+  expect(host.textContent).toContain("PRIVATE_VIDEO");
+  await act(async () => button("读取最新状态").click());
+  await act(async () => vi.advanceTimersByTimeAsync(1001));
+  expect(host.textContent).not.toContain("PRIVATE_VIDEO"); expect(button("生成匹配建议")).toBeUndefined();
+  expect(host.textContent).toContain("证据使用期限已到");
+  await act(async () => pending.resolve({ ok: true, value: dated }));
+  expect(host.textContent).not.toContain("PRIVATE_VIDEO"); expect(fetcher).not.toHaveBeenCalled();
+});
 it("requires confirmation before clearing and hides old evidence during an unknown clear outcome", async () => {
   const pending = deferred<Awaited<ReturnType<ResourceRunReviewProps["readAction"]>>>();
   const clearAction = vi.fn(() => pending.promise);

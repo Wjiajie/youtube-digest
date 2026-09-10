@@ -30,6 +30,9 @@ async function account(context?: BrowserContext) {
   if (context) await context.addCookies(cookies.map(({ name, value }) => ({ name, value, url: origin, sameSite: "Lax" as const })));
   const token = (await client.auth.getSession()).data.session?.access_token;
   if (!token) throw new Error("Missing fixture session");
+  execFileSync("docker", ["exec", "-i", "supabase_db_blueprint-local", "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1"], {
+    input: `insert into private.resource_retention_policies(owner_id,window_seconds,policy_ref) values ('${id}',86400,'local-browser-fixture-only');`, stdio: ["pipe", "pipe", "pipe"],
+  });
   return { id, client, token, cookies };
 }
 test.afterEach(async ({ context }) => {
@@ -172,6 +175,54 @@ for (const route of ["resources/runs", "planning/runs", "clarification/turns"]) 
     expect(records.error).toBeNull(); expect(records.data).toEqual([]);
   }
   expect(await (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json()).toEqual([]);
+});
+
+for (const theme of ["cyberpunk", "eastern"] as const) test(`resource expiry ${theme}: live evidence hides on deadline and explicit read recovers a body-free receipt`, async ({ page, context }, testInfo) => {
+  test.skip(disabled, "Execution fixtures only; production providers stay disabled.");
+  const owner = await account(context), actor = { userId: owner.id, client: "web" as const };
+  const store = createSupabaseBlueprintStore(owner.client), current = await store.getMainBlueprint(owner.id);
+  if (!current) throw new Error("Missing fixture Blueprint");
+  const nodeId = randomUUID(), goalId = randomUUID(), runId = randomUUID();
+  const app = createBlueprintApplication({ store, newId: randomUUID, now: () => new Date() });
+  const proposal = await app.createProposal(actor, { baseVersion: 0, clientMutationId: randomUUID(), draft: { ...current, goals: [{ id: goalId,
+    title: "摄影练习", position: 0, stages: [{ id: randomUUID(), title: "曝光", position: 0, nodes: [{ id: nodeId,
+      title: "比较光圈与快门", type: "learn", position: 0, estimatedMinutes: 30, completionCriteria: "比较三组曝光照片", dependencyIds: [], resources: [] }] }] }] } });
+  if (!proposal.ok) throw new Error("Missing fixture proposal");
+  expect((await app.applyProposal(actor, { proposalId: proposal.value.id, expectedVersion: 0, clientMutationId: randomUUID() })).ok).toBe(true);
+  await page.goto(`${origin}/paths/${goalId}`);
+  if (theme === "eastern") {
+    await page.getByRole("combobox", { name: "界面主题", exact: true }).selectOption(theme);
+    await page.getByRole("button", { name: "保存到账号", exact: true }).click();
+    await expect(page.getByText("主题已保存到账号。扩展将在重新读取时跟随。", { exact: true })).toBeVisible();
+  }
+  execFileSync("docker", ["exec", "-i", "supabase_db_blueprint-local", "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1"], {
+    input: `update private.resource_retention_policies set window_seconds=6 where owner_id='${owner.id}'; insert into private.resource_quotas(owner_id,kind,available_attempts) values ('${owner.id}','discover',1);`, stdio: "pipe",
+  });
+  const calls = async () => (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json();
+  await context.request.post("http://127.0.0.1:3166/fixture/reset");
+  const created = await context.request.post(`${origin}/api/resources/runs`, { headers: { origin }, data: { accountId: owner.id, kind: "discover", runId, nodeId,
+    expectedBlueprintVersion: 1, preferences: { regionCode: "US", language: "zh", allowLanguageFallback: true, maxDurationSeconds: 1800, publishedAfter: null },
+    learnerContext: { startingPoint: null, constraints: null } } });
+  expect(created.status()).toBe(200);
+  const before = await calls(); expect(before.length).toBeGreaterThan(0);
+  const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto(`${origin}/resources/${runId}`);
+  await expect(page.getByRole("heading", { name: "候选材料", exact: true })).toBeVisible();
+  await expect(page.locator("[data-bp-theme]").first()).toHaveAttribute("data-bp-theme", theme);
+  await expect(page.getByRole("heading", { name: "证据使用期限已到", exact: true })).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(".resource-candidate")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "读取待处理字幕", exact: true })).toHaveCount(0);
+  expect(await calls()).toEqual(before);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath(`${theme}-expired-320.png`), fullPage: true });
+  await page.getByRole("button", { name: "读取清除状态", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "资源证据已到期清除", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "资源证据已到期清除", exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath(`${theme}-expiry-receipt-320.png`), fullPage: true });
+  expect(await calls()).toEqual(before); expect(errors).toEqual([]);
+  expect((await store.getMainBlueprint(owner.id))?.version).toBe(1);
 });
 
 for (const theme of ["cyberpunk", "eastern"] as const) test(`resource workbench ${theme}: discover → match → verify → explicitly append or replace without losing learning history`, async ({ page, context }, testInfo) => {

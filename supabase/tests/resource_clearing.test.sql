@@ -2,6 +2,7 @@ begin;
 select no_plan();
 create function pg_temp.cid(n integer) returns uuid language sql as $$select ('fd560000-0000-4000-8000-'||lpad(n::text,12,'0'))::uuid$$;
 insert into auth.users(id,email) values(pg_temp.cid(1),'clear-owner@example.test'),(pg_temp.cid(2),'clear-other@example.test');
+insert into private.resource_retention_policies values(pg_temp.cid(1),86400,'local-fixture-only');
 insert into public.goals(id,owner_id,blueprint_id,title,position) select pg_temp.cid(10),owner_id,id,'Goal',0 from public.blueprints where owner_id=pg_temp.cid(1);
 insert into public.stages(id,owner_id,goal_id,title,position) values(pg_temp.cid(11),pg_temp.cid(1),pg_temp.cid(10),'Stage',0);
 insert into public.path_nodes(id,owner_id,stage_id,node_type,title,position) values(pg_temp.cid(12),pg_temp.cid(1),pg_temp.cid(11),'learn','Node',0);

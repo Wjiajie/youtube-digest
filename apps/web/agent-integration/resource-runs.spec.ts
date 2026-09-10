@@ -68,18 +68,23 @@ async function fixture(credits = 5) {
   if (!proposal.ok) throw new Error("Could not save fixture proposal");
   expect((await application.applyProposal(actor, { proposalId: proposal.value.id, expectedVersion: 0, clientMutationId: randomUUID() })).ok).toBe(true);
   localSql(`insert into private.resource_quotas(owner_id,kind,available_attempts) values ('${id}','discover',${credits}),('${id}','captions',${credits}),('${id}','match',${credits});`);
+  localSql(`insert into private.resource_retention_policies(owner_id,window_seconds,policy_ref) values ('${id}',86400,'local-fixture-only');`);
   return { id, client, actor, store, application, nodeId, worker: databaseWorker(id),
     command: { kind: "discover" as const, runId: randomUUID(), nodeId, expectedBlueprintVersion: 1, preferences, learnerContext } };
 }
 function json(response: ServerResponse, value: unknown, status = 200) {
   response.writeHead(status, { "content-type": "application/json" }); response.end(JSON.stringify(value));
 }
-async function externalFixture(options: { pending?: boolean; jobStillPending?: boolean; rateLimit?: boolean } = {}) {
+async function externalFixture(options: { pending?: boolean; jobStillPending?: boolean; rateLimit?: boolean; searchDelayMs?: number } = {}) {
   const calls: string[] = [], modelBodies: string[] = [];
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1"); calls.push(url.pathname);
     if (options.rateLimit) return json(response, { error: "PRIVATE_PROVIDER_FAILURE" }, 429);
-    if (url.pathname === "/youtube/v3/search") return json(response, { items: [{ id: { kind: "youtube#video", videoId } }] });
+    if (url.pathname === "/youtube/v3/search") {
+      const respond = () => json(response, { items: [{ id: { kind: "youtube#video", videoId } }] });
+      if (options.searchDelayMs) { const timer = setTimeout(respond, options.searchDelayMs); response.on("close", () => clearTimeout(timer)); return; }
+      return respond();
+    }
     if (url.pathname === "/youtube/v3/videos") return json(response, { items: [{ id: videoId, snippet: { title: "曝光基础", description: "对比快门和光圈",
       channelId: "camera", channelTitle: "摄影", publishedAt: "2018-01-01T00:00:00Z", liveBroadcastContent: "none" }, contentDetails: { duration: "PT5M", caption: "true" },
       status: { privacyStatus: "public", uploadStatus: "processed", embeddable: false } }] });
@@ -115,6 +120,37 @@ function adoptionWorker(ownerId: string): ResourceAdoptionWorker {
   return { claim: async input => await admin.rpc("claim_resource_adoption", { p_owner_id: ownerId, p_adoption_id: input.adoptionId, p_lease_id: input.leaseId }),
     finish: async input => await admin.rpc("finish_resource_adoption", { p_owner_id: ownerId, p_adoption_id: input.adoptionId, p_lease_id: input.leaseId, p_result: input.result }) };
 }
+
+it("does not send provider requests when a delayed claim receipt arrives after the evidence deadline", async () => {
+  const owner = await fixture(), external = await externalFixture();
+  localSql(`update private.resource_retention_policies set window_seconds=1 where owner_id='${owner.id}';`);
+  const worker: ResourceWorker = { ...owner.worker, claim: async input => {
+    const receipt = await owner.worker.claim(input);
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    return receipt;
+  } };
+  const result = await createCloudResourceRunner({ ...owner, ...external, worker }).run(owner.command, signal());
+  expect(result).toMatchObject({ ok: true, run: { status: "cleared", clearReason: "expired", result: null } });
+  expect(external.calls).toEqual([]);
+});
+
+it("an account without a retention policy cannot start discovery or spend an attempt", async () => {
+  const owner = await fixture(), external = await externalFixture();
+  localSql(`delete from private.resource_retention_policies where owner_id='${owner.id}';`);
+  const result = await createCloudResourceRunner({ ...owner, ...external }).run(owner.command, signal());
+  expect(result).toEqual({ ok: false, code: "retention_unavailable" });
+  expect(external.calls).toEqual([]);
+  expect(localSql(`select available_attempts from private.resource_quotas where owner_id='${owner.id}' and kind='discover';`)).toBe("5");
+  expect((await owner.client.from("resource_runs").select("id")).data).toEqual([]);
+});
+
+it("an evidence deadline aborts an in-flight search without launching downstream metadata or caption requests", async () => {
+  const owner = await fixture(), external = await externalFixture({ searchDelayMs: 2000 });
+  localSql(`update private.resource_retention_policies set window_seconds=1 where owner_id='${owner.id}';`);
+  const result = await createCloudResourceRunner({ ...owner, ...external }).run(owner.command, signal());
+  expect(result).toMatchObject({ ok: true, run: { status: "cleared", clearReason: "expired", result: null } });
+  expect(external.calls).toEqual(["/youtube/v3/search"]);
+});
 
 it("clearing a chain erases all resource payloads, rejects pending adoption and recovers old IDs without providers", async () => {
   const owner = await fixture(), external = await externalFixture({ pending: true });

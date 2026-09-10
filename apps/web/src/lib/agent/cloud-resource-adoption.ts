@@ -6,6 +6,7 @@ import { createResourceRunAccess } from "./resource-run-access";
 import { createResourceAdoptionAccess, adoptionFailure, type ResourceAdoptionResponse } from "./resource-adoption-access";
 import { parseResourceAdoption, resourceAdoptionCommandSchema, type ResourceAdoptionWorker, type ResourceAdoption, type ResourceAdoptionCommand } from "./resource-adoption";
 import { videoVerificationSchema, type createVideoVerification } from "../resources/verification";
+import { resourceExecutionSignal } from "./resource-lifetime";
 
 function matches(record: ResourceAdoption, command: ResourceAdoptionCommand) {
   return record.id === command.adoptionId && record.sourceRunId === command.sourceRunId &&
@@ -49,7 +50,9 @@ export function createCloudResourceAdoption(dependencies: { client: SupabaseClie
       const current = parseResourceAdoption(receipt.adoption, actor.userId, started.id);
       if (!receipt.acquired) return { ok: true, adoption: current };
       if (current.status !== "running" || !matches(current, command)) return { ok: false, code: "unavailable" };
-      const raw = await dependencies.verification.run({ original: candidate.video, preferences: run.preferences, signal });
+      const executionSignal = resourceExecutionSignal(current, signal);
+      const raw = executionSignal.aborted ? { status: signal.aborted ? "cancelled" as const : "timed_out" as const }
+        : await dependencies.verification.run({ original: candidate.video, preferences: run.preferences, signal: executionSignal });
       const result = videoVerificationSchema.parse(raw);
       const args = { adoptionId: current.id, leaseId, result };
       const saved = await finish(args);

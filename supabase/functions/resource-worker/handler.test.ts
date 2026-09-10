@@ -180,7 +180,7 @@ test("Auth outage is sanitized and never constructs a privileged client", async 
 });
 test("resource database errors are narrow and unknown details never leave the handler", async () => {
   for (const [code, message, status] of [["P0002", "RESOURCE_NOT_FOUND", 404], ["22023", "RESOURCE_SOURCE_CONSUMED", 422],
-    ["22023", "RESOURCE_COMPLETION_REUSED", 422], ["P0001", "RESOURCE_QUOTA_EXHAUSTED", 409]] as const) {
+    ["22023", "RESOURCE_COMPLETION_REUSED", 422], ["P0001", "RESOURCE_QUOTA_EXHAUSTED", 409], ["P0001", "RESOURCE_RETENTION_UNAVAILABLE", 409]] as const) {
     const f = fixture({ rpcError: { code, message, details: "private database detail" } }); const response = await f.worker(request());
     assert.equal(response.status, status); assert.deepEqual(await response.json(), { data: null, error: { code, message } });
   }

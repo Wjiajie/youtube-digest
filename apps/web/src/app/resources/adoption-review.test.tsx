@@ -6,7 +6,7 @@ import { AdoptionReview, AdoptionStart } from "./adoption-review";
 import type { AdoptionView, AdoptionReviewProps } from "./adoption-view";
 const account = "10000000-0000-4000-8000-000000000001", id = "10000000-0000-4000-8000-000000000002", proposalId = "10000000-0000-4000-8000-000000000003";
 const initial: Exclude<AdoptionView, { status: "cleared" }> = { id, sourceRunId: id, nodeId: id, nodeTitle: "PRIVATE_NODE", goalId: id, goalTitle: "PRIVATE_GOAL", blueprintVersion: 3,
-  status: "ready", selected: { videoId: "abcdefghijk", title: "PRIVATE_VIDEO", channel: "Camera" }, replaceBindingId: null, outcome: "verified",
+  status: "ready", contentExpiresAt: "2099-01-01T00:00:00Z", selected: { videoId: "abcdefghijk", title: "PRIVATE_VIDEO", channel: "Camera" }, replaceBindingId: null, outcome: "verified",
   verifiedAt: "2026-09-10T00:00:00Z", validUntil: "2026-09-10T00:10:00Z", before: [], after: [{ id: proposalId, videoId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk" }],
   proposal: { id: proposalId, status: "pending", appliedVersion: null } };
 function props(overrides: Partial<AdoptionReviewProps> = {}): AdoptionReviewProps {
@@ -16,8 +16,18 @@ function props(overrides: Partial<AdoptionReviewProps> = {}): AdoptionReviewProp
 }
 let host: HTMLDivElement, root: Root;
 beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
-afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
+afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 const button = (text: string) => [...host.querySelectorAll("button")].find(el => el.textContent === text)!;
+test("a resumed adoption tab hides expired evidence and cannot confirm or automatically refresh it", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-09-11T01:00:00Z"));
+  const apply = vi.fn(props().applyAction), read = vi.fn(props().readAction);
+  await act(async () => root.render(<AdoptionReview {...props({ initial: { ...initial, contentExpiresAt: "2026-09-11T01:01:00Z" }, readAction: read, applyAction: apply })} />));
+  expect(host.textContent).toContain("PRIVATE_VIDEO");
+  vi.setSystemTime(new Date("2026-09-11T01:02:00Z"));
+  await act(async () => window.dispatchEvent(new Event("pageshow")));
+  expect(host.textContent).not.toContain("PRIVATE_VIDEO"); expect(button("确认并绑定资源")).toBeUndefined();
+  expect(host.textContent).toContain("证据使用期限已到"); expect(read).not.toHaveBeenCalled(); expect(apply).not.toHaveBeenCalled();
+});
 test("a cleared adoption receipt removes selected content and all confirmation controls", async () => {
   const cleared: AdoptionView = { id, sourceRunId: id, nodeId: id, blueprintVersion: 3, status: "cleared", clearedAt: "2026-09-11T01:00:00Z", result: null };
   await act(async () => root.render(<AdoptionReview {...props({ readAction: async () => ({ ok: true, value: cleared }) })} />));
@@ -63,7 +73,8 @@ test("identity loss hides private proposal contents and stale records can be rej
 
 test("verification times are readable with an explicit timezone and preserve machine-readable instants", async () => {
   await act(async () => root.render(<AdoptionReview {...props()} />));
-  const times = [...host.querySelectorAll("time")];
+  expect(host.querySelector(`time[datetime="${initial.contentExpiresAt}"]`)).not.toBeNull();
+  const times = [...host.querySelectorAll("time")].filter(time => time.dateTime !== initial.contentExpiresAt);
   expect(times.map(time => time.dateTime)).toEqual([initial.verifiedAt, initial.validUntil]);
   expect(host.textContent).toContain("北京时间");
   expect(times[0].textContent).toContain("08:00"); expect(times[1].textContent).toContain("08:10");

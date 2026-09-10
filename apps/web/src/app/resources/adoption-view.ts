@@ -1,7 +1,7 @@
 import type { ClearedEvidenceView, ResourceUiResult } from "./resource-view";
 export type ResourceBindingView = { id: string; videoId: string; url: string };
 export type AdoptionView = (ClearedEvidenceView & { sourceRunId: string }) | { id: string; sourceRunId: string; nodeId: string; nodeTitle: string; goalId: string; goalTitle: string;
-  blueprintVersion: number; status: "queued" | "running" | "ready" | "failed" | "cancelled" | "interrupted" | "stale" | "applied" | "rejected";
+  blueprintVersion: number; contentExpiresAt: string; status: "queued" | "running" | "ready" | "failed" | "cancelled" | "interrupted" | "stale" | "applied" | "rejected";
   selected: { videoId: string; title: string; channel: string }; replaceBindingId: string | null;
   outcome: string | null; verifiedAt: string | null; validUntil: string | null; before: ResourceBindingView[]; after: ResourceBindingView[] | null;
   proposal: { id: string; status: "pending" | "applied" | "rejected"; appliedVersion: number | null } | null };

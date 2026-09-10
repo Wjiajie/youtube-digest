@@ -4,18 +4,18 @@ export type ResourceDiscoverCommand = { kind: "discover"; runId: string; nodeId:
   preferences: ResourcePreferences; learnerContext: { startingPoint: string | null; constraints: string | null } };
 export type ResourceUiCommand = ResourceDiscoverCommand | { kind: "captions" | "match"; runId: string; sourceRunId: string };
 export type ResourceUiFailure = { ok: false; code: "unauthenticated" | "forbidden" | "invalid" | "not_found" | "version_conflict" |
-  "quota_exhausted" | "busy" | "unavailable" | "cancelled" | "input_too_large" | "disabled" };
+  "quota_exhausted" | "busy" | "unavailable" | "retention_unavailable" | "cancelled" | "input_too_large" | "disabled" };
 export type ResourceUiResult<T> = { ok: true; value: T } | ResourceUiFailure;
 export type ResourceCandidateView = { videoId: string; url: string; title: string; channel: string; publishedAt: string; durationSeconds: number;
   transcriptStatus: string; language: string | null; languageFallback: boolean | null; eligible: boolean;
   assessment: null | { role: "recommended" | "alternative" | "rejected"; relevance: string; levelFit: string; languageFit: string; timeFit: string; freshness: string;
     limitations: string[]; evidence: { quote: string; offsetMs: number }[]; totalSegments: number; sampledSegments: number; textTruncated: boolean } };
 export type ClearedEvidenceView = { id: string; nodeId: string; blueprintVersion: number; sourceRunId: string | null;
-  status: "cleared"; clearedAt: string; result: null; childId?: string | null; adoptions?: { id: string; createdAt: string }[] };
+  status: "cleared"; clearedAt: string; clearReason?: "manual" | "expired"; result: null; childId?: string | null; adoptions?: { id: string; createdAt: string }[] };
 export type ResourceRunView = ClearedEvidenceView | { id: string; nodeId: string; nodeTitle: string; goalId: string; goalTitle: string; blueprintVersion: number;
   bindings?: { id: string; videoId: string; url: string }[]; adoptions?: { id: string; videoId: string; createdAt: string }[];
   kind: "discover" | "captions" | "match"; sourceRunId: string | null; childId: string | null; nextKind: "captions" | "match" | null;
-  status: "queued" | "running" | "ready" | "failed" | "cancelled" | "interrupted" | "stale"; createdAt: string; expiresAt: string;
+  status: "queued" | "running" | "ready" | "failed" | "cancelled" | "interrupted" | "stale"; createdAt: string; expiresAt: string; contentExpiresAt: string;
   preferences: ResourcePreferences; learnerContext: { startingPoint: string | null; constraints: string | null }; skillVersion: string | null;
   result: null | { status: string; summary: string | null; candidates: ResourceCandidateView[]; rejected: { videoId: string; reason: string }[]; uninspectedCount: number } };
 export type ResourceNodeView = { nodeId: string; nodeTitle: string; goalId: string; goalTitle: string; blueprintVersion: number;

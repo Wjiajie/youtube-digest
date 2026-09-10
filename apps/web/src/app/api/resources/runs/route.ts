@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     }
     if (!session.data.session) return reply({ ok: false, code: "unauthenticated" }, 401);
     const statuses = { forbidden: 403, invalid: 422, not_found: 404, version_conflict: 409, quota_exhausted: 429,
-      busy: 409, unavailable: 503, cancelled: 409, input_too_large: 413 };
+      busy: 409, unavailable: 503, retention_unavailable: 503, cancelled: 409, input_too_large: 413 };
     if (command.kind === "adopt" && adoptionConfig) {
       const { kind: _kind, ...adoption } = command;
       const result = await createCloudResourceAdoption({ ...identity.value,
