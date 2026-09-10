@@ -86,3 +86,9 @@ P7 不能只增加一个缓存 TTL。当前持久化链条会复制候选元数�
 官方页面显示的更新时间：Developer Policies **2026-06-24**；合规指南 **2026-05-04**；派生指标政策 **2026-06-01**；修订历史 **2026-09-03**；`captions.download` **2026-09-04**；[API Services Terms](https://developers.google.com/youtube/terms/api-services-terms-of-service) **2026-04-28**。同时核对了 [APAC 版本入口](https://developers.google.com/youtube/terms/api-services-terms-of-service-apac)，不根据中文用户群自动认定适用法律。Supadata Terms/Privacy/Transcript 所读页面未显示明确修订日期；以本次核对日期标记，不能把页脚年份当版本日期。Supabase changelog 公共读取失败；因未实现 Supabase 功能，不据此推断平台现有备份/删除能力。
 
 本批仅形成此研究文档；不代表任何清理机制已上线，也不授权实施数据删除。
+
+## 文档验收
+
+源码／文档固定点 `5c6c884`，研究提交 `cf436f8`。主线程复核主要官方条款与当前保存路径，175 个本地文档链接有效。两位非作者分别复核七个文件：Standards 轴 0 项确认的规范、事实或安全问题，Spec 轴 0 项确认遗漏、范围扩张或错误。规范复核另核对全部本地链接及官方页面日期，需求复核抽查副本与外键方向。
+
+本批没有应用代码或数据库变更，因此未重跑未变更的运行时测试。以上仅是文档与源码证据验收，不是法律批准、供应商授权证明、托管设置核验或删除执行证据。
