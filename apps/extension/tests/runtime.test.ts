@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { prepareBlueprintDraft } from "@blueprint/domain";
 
-import { findBoundNode, flushOutbox, type OutboxCommand } from "../src/runtime";
+import { findBoundNodes, flushOutbox, type OutboxCommand } from "../src/runtime";
 
 const snapshot = {
   schemaVersion: 1 as const,
@@ -39,17 +39,36 @@ describe("extension runtime", () => {
     const node = current.goals[0]!.stages[0]!.nodes[0]!;
     node.estimatedMinutes = 45;
     node.completionCriteria = "独立完成三条查询";
-    expect(findBoundNode(current, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toMatchObject({
+    node.description = "学会分析数据";
+    expect(findBoundNodes(current, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toMatchObject([{
       nodeId: "018f6f68-9b4d-7c93-a134-c8571b8f7804", nodeTitle: "SQL 基础", videoId: "dQw4w9WgXcQ",
-    });
-    expect(node).toMatchObject({ estimatedMinutes: 45, completionCriteria: "独立完成三条查询" });
+      description: "学会分析数据", estimatedMinutes: 45, completionCriteria: "独立完成三条查询",
+    }]);
   });
   it("matches the current canonical YouTube video to its Goal context", () => {
-    expect(findBoundNode(snapshot, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toMatchObject({
+    expect(findBoundNodes(snapshot, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")).toMatchObject([{
       goalTitle: "数据分析师",
       stageTitle: "基础",
       nodeTitle: "SQL 基础",
-    });
+      description: null, estimatedMinutes: null, completionCriteria: "",
+    }]);
+  });
+
+  it("returns every binding for the video without silently choosing a path", () => {
+    const current = prepareBlueprintDraft(snapshot);
+    const node = current.goals[0]!.stages[0]!.nodes[0]!;
+    node.resources.push({ ...node.resources[0]!, id: "018f6f68-9b4d-7c93-a134-c8571b8f7808" });
+    current.goals[0]!.stages[0]!.nodes.push({ ...node, id: "018f6f68-9b4d-7c93-a134-c8571b8f7806", title: "另一条路径", position: 1,
+      resources: [{ ...node.resources[0]!, id: "018f6f68-9b4d-7c93-a134-c8571b8f7807" }] });
+    expect(findBoundNodes(current, "https://www.youtube.com/watch?v=dQw4w9WgXcQ").map((item) => [item.nodeTitle, item.resourceBindingId])).toEqual([
+      ["SQL 基础", "018f6f68-9b4d-7c93-a134-c8571b8f7805"],
+      ["SQL 基础", "018f6f68-9b4d-7c93-a134-c8571b8f7808"],
+      ["另一条路径", "018f6f68-9b4d-7c93-a134-c8571b8f7807"],
+    ]);
+  });
+
+  it.each(["https://www.youtube.com/watch?v=abcdefghijk", "https://evil.test/watch?v=dQw4w9WgXcQ", "http://www.youtube.com/watch?v=dQw4w9WgXcQ", "javascript:alert(1)", "https://www.youtube.com/shorts/dQw4w9WgXcQ"])("has no context for an unbound or unsupported URL %s", (url) => {
+    expect(findBoundNodes(snapshot, url)).toEqual([]);
   });
 
   it("retries only the signed-in user's commands and preserves failures", async () => {

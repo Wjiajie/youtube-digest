@@ -6,9 +6,10 @@ import { App } from "./App";
 
 const transport = vi.hoisted(() => ({ sendMessage: vi.fn() }));
 const storage = vi.hoisted(() => ({ addListener: vi.fn(), removeListener: vi.fn() }));
+const tabs = vi.hoisted(() => ({ onUpdated: { addListener: vi.fn(), removeListener: vi.fn() }, onActivated: { addListener: vi.fn(), removeListener: vi.fn() } }));
 vi.mock("wxt/browser", () => ({ browser: {
   runtime: transport,
-  tabs: { onUpdated: { addListener: vi.fn(), removeListener: vi.fn() } },
+  tabs,
   storage: { onChanged: storage },
 } }));
 
@@ -20,6 +21,7 @@ let preferencesStatus: "current" | "cached" | "unavailable";
 
 beforeEach(() => {
   storage.addListener.mockClear();
+  tabs.onUpdated.addListener.mockClear(); tabs.onActivated.addListener.mockClear();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   connected = true;
   preferences = { theme: { id: "cyberpunk", version: 1 }, revision: 1 };
@@ -29,7 +31,8 @@ beforeEach(() => {
     if (message.type === "LOAD_PREFERENCES") return connected ? { connected: true, userId: "user-a", preferences, preferencesStatus } : { connected: false };
     if (message.type === "LOAD_CONTEXT") return connected ? {
       connected: true, userId: "user-a", email: "learner@example.com", nodes: [], preferences, preferencesStatus,
-      context: { goalTitle: "学习目标", stageTitle: "起步", nodeTitle: "了解基础", nodeId: "node-1" },
+      tabId: 7, contexts: [{ goalId: "goal-1", goalTitle: "学习目标", stageTitle: "起步", nodeTitle: "了解基础", nodeId: "node-1", resourceBindingId: "binding-1", videoId: "abcdefghijk",
+        description: "用三张照片比较曝光组合", completionCriteria: "提交照片并解释取舍", estimatedMinutes: 30 }],
     } : { connected: false };
     throw new Error(`Unexpected browser message: ${message.type}`);
   });
@@ -154,7 +157,7 @@ test("a delayed logout cannot hide the account connected through the newly avail
     if (type === "LOAD_CONTEXT") return owner ? {
       connected: true, userId: owner, email: "next-account@example.test", nodes: [],
       preferences: { theme: { id: "eastern", version: 1 }, revision: 1 }, preferencesStatus: "current",
-      context: { nodeId: "node-b", nodeTitle: "新账号当前节点", goalTitle: "新目标", stageTitle: "起步" },
+      contexts: [{ nodeId: "node-b", nodeTitle: "新账号当前节点", goalTitle: "新目标", stageTitle: "起步" }],
     } : { connected: false };
     throw new Error(`Unexpected browser message: ${type}`);
   });
@@ -167,4 +170,77 @@ test("a delayed logout cannot hide the account connected through the newly avail
   expect(host.textContent).toContain("新账号当前节点");
   expect(host.textContent).not.toContain("扩展会话已退出");
   expect(host.querySelector("[data-bp-theme]")?.getAttribute("data-bp-theme")).toBe("eastern");
+});
+
+test("the learning context explains purpose, expected evidence and time and returns to the exact node", async () => {
+  const original = transport.sendMessage.getMockImplementation()!;
+  transport.sendMessage.mockImplementation(async message => message.type === "OPEN_PATH" ? { ok: true } : original(message));
+  await act(async () => root.render(<App />));
+  expect(host.textContent).toContain("用三张照片比较曝光组合");
+  expect(host.textContent).toContain("提交照片并解释取舍");
+  expect(host.textContent).toContain("30 分钟");
+  await clickButton("返回此节点路径");
+  expect(transport.sendMessage).toHaveBeenCalledWith({ type: "OPEN_PATH", ownerId: "user-a", tabId: 7, context: { nodeId: "node-1", resourceBindingId: "binding-1" } });
+  await clickButton("开始学习");
+  expect(transport.sendMessage).toHaveBeenCalledWith({ type: "START_SESSION", ownerId: "user-a", tabId: 7, context: { nodeId: "node-1", resourceBindingId: "binding-1" } });
+});
+
+test("a shared video requires explicit node choice and retains that choice on refresh but not another tab", async () => {
+  const original = transport.sendMessage.getMockImplementation()!;
+  let tabId = 7;
+  transport.sendMessage.mockImplementation(async message => {
+    const result = await original(message);
+    return message.type === "LOAD_CONTEXT" ? { ...result, tabId, contexts: [result.contexts[0], { ...result.contexts[0], nodeId: "node-2", resourceBindingId: "binding-2", nodeTitle: "进阶实践", completionCriteria: "独立重拍三张照片" }] } : result;
+  });
+  await act(async () => root.render(<App />));
+  expect(host.textContent).toContain("同一视频关联了多个节点");
+  expect([...host.querySelectorAll("button")].find(button => button.textContent === "开始学习")).toBeUndefined();
+  const select = host.querySelector<HTMLSelectElement>('select[aria-label="本次学习节点"]');
+  expect(select).not.toBeNull();
+  await act(async () => { select!.value = "binding-2"; select!.dispatchEvent(new Event("change", { bubbles: true })); });
+  expect(host.textContent).toContain("独立重拍三张照片");
+  await clickButton("刷新");
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="本次学习节点"]')?.value).toBe("binding-2");
+  await clickButton("开始学习");
+  expect(transport.sendMessage).toHaveBeenCalledWith({ type: "START_SESSION", ownerId: "user-a", tabId: 7, context: { nodeId: "node-2", resourceBindingId: "binding-2" } });
+  tabId = 8;
+  await act(async () => tabs.onActivated.addListener.mock.calls[0]![0]({ tabId: 8, windowId: 1 }));
+  expect(host.querySelector<HTMLSelectElement>('select[aria-label="本次学习节点"]')?.value).toBe("");
+  expect(host.textContent).not.toContain("学习会话已写入你的蓝图");
+});
+
+test("navigation hides old video context immediately and ignores its late learning receipt", async () => {
+  const original = transport.sendMessage.getMockImplementation()!;
+  await act(async () => root.render(<App />));
+  let finishLearning!: (value: unknown) => void;
+  let finishContext!: (value: unknown) => void;
+  transport.sendMessage.mockImplementation(message => message.type === "START_SESSION" ? new Promise(resolve => { finishLearning = resolve; })
+    : message.type === "LOAD_CONTEXT" ? new Promise(resolve => { finishContext = resolve; }) : original(message));
+  await clickButton("开始学习");
+  const updated = tabs.onUpdated.addListener.mock.calls[0]![0];
+  await act(async () => updated(99, { url: "https://www.youtube.com/watch?v=12345678901" }));
+  expect(host.textContent).toContain("提交照片并解释取舍");
+  await act(async () => updated(7, { url: "https://www.youtube.com/watch?v=lmnopqrstuv" }));
+  expect(host.textContent).not.toContain("提交照片并解释取舍");
+  expect(host.textContent).toContain("正在核对当前视频");
+  await act(async () => finishLearning({ ok: true }));
+  expect(host.textContent).not.toContain("学习会话已写入你的蓝图");
+  await act(async () => finishContext({ connected: true, userId: "user-a", tabId: 7, contexts: [], preferences }));
+  expect(host.textContent).toContain("没有匹配的蓝图节点");
+});
+
+test("legacy paths use honest missing-context text and a failed refresh disables old actions", async () => {
+  const original = transport.sendMessage.getMockImplementation()!;
+  transport.sendMessage.mockImplementation(async message => {
+    const result = await original(message);
+    return message.type === "LOAD_CONTEXT" ? { ...result, contexts: [{ ...result.contexts[0], description: null, completionCriteria: "", estimatedMinutes: null }], stale: true } : result;
+  });
+  await act(async () => root.render(<App />));
+  expect(host.textContent).toContain("路径尚未填写学习说明");
+  expect(host.textContent).toContain("不以观看时长判断掌握");
+  expect(host.textContent).toContain("当前显示缓存蓝图");
+  transport.sendMessage.mockRejectedValueOnce(new Error("background unavailable"));
+  await clickButton("刷新");
+  expect(host.textContent).toContain("无法连接 Blueprint 后台");
+  expect([...host.querySelectorAll("button")].some(button => button.textContent === "开始学习" || button.textContent === "返回此节点路径")).toBe(false);
 });

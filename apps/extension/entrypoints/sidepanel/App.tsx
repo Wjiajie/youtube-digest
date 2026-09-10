@@ -24,7 +24,7 @@ type ViewState = {
   preferences?: AccountPreferences | null;
   preferencesStatus?: "current" | "cached" | "unavailable";
   snapshot?: BlueprintSnapshot | null;
-  context?: BoundNodeContext | null;
+  contexts?: BoundNodeContext[];
   nodes?: BoundNodeListItem[];
   tabId?: number;
   stale?: boolean;
@@ -41,21 +41,33 @@ export function App() {
   const loadRequest = useRef(0);
   const preferenceRequest = useRef(0);
   const authRequest = useRef(0);
+  const contextRequest = useRef(0);
+  const [choice, setChoice] = useState<{ ownerId?: string; tabId?: number; videoId: string; bindingId: string } | null>(null);
+  const contexts = state.contexts ?? [];
+  const context = contexts.length === 1 ? contexts[0] : contexts.find(item => choice !== null && choice.ownerId === state.userId
+    && choice.tabId === state.tabId && choice.videoId === item.videoId && choice.bindingId === item.resourceBindingId);
 
   const load = useCallback(async () => {
     const request = ++loadRequest.current;
     const preference = ++preferenceRequest.current;
+    ++contextRequest.current;
     setBusy(true);
     setError("");
     try {
       const next = await browser.runtime.sendMessage({ type: "LOAD_CONTEXT" }) as ViewState & { superseded?: boolean };
       if (request !== loadRequest.current || next.superseded) return;
+      setChoice(previous => previous !== null && previous.ownerId === next.userId && previous.tabId === next.tabId
+        && next.contexts?.some(item => item.resourceBindingId === previous.bindingId && item.videoId === previous.videoId) ? previous : null);
       setState((previous) => preference !== preferenceRequest.current && previous.userId === next.userId && next.connected
         ? { ...next, preferences: previous.preferences, preferencesStatus: previous.preferencesStatus }
         : next);
       if (!next.connected || currentState.current.userId !== next.userId) setMessage("");
     } catch {
-      if (request === loadRequest.current) setError("无法连接 Blueprint 后台，请重新打开侧边栏。");
+      if (request === loadRequest.current) {
+        setState(previous => ({ ...previous, contexts: [] }));
+        setMessage("");
+        setError("无法连接 Blueprint 后台，请刷新或重新打开侧边栏。");
+      }
     } finally {
       if (request === loadRequest.current) setBusy(false);
     }
@@ -98,15 +110,24 @@ export function App() {
 
   useEffect(() => {
     void load();
-    const listener = (_tabId: number, change: { url?: string }) => {
-      if (change.url) void load();
+    const refreshContext = () => {
+      ++contextRequest.current;
+      setChoice(null); setMessage("");
+      setState(previous => ({ ...previous, contexts: [] }));
+      void load();
+    };
+    const listener = (tabId: number, change: { url?: string }) => {
+      if (change.url && (currentState.current.tabId === undefined || currentState.current.tabId === tabId)) refreshContext();
     };
     browser.tabs.onUpdated.addListener(listener);
+    browser.tabs.onActivated.addListener(refreshContext);
     return () => {
       ++loadRequest.current;
       ++preferenceRequest.current;
       ++authRequest.current;
+      ++contextRequest.current;
       browser.tabs.onUpdated.removeListener(listener);
+      browser.tabs.onActivated.removeListener(refreshContext);
     };
   }, [load]);
 
@@ -123,6 +144,8 @@ export function App() {
       ++loadRequest.current;
       ++preferenceRequest.current;
       currentState.current = { connected: false };
+      ++contextRequest.current;
+      setChoice(null);
       setState({ connected: false });
       setMessage("");
       setError("");
@@ -170,13 +193,15 @@ export function App() {
   }
 
   async function startLearning() {
-    if (!state.context) return;
+    if (!context) return;
     const ownerId = state.userId;
+    const request = contextRequest.current;
     setBusy(true);
     setError("");
     try {
-      const result = await browser.runtime.sendMessage({ type: "START_SESSION", context: state.context }) as { ok: boolean; queued?: boolean };
-      if (!currentState.current.connected || currentState.current.userId !== ownerId) return;
+      const result = await browser.runtime.sendMessage({ type: "START_SESSION", ownerId, tabId: state.tabId,
+        context: { nodeId: context.nodeId, resourceBindingId: context.resourceBindingId } }) as { ok: boolean; queued?: boolean };
+      if (request !== contextRequest.current || !currentState.current.connected || currentState.current.userId !== ownerId) return;
       if (!result.ok) {
         setError("学习会话被拒绝。请重新授权，或回到 Web 检查该节点是否仍然存在。");
         setBusy(false);
@@ -185,7 +210,7 @@ export function App() {
       setMessage(result.queued ? "网络不可用，学习会话已进入待同步队列。" : "学习会话已写入你的蓝图。");
       await load();
     } catch {
-      if (!currentState.current.connected || currentState.current.userId !== ownerId) return;
+      if (request !== contextRequest.current || !currentState.current.connected || currentState.current.userId !== ownerId) return;
       setError("无法保存学习会话，请重新打开侧边栏后重试。");
       setBusy(false);
     }
@@ -209,7 +234,24 @@ export function App() {
   }
 
   async function openNode(item: BoundNodeListItem) {
-    await browser.runtime.sendMessage({ type: "OPEN_NODE", tabId: state.tabId, url: item.url });
+    const ownerId = state.userId;
+    setError("");
+    try { await browser.runtime.sendMessage({ type: "OPEN_NODE", tabId: state.tabId, url: item.url }); }
+    catch { if (currentState.current.userId === ownerId) setError("无法打开视频，请刷新后重试。"); }
+  }
+
+  async function openPath() {
+    if (!context) return;
+    const ownerId = state.userId;
+    const request = contextRequest.current;
+    setError("");
+    try {
+      const result = await browser.runtime.sendMessage({ type: "OPEN_PATH", ownerId, tabId: state.tabId,
+        context: { nodeId: context.nodeId, resourceBindingId: context.resourceBindingId } }) as { ok: boolean };
+      if (request === contextRequest.current && currentState.current.userId === ownerId && !result.ok) setError("当前视频或路径已变化，请刷新后返回路径。");
+    } catch {
+      if (request === contextRequest.current && currentState.current.userId === ownerId) setError("暂时无法打开路径，请刷新后重试。");
+    }
   }
 
   const theme = resolveTheme(state.connected ? state.preferences?.theme : null);
@@ -243,25 +285,40 @@ export function App() {
             ? <Status tone="warning">当前扩展暂不支持账号主题，已使用默认表现。</Status> : null}
           {state.stale ? <Status tone="warning">当前显示缓存蓝图，网络恢复后可刷新。</Status> : null}
           {state.pending ? <Panel className="sync-card"><span>{state.pending} 条学习会话待同步</span><Button disabled={busy} onClick={() => void retry()}>重试</Button></Panel> : null}
-          {state.context ? (
+          {contexts.length > 1 ? <div className="context-choice">
+            <label htmlFor="learning-node-choice">同一视频关联了多个节点，请选择本次学习目标</label>
+            <select id="learning-node-choice" aria-label="本次学习节点" disabled={busy} value={context?.resourceBindingId ?? ""} onChange={event => {
+              ++contextRequest.current; setMessage(""); setError("");
+              const selected = contexts.find(item => item.resourceBindingId === event.target.value);
+              setChoice(selected ? { ownerId: state.userId, tabId: state.tabId, videoId: selected.videoId, bindingId: selected.resourceBindingId } : null);
+            }}><option value="">请选择节点</option>{contexts.map(item => <option key={item.resourceBindingId} value={item.resourceBindingId}>{item.goalTitle} / {item.nodeTitle}</option>)}</select>
+          </div> : null}
+          {context ? (
             <Panel className="context-card">
               <div className="label">当前视频对应</div>
-              <p className="breadcrumb">{state.context.goalTitle} / {state.context.stageTitle}</p>
-              <h2>{state.context.nodeTitle}</h2>
+              <p className="breadcrumb">{context.goalTitle} / {context.stageTitle}</p>
+              <h2>{context.nodeTitle}</h2>
+              <div className="learning-purpose"><h3>为什么学习</h3><p>{context.description || "路径尚未填写学习说明。请结合目标与完成依据，判断本次学习的用途。"}</p></div>
+              <dl className="learning-facts">
+                <div><dt>完成依据</dt><dd>{context.completionCriteria || "尚未明确。可回到路径补充，不以观看时长判断掌握。"}</dd></div>
+                <div><dt>节点预计投入</dt><dd>{context.estimatedMinutes == null ? "尚未明确" : `${context.estimatedMinutes} 分钟`}</dd></div>
+              </dl>
               <Button className="primary" disabled={busy} onClick={() => void startLearning()}>开始学习</Button>
+              <p className="muted learning-note">开始仅记录学习活动，不会将节点标记为完成。</p>
+              <Button className="web-link" disabled={busy} onClick={() => void openPath()}>返回此节点路径</Button>
             </Panel>
           ) : (
             <Panel className="context-card">
               <div className="label">当前页面</div>
-              <h2>没有匹配的蓝图节点</h2>
-              <p className="muted">从下面选择一个已绑定节点，或回到 Web 修改蓝图。</p>
+              <h2>{busy ? "正在核对当前视频…" : contexts.length ? "选择本次学习目标" : "没有匹配的蓝图节点"}</h2>
+              <p className="muted">{contexts.length ? "选择后会展示完成依据，开始学习会话将关联所选节点。已有成果草稿不会自动移动。" : "从下面选择一个已绑定节点，或回到 Web 选择路径。成果草稿不会随视频移动。"}</p>
             </Panel>
           )}
           {state.userId ? <EvidencePanel ownerId={state.userId} /> : null}
           <section className="node-list" aria-label="已绑定的 YouTube 节点">
             <div className="section-heading"><h2>可学习节点</h2><Button disabled={busy} onClick={() => void load()}>刷新</Button></div>
             {state.nodes?.length ? state.nodes.map((item) => (
-              <button className="node-link" key={item.resourceBindingId} onClick={() => void openNode(item)}>
+              <button className="node-link" disabled={busy} key={item.resourceBindingId} onClick={() => void openNode(item)}>
                 <span className="node-context">{item.goalTitle} / {item.stageTitle}</span>
                 <strong>{item.nodeTitle}</strong>
               </button>

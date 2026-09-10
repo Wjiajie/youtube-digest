@@ -7,7 +7,7 @@ body {
   color: var(--bp-text);
   font-family: var(--bp-font-sans);
 }
-button { font: inherit; }
+button, select { font: inherit; }
 :focus-visible { outline: 2px solid var(--bp-accent); outline-offset: 3px; }
 .extension-shell { min-height: 100vh; padding: 20px; }
 header { margin-bottom: 20px; }
@@ -21,6 +21,16 @@ h2 { margin: 7px 0 12px; font-size: 18px; }
 .account-card, .sync-card, .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .account-card strong { display: block; margin-top: 5px; overflow-wrap: anywhere; }
 .context-card { border-color: var(--bp-accent); }
+.context-card :is(h2, p, dd), .context-choice label { overflow-wrap: anywhere; }
+.context-choice { margin-top: 20px; }
+.context-choice label { display: block; margin-bottom: 10px; font-size: 13px; line-height: 1.6; }
+.context-choice select { width: 100%; min-width: 0; min-height: 44px; padding: 10px; color: var(--bp-text); background: var(--bp-field); border: 1px solid var(--bp-control-border); border-radius: var(--bp-radius-sm); }
+.learning-purpose { margin: 20px 0; }
+.learning-purpose h3, .learning-facts dt { margin: 0 0 7px; color: var(--bp-muted); font-size: 12px; font-weight: 500; }
+.learning-purpose p, .learning-facts dd { margin: 0; font-size: 14px; line-height: 1.8; white-space: pre-wrap; }
+.learning-facts { display: grid; gap: 16px; padding: 16px 0; margin: 0 0 18px; border-top: 1px solid var(--bp-control-border); border-bottom: 1px solid var(--bp-control-border); }
+.learning-note { font-size: 12px; line-height: 1.6; margin: 10px 0 0; }
+.node-link:disabled { cursor: wait; opacity: .65; }
 .breadcrumb { margin: 8px 0 0; font-size: 12px; }
 .section-heading { margin-top: 22px; }
 .section-heading h2 { margin: 0; }

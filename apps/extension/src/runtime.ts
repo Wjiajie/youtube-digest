@@ -7,6 +7,9 @@ export type BoundNodeContext = {
   stageTitle: string;
   nodeId: string;
   nodeTitle: string;
+  description: string | null;
+  estimatedMinutes: number | null;
+  completionCriteria: string;
   resourceBindingId: string;
   videoId: string;
 };
@@ -23,35 +26,39 @@ export type OutboxCommand = {
 
 export type DeliveryResult = "sent" | "retryable" | "rejected";
 
-export function findBoundNode(
+export function findBoundNodes(
   snapshotInput: BlueprintSnapshot,
   currentUrl: string,
-): BoundNodeContext | null {
+): BoundNodeContext[] {
   const snapshot = parseBlueprintSnapshot(snapshotInput);
   const videoId = currentYouTubeVideoId(currentUrl);
-  if (!videoId) return null;
+  if (!videoId) return [];
+  const contexts: BoundNodeContext[] = [];
   for (const goal of snapshot.goals) {
     for (const stage of goal.stages) {
       for (const node of stage.nodes) {
-        const resource = node.resources.find(
+        const resources = node.resources.filter(
           (candidate) => candidate.kind === "youtube_video" && candidate.externalId === videoId,
         );
-        if (resource) {
-          return {
+        for (const resource of resources) {
+          contexts.push({
             goalId: goal.id,
             goalTitle: goal.title,
             stageId: stage.id,
             stageTitle: stage.title,
             nodeId: node.id,
             nodeTitle: node.title,
+            description: node.description ?? null,
+            estimatedMinutes: "estimatedMinutes" in node ? node.estimatedMinutes ?? null : null,
+            completionCriteria: "completionCriteria" in node ? node.completionCriteria ?? "" : "",
             resourceBindingId: resource.id,
             videoId,
-          };
+          });
         }
       }
     }
   }
-  return null;
+  return contexts;
 }
 
 export async function flushOutbox(

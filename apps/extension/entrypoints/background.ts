@@ -5,7 +5,7 @@ import { accountPreferencesSchema, parseBlueprintSnapshot, type BlueprintSnapsho
 import { createExtensionAuthPort } from "../src/auth";
 import { initExtensionObservability } from "../src/observability";
 import { createEvidenceTransport } from "../src/evidence";
-import { findBoundNode, flushOutbox, type OutboxCommand } from "../src/runtime";
+import { findBoundNodes, flushOutbox, type BoundNodeContext, type OutboxCommand } from "../src/runtime";
 
 const OUTBOX_KEY = "blueprint_session_outbox_v1";
 const CLEANUP_KEY = "blueprint_v3_cleanup_complete";
@@ -45,7 +45,9 @@ export default defineBackground(() => {
       case "SAVE_EVIDENCE":
         return evidence.save(message.ownerId, message.input);
       case "START_SESSION":
-        return startSession(auth, message.context);
+        return startSession(auth, message);
+      case "OPEN_PATH":
+        return openPath(auth, message);
       case "RETRY_OUTBOX": {
         const current = await auth.accessToken();
         return current ? retryOutbox(auth, current.session.userId) : { recovered: 0, pending: 0, rejected: 0 };
@@ -103,9 +105,6 @@ async function loadContext(auth: ReturnType<typeof createExtensionAuthPort>) {
       : null;
     stale = true;
   }
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  const currentUrl = tab?.url ?? "";
-  const context = snapshot ? findBoundNode(snapshot, currentUrl) : null;
   const nodes = snapshot
     ? snapshot.goals.flatMap((goal) => goal.stages.flatMap((stage) => stage.nodes.flatMap((node) => node.resources.map((resource) => ({
         goalTitle: goal.title,
@@ -125,13 +124,16 @@ async function loadContext(auth: ReturnType<typeof createExtensionAuthPort>) {
   // superseding the video context. Use the latest accepted account cache.
   const preferences = "superseded" in preferenceResult ? await cachedPreferences(current) : preferenceResult;
   if (!await auth.isCurrent(current.token)) return { superseded: true as const };
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  const contexts = snapshot ? findBoundNodes(snapshot, tab?.url ?? "") : [];
+  if (!await auth.isCurrent(current.token)) return { superseded: true as const };
   return {
     ...preferences,
     connected: true,
     email: current.session.email,
     userId: current.session.userId,
     snapshot,
-    context,
+    contexts,
     nodes,
     tabId: tab?.id,
     stale,
@@ -190,12 +192,50 @@ async function cachedPreferences(current: AuthorizedSession) {
   return { connected: true as const, userId: ownerId, preferences: parsed.success ? parsed.data : null, preferencesStatus: parsed.success ? "cached" as const : "unavailable" as const };
 }
 
-async function startSession(
-  auth: ReturnType<typeof createExtensionAuthPort>,
-  context: { nodeId: string; resourceBindingId?: string },
-) {
+type ContextAction = { ownerId?: unknown; tabId?: unknown; context?: unknown };
+
+async function authorizeContextAction(auth: AuthPort, message: ContextAction): Promise<
+  { ok: false; code: string } | { ok: true; current: AuthorizedSession; context: BoundNodeContext }
+> {
   const current = await auth.accessToken();
   if (!current) return { ok: false, code: "unauthenticated" };
+  if (message.ownerId !== current.session.userId) return { ok: false, code: "forbidden" };
+  const selection = message.context;
+  if (!Number.isInteger(message.tabId) || typeof selection !== "object" || selection === null
+    || !("nodeId" in selection) || typeof selection.nodeId !== "string"
+    || !("resourceBindingId" in selection) || typeof selection.resourceBindingId !== "string") {
+    return { ok: false, code: "source_changed" };
+  }
+  const loaded = await loadContext(auth);
+  if (!await auth.isCurrent(current.token)) return { ok: false, code: "forbidden" };
+  if (!("contexts" in loaded) || loaded.userId !== message.ownerId || !loaded.snapshot) {
+    return { ok: false, code: "source_changed" };
+  }
+  const [active] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (!await auth.isCurrent(current.token)) return { ok: false, code: "forbidden" };
+  if (!active || active.id !== message.tabId) return { ok: false, code: "source_changed" };
+  const context = findBoundNodes(loaded.snapshot, active.url ?? "").find((candidate) =>
+    candidate.nodeId === selection.nodeId && candidate.resourceBindingId === selection.resourceBindingId);
+  return context ? { ok: true, current, context } : { ok: false, code: "source_changed" };
+}
+
+async function openPath(auth: AuthPort, message: ContextAction) {
+  const authorized = await authorizeContextAction(auth, message);
+  if (!authorized.ok) return authorized;
+  const origin = new URL(apiBase);
+  if (origin.protocol !== "https:" && !(origin.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname))) {
+    return { ok: false, code: "invalid_configuration" };
+  }
+  const url = new URL(`/paths/${encodeURIComponent(authorized.context.goalId)}`, origin.origin);
+  url.hash = `node-${authorized.context.nodeId}`;
+  await browser.tabs.create({ url: url.href });
+  return { ok: true };
+}
+
+async function startSession(auth: AuthPort, message: ContextAction) {
+  const authorized = await authorizeContextAction(auth, message);
+  if (!authorized.ok) return authorized;
+  const { current, context } = authorized;
   const command: OutboxCommand = {
     ownerId: current.session.userId,
     nodeId: context.nodeId,
@@ -205,6 +245,7 @@ async function startSession(
     attempts: 0,
   };
   const delivery = await sendSession(current.token, command);
+  if (!await auth.isCurrent(current.token)) return { ok: false, code: "superseded" };
   if (delivery === "sent") return { ok: true, queued: false };
   if (delivery === "rejected") return { ok: false, code: "authorization_or_data_rejected" };
   command.failureRecorded = await sendSyncEvent(
@@ -213,6 +254,7 @@ async function startSession(
     "network_or_service_unavailable",
   );
   const outbox = await readOutbox();
+  if (!await auth.isCurrent(current.token)) return { ok: false, code: "superseded" };
   await browser.storage.local.set({ [OUTBOX_KEY]: [...outbox, command] });
   return { ok: true, queued: true };
 }
