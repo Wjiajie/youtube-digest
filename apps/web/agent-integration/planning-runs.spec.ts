@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { localSupabaseTestConfig } from "../../../scripts/local-supabase-test-config.mjs";
 import { createCloudPathPlanner } from "../src/lib/agent/cloud-path-planner";
+import { createPlanningRunAccess } from "../src/lib/agent/planning-access";
 
 const local = localSupabaseTestConfig();
 const authOptions = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
@@ -82,6 +83,23 @@ it("does not run a provider without account credits", async () => {
   expect(await planner.run(owner.command, new AbortController().signal)).toEqual({ ok: false, code: "quota_exhausted" });
   expect(model.doGenerateCalls).toHaveLength(0);
   expect(await planner.read(owner.command.runId)).toEqual({ ok: false, code: "not_found" });
+});
+
+it("lets an owner discover and recover runs without a model or worker credential", async () => {
+  const owner = await fixture(), outsider = await fixture();
+  const access = createPlanningRunAccess(owner.client, { userId: owner.id, client: "web" });
+  expect(await access.list(owner.briefId)).toEqual({ ok: true, value: { runs: [], hasMore: false } });
+  const command = owner.command;
+  expect((await owner.client.rpc("begin_path_planning", { p_run_id: command.runId, p_brief_id: command.briefId,
+    p_expected_brief_revision: 1, p_expected_blueprint_version: 0, p_start_date: command.startDate })).error).toBeNull();
+  expect(await access.list(owner.briefId)).toMatchObject({ ok: true, value: { runs: [{ id: command.runId }], hasMore: false } });
+  expect(await access.read(command.runId)).toMatchObject({ ok: true, run: { status: "queued" } });
+  const denied = createPlanningRunAccess(outsider.client, { userId: outsider.id, client: "web" });
+  expect(await denied.read(command.runId)).toEqual({ ok: false, code: "not_found" });
+  expect(await denied.list(owner.briefId)).toEqual({ ok: true, value: { runs: [], hasMore: false } });
+  expect(await access.cancel(command.runId)).toMatchObject({ ok: true, run: { status: "cancelled" } });
+  expect(await access.read(command.runId)).toMatchObject({ ok: true, run: { status: "cancelled" } });
+  expect(await access.list(owner.briefId, -1)).toEqual({ ok: false, code: "invalid" });
 });
 
 it("enforces the real JWT owner even when a server caller supplies another actor ID", async () => {

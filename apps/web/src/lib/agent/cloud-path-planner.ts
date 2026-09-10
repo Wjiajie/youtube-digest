@@ -5,21 +5,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LanguageModel } from "ai";
 import { createPathPlanner } from "./path-planner";
 import { loadPlanningSkill } from "./planning-skill";
-import { parsePlanningRun, startPlanningRunSchema, type PlanningRun } from "./planning-run";
+import { parsePlanningRun, startPlanningRunSchema } from "./planning-run";
 import { planningResultSchema } from "./planning-result";
-
-type FailureCode = "forbidden" | "invalid" | "not_found" | "version_conflict" | "quota_exhausted" | "busy" | "unavailable" | "cancelled";
-type RunResponse = { ok: true; run: PlanningRun } | { ok: false; code: FailureCode };
-
-function failure(error: { code?: string; message?: string }): RunResponse {
-  if (error.code === "42501") return { ok: false, code: "forbidden" };
-  if (error.code === "P0002") return { ok: false, code: "not_found" };
-  if (error.code === "40001") return { ok: false, code: "version_conflict" };
-  if (["22023", "23514"].includes(error.code ?? "")) return { ok: false, code: "invalid" };
-  if (error.code === "P0001" && error.message === "PATH_PLANNING_QUOTA_EXHAUSTED") return { ok: false, code: "quota_exhausted" };
-  if (error.code === "P0001" && error.message === "PATH_PLANNING_BUSY") return { ok: false, code: "busy" };
-  return { ok: false, code: "unavailable" };
-}
+import { createPlanningRunAccess, planningFailure as failure, type RunResponse } from "./planning-access";
 
 /** Server-only orchestration. Caller resolves identity; DB checks the user client's actual JWT. */
 export function createCloudPathPlanner(dependencies: {
@@ -34,14 +22,9 @@ export function createCloudPathPlanner(dependencies: {
       return { ok: true, run: parsePlanningRun(data, actor.userId, runId) };
     } catch { return { ok: false, code: "unavailable" }; }
   }
-  async function userCommand(name: string, runId: string): Promise<RunResponse> {
-    if (!allowed) return { ok: false, code: "forbidden" };
-    if (!z.uuid().safeParse(runId).success) return { ok: false, code: "invalid" };
-    return call(dependencies.client, name, { p_run_id: runId }, runId);
-  }
-  const cancel = (runId: string) => userCommand("cancel_path_planning", runId);
+  const { read, cancel } = createPlanningRunAccess(dependencies.client, actor);
   return {
-    read: (runId: string) => userCommand("read_path_planning", runId),
+    read,
     cancel,
     async run(input: unknown, signal: AbortSignal): Promise<RunResponse> {
       if (!allowed) return { ok: false, code: "forbidden" };

@@ -36,5 +36,6 @@ export default async function GoalBriefPage({ params, searchParams }: {
       saveAction={saveGoalBriefAction.bind(null, actor.userId)} reloadAction={readGoalBriefAction.bind(null, actor.userId, id)} />
       : <Panel className="brief-card"><Status tone="warning">{result.code === "not_found" ? "没有找到可访问的目标定义，不会用空白草稿替代已有数据。" : "暂时无法读取目标定义，已有数据与本机恢复内容没有删除。"}</Status><a className="bp-button" href={path}>重新读取</a></Panel>}
     <p className="brief-footnote subtle">未保存的文字只保留在当前浏览器。请收藏本页以找回本机草稿；保存到云端后，可从“我的目标定义”跨设备继续。</p>
+    {result.ok && <Link prefetch={false} href={`/goals/${id}/planning`} className="bp-button">查看规划记录</Link>}
   </main></AccountThemeShell>;
 }
