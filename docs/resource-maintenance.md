@@ -65,6 +65,13 @@ bash scripts/with-m1-runtime.sh docker exec -i supabase_db_blueprint-local \
 
 完整本地回归通过：21 文件共 **1089 项 pgTAP**（原 1047 加本批 42），21 条迁移历史对齐，schema diff 为空，安全／性能顾问无警告；lint 仅保留五组既有函数告警，没有新函数告警。`check:m1` 通过：940 项应用测试、79 项 worker 检查、四工作区类型检查、6 项压缩检查、本批 4 组 CLI 测试、进程内升级契约、向导及 Web／WXT 构建，扩展输出仍 645.79 kB。
 
-独立复核结果在本批收口后补充。当前改动不含页面或应用认证流程，不把上一批 73 项 Auth／8 项浏览器结果记成本批新证据。
+源码 `13fe8d0` 已经两位非作者分别完成复核：
+
+- Standards：0 项确认规范／正确性／安全问题，0 项可行动异味；独立通过 4 组 CLI 进程测试、进程内迁移契约及 diff 检查。
+- Spec：0 项确认遗漏／越界／错误实现；独立通过 4 组 CLI 进程测试和进程内迁移契约，核对全部九个文件与原扫描规则。
+
+两位均未操作共享数据库、cron、Auth 或浏览器；双连接／临时调度是主线程的实测证据，不混称为重复独立演练。最终复查测试身份、临时作业、活跃资源作业均为 0，71 个唯一的本地文档目标存在。
+
+当前改动不含页面或应用认证流程，不把上一批 73 项 Auth／8 项浏览器结果记成本批新证据。持续调度、外部告警和基础设施日志留存仍未实现，也未被本次审查批准为已完成。
 
 实现入口：[增量迁移](../supabase/migrations/20260910204925_resource_maintenance.sql)、[数据库检查](../supabase/tests/resource_maintenance.test.sql)、[CLI 行为测试](../scripts/resource-maintenance-health.test.mjs)。本地重现命令使用运行时包装：`npm run test:resource-maintenance`、`npm run check:m1`、`supabase test db`。共享数据库测试不能与已提交夹具／临时 cron 演练同时运行。
