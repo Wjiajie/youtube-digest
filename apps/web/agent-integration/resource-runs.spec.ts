@@ -1,4 +1,5 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+import { z } from "zod";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createServer, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
@@ -6,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { createBlueprintApplication } from "@blueprint/domain";
 import { localSupabaseTestConfig } from "../../../scripts/local-supabase-test-config.mjs";
 import { createCloudResourceRunner } from "../src/lib/agent/cloud-resource-runner";
-import { createResourceRunAccess } from "../src/lib/agent/resource-run-access";
+import { createResourceRunAccess, type ResourceRunResponse } from "../src/lib/agent/resource-run-access";
 import { createResourceWorkspace } from "../src/lib/agent/resource-workspace";
 import type { ResourceWorker } from "../src/lib/agent/resource-worker";
 import { createSupabaseBlueprintStore } from "../src/lib/supabase/store";
@@ -41,6 +42,7 @@ function databaseWorker(ownerId: string): ResourceWorker {
   };
 }
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const close of closers.splice(0)) await close();
   for (const { id, client } of accounts.splice(0)) {
     await client.auth.signOut(); expect((await admin.auth.admin.deleteUser(id)).error?.code ?? null).toBeNull();
@@ -121,17 +123,42 @@ function adoptionWorker(ownerId: string): ResourceAdoptionWorker {
     finish: async input => await admin.rpc("finish_resource_adoption", { p_owner_id: ownerId, p_adoption_id: input.adoptionId, p_lease_id: input.leaseId, p_result: input.result }) };
 }
 
-it("does not send provider requests when a delayed claim receipt arrives after the evidence deadline", async () => {
+async function expectStoppedThenExpired(runner: ReturnType<typeof createCloudResourceRunner>, result: ResourceRunResponse, runId: string) {
+  // Conservative local expiry may precede DB wall time; it must still stop execution.
+  if (result.ok && result.run.status === "failed") expect(result.run).toMatchObject({ result: { status: "timed_out" } });
+  else expect(result).toMatchObject({ ok: true, run: { status: "cleared", clearReason: "expired", result: null } });
+  // Recovery is a distinct read, never an execution retry or a longer evidence TTL.
+  await expect.poll(() => runner.read(runId), { timeout: 5000 }).toMatchObject({ ok: true, run: { status: "cleared", clearReason: "expired", result: null } });
+}
+
+it.each([-300_000, 0, 300_000])("does not send provider requests when a delayed claim receipt arrives after the evidence deadline (host offset %i ms)", async offset => {
   const owner = await fixture(), external = await externalFixture();
   localSql(`update private.resource_retention_policies set window_seconds=1 where owner_id='${owner.id}';`);
+  const wallNow = Date.now.bind(Date);
+  vi.spyOn(Date, "now").mockImplementation(() => wallNow() + offset);
   const worker: ResourceWorker = { ...owner.worker, claim: async input => {
     const receipt = await owner.worker.claim(input);
     await new Promise(resolve => setTimeout(resolve, 1200));
     return receipt;
   } };
-  const result = await createCloudResourceRunner({ ...owner, ...external, worker }).run(owner.command, signal());
-  expect(result).toMatchObject({ ok: true, run: { status: "cleared", clearReason: "expired", result: null } });
+  const runner = createCloudResourceRunner({ ...owner, ...external, worker });
+  const result = await runner.run(owner.command, signal());
   expect(external.calls).toEqual([]);
+  await expectStoppedThenExpired(runner, result, owner.command.runId);
+  expect(external.calls).toEqual([]);
+});
+
+it("conservative in-flight deadline cancellation is a timeout, not the user's cancellation", async () => {
+  const owner = await fixture(), external = await externalFixture({ searchDelayMs: 2000 });
+  localSql(`update private.resource_retention_policies set window_seconds=4 where owner_id='${owner.id}';`);
+  const worker: ResourceWorker = { ...owner.worker, async claim(input) {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return owner.worker.claim(input);
+  } };
+  const runner = createCloudResourceRunner({ ...owner, ...external, worker });
+  const result = await runner.run(owner.command, signal());
+  expect(external.calls).toEqual(["/youtube/v3/search"]);
+  expect(result).toMatchObject({ ok: true, run: { status: "failed", result: { status: "timed_out" } } });
 });
 
 it("an account without a retention policy cannot start discovery or spend an attempt", async () => {
@@ -144,12 +171,58 @@ it("an account without a retention policy cannot start discovery or spend an att
   expect((await owner.client.from("resource_runs").select("id")).data).toEqual([]);
 });
 
-it("an evidence deadline aborts an in-flight search without launching downstream metadata or caption requests", async () => {
+it.each([-300_000, 0, 300_000])("an evidence deadline aborts an in-flight search without launching downstream metadata or caption requests (host offset %i ms)", async offset => {
   const owner = await fixture(), external = await externalFixture({ searchDelayMs: 2000 });
   localSql(`update private.resource_retention_policies set window_seconds=1 where owner_id='${owner.id}';`);
-  const result = await createCloudResourceRunner({ ...owner, ...external }).run(owner.command, signal());
-  expect(result).toMatchObject({ ok: true, run: { status: "cleared", clearReason: "expired", result: null } });
+  const wallNow = Date.now.bind(Date);
+  vi.spyOn(Date, "now").mockImplementation(() => wallNow() + offset);
+  const runner = createCloudResourceRunner({ ...owner, ...external });
+  const result = await runner.run(owner.command, signal());
   expect(external.calls).toEqual(["/youtube/v3/search"]);
+  await expectStoppedThenExpired(runner, result, owner.command.runId);
+  expect(external.calls).toEqual(["/youtube/v3/search"]);
+});
+
+it("a delayed adoption claim spends only the old source's remaining lifetime, not a fresh retention window", async () => {
+  const owner = await fixture(), external = await externalFixture();
+  localSql(`update private.resource_retention_policies set window_seconds=5 where owner_id='${owner.id}';`);
+  const resources = createCloudResourceRunner({ ...owner, ...external });
+  expect(await resources.run(owner.command, signal())).toMatchObject({ ok: true, run: { status: "ready" } });
+  const sourceRunId = randomUUID();
+  const matched = await resources.run({ kind: "match", runId: sourceRunId, sourceRunId: owner.command.runId }, signal());
+  if (!matched.ok || matched.run.status !== "ready" || !matched.run.contentExpiresAt) throw new Error("Missing matched fixture");
+  const originalDeadline = matched.run.contentExpiresAt;
+  localSql(`insert into private.resource_adoption_quotas(owner_id,available_attempts) values ('${owner.id}',1);`);
+  // Changing current policy must not renew the original five-second evidence window.
+  localSql(`update private.resource_retention_policies set window_seconds=60 where owner_id='${owner.id}';`);
+  const wallNow = Date.now.bind(Date);
+  vi.spyOn(Date, "now").mockImplementation(() => wallNow() - 300_000);
+  const original = adoptionWorker(owner.id);
+  let acquired = false;
+  const worker: ResourceAdoptionWorker = { ...original, async claim(input) {
+    const receipt = await original.claim(input);
+    const body = z.object({ acquired: z.literal(true), observed_at: z.iso.datetime({ offset: true }),
+      adoption: z.object({ status: z.literal("running"), content_expires_at: z.iso.datetime({ offset: true }) }) }).parse(receipt.data);
+    expect(Date.parse(body.adoption.content_expires_at)).toBe(Date.parse(originalDeadline));
+    const remaining = Date.parse(body.adoption.content_expires_at) - Date.parse(body.observed_at);
+    expect(remaining).toBeGreaterThan(0);
+    expect(remaining).toBeLessThanOrEqual(5000);
+    acquired = true;
+    // Delay across the actual DB-observed remainder; do not assume two OS clocks progress identically.
+    await new Promise(resolve => setTimeout(resolve, Math.ceil(remaining) + 100));
+    return receipt;
+  } };
+  const runner = createCloudResourceAdoption({ client: owner.client, actor: owner.actor, worker,
+    verification: createVideoVerification({ youtubeApiKey: "fixture-key", fetch: external.fetch }) });
+  const command = { adoptionId: randomUUID(), sourceRunId, videoId, replaceBindingId: null };
+  const result = await runner.run(command, signal());
+  expect(acquired).toBe(true);
+  expect(external.calls).toEqual(["/youtube/v3/search", "/youtube/v3/videos", "/v1/transcript", "/chat/completions"]);
+  if (result.ok && result.adoption.status === "failed") expect(result.adoption).toMatchObject({ result: { status: "timed_out" }, proposalId: null });
+  else expect(result).toMatchObject({ ok: true, adoption: { status: "cleared", clearReason: "expired", proposalId: null } });
+  await expect.poll(() => runner.read(command.adoptionId), { timeout: 5000 }).toMatchObject({ ok: true, adoption: { status: "cleared", clearReason: "expired", proposalId: null } });
+  expect(await runner.run(command, signal())).toMatchObject({ ok: true, adoption: { status: "cleared" } });
+  expect(external.calls).toHaveLength(4);
 });
 
 it("clearing a chain erases all resource payloads, rejects pending adoption and recovers old IDs without providers", async () => {
@@ -187,8 +260,10 @@ it("clearing a chain erases all resource payloads, rejects pending adoption and 
   expect(external.calls).toEqual(calls);
 });
 
-it("freshly verifies a matched candidate once, prepares an immutable proposal, and only explicit confirmation binds it", async () => {
+it.each([-300_000, 0, 300_000])("freshly verifies a matched candidate once, prepares an immutable proposal, and only explicit confirmation binds it (host offset %i ms)", async offset => {
   const owner = await fixture(), external = await externalFixture();
+  const wallNow = Date.now.bind(Date);
+  vi.spyOn(Date, "now").mockImplementation(() => wallNow() + offset);
   const resources = createCloudResourceRunner({ ...owner, ...external });
   expect((await resources.run(owner.command, signal())).ok).toBe(true);
   const sourceRunId = randomUUID();
@@ -464,6 +539,21 @@ it("uncertain claim delivery never launches providers or reclaims a charged oper
   localSql(`update public.resource_runs set expires_at=clock_timestamp()-interval '1 second' where id='${owner.command.runId}';`);
   expect(await runner.read(owner.command.runId)).toMatchObject({ ok: true, run: { status: "interrupted", result: { status: "timed_out" } } });
   expect(await runner.run({ ...owner.command, runId: randomUUID() }, signal())).toEqual({ ok: false, code: "quota_exhausted" });
+  expect(external.calls).toEqual([]);
+});
+
+it.each([undefined, "not-a-timestamp"])("a claim without a valid database observation fails closed (%s)", async observedAt => {
+  const owner = await fixture(), external = await externalFixture();
+  const worker: ResourceWorker = { ...owner.worker, async claim(input) {
+    const receipt = await owner.worker.claim(input);
+    if (!receipt.data || typeof receipt.data !== "object" || Array.isArray(receipt.data)) throw new Error("Missing fixture claim");
+    return { ...receipt, data: { ...receipt.data, observed_at: observedAt } };
+  } };
+  const runner = createCloudResourceRunner({ ...owner, ...external, worker });
+  expect(await runner.run(owner.command, signal())).toEqual({ ok: false, code: "unavailable" });
+  expect(external.calls).toEqual([]);
+  // The successful claim may have been charged: recovery reads it, never reclaims or retries providers.
+  expect(await runner.run(owner.command, signal())).toMatchObject({ ok: true, run: { status: "running" } });
   expect(external.calls).toEqual([]);
 });
 

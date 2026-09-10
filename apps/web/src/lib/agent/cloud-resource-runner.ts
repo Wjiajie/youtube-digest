@@ -64,14 +64,16 @@ export function createCloudResourceRunner(dependencies: { client: SupabaseClient
       if (signal.aborted) return cancel(started.id);
       const skill = loaded ? { ...loaded.identity, instructions: loaded.instructions } : null;
       const leaseId = randomUUID();
+      const claimStartedAt = performance.now();
       const claimed = await dependencies.worker.claim({ runId: started.id, leaseId, skill });
       if (claimed.error) return failure(claimed.error);
-      const receipt = z.strictObject({ acquired: z.boolean(), run: z.unknown() }).parse(claimed.data);
+      const receipt = z.strictObject({ acquired: z.boolean(), run: z.unknown(), observed_at: z.iso.datetime({ offset: true }) }).parse(claimed.data);
       const current = parseResourceRun(receipt.run, actor.userId, started.id);
       if (!receipt.acquired) return { ok: true, run: current };
       if (current.status !== "running" || !commandMatches(current, command) || JSON.stringify(current.skill) !== JSON.stringify(skill)) return { ok: false, code: "unavailable" };
-      const executionSignal = resourceExecutionSignal(current, signal);
-      const result = executionSignal.aborted ? { status: signal.aborted ? "cancelled" as const : "timed_out" as const } : await execute(current, executionSignal);
+      const executionSignal = resourceExecutionSignal(current, receipt.observed_at, claimStartedAt, signal);
+      let result = executionSignal.aborted ? { status: signal.aborted ? "cancelled" as const : "timed_out" as const } : await execute(current, executionSignal);
+      if (result.status === "cancelled" && executionSignal.aborted && !signal.aborted) result = { ...result, status: "timed_out" };
       const args = { runId: current.id, leaseId, result };
       const finished = await finish(args);
       // Only the identical storage receipt can retry; not discovery, jobs, model or claim.

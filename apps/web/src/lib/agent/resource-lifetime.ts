@@ -22,9 +22,12 @@ export function readResourceLifetime(row: z.infer<typeof lifetime> & { status: s
     clearReason: row.status === "cleared" ? row.clear_reason ?? "manual" : null };
 }
 
-/** The worker lease and original evidence deadline both bound outbound processing. */
-export function resourceExecutionSignal(record: { expiresAt: string; contentExpiresAt: string | null }, parent: AbortSignal): AbortSignal {
-  const remaining = record.contentExpiresAt === null ? NaN : Math.min(Date.parse(record.expiresAt), Date.parse(record.contentExpiresAt)) - Date.now();
+/** Database deadlines share a clock with observedAt, not with this application's wall clock.
+ * Charge the entire monotonic claim roundtrip conservatively, including any delayed receipt. */
+export function resourceExecutionSignal(record: { expiresAt: string; contentExpiresAt: string | null }, observedAt: string, claimStartedAt: number, parent: AbortSignal): AbortSignal {
+  const elapsed = performance.now() - claimStartedAt;
+  const remaining = record.contentExpiresAt === null || elapsed < 0 ? NaN
+    : Math.min(Date.parse(record.expiresAt), Date.parse(record.contentExpiresAt)) - Date.parse(observedAt) - elapsed;
   if (!Number.isFinite(remaining) || remaining <= 0) return AbortSignal.abort(new DOMException("Evidence deadline elapsed", "TimeoutError"));
   return AbortSignal.any([parent, AbortSignal.timeout(Math.min(Math.floor(remaining), 2_147_483_647))]);
 }

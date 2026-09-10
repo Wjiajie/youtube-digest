@@ -44,16 +44,19 @@ export function createCloudResourceAdoption(dependencies: { client: SupabaseClie
       }
       if (signal.aborted) return access.cancel(started.id);
       const leaseId = randomUUID();
+      const claimStartedAt = performance.now();
       const claim = await dependencies.worker.claim({ adoptionId: started.id, leaseId });
       if (claim.error) return adoptionFailure(claim.error);
-      const receipt = z.strictObject({ acquired: z.boolean(), adoption: z.unknown() }).parse(claim.data);
+      const receipt = z.strictObject({ acquired: z.boolean(), adoption: z.unknown(), observed_at: z.iso.datetime({ offset: true }) }).parse(claim.data);
       const current = parseResourceAdoption(receipt.adoption, actor.userId, started.id);
       if (!receipt.acquired) return { ok: true, adoption: current };
       if (current.status !== "running" || !matches(current, command)) return { ok: false, code: "unavailable" };
-      const executionSignal = resourceExecutionSignal(current, signal);
+      const executionSignal = resourceExecutionSignal(current, receipt.observed_at, claimStartedAt, signal);
       const raw = executionSignal.aborted ? { status: signal.aborted ? "cancelled" as const : "timed_out" as const }
         : await dependencies.verification.run({ original: candidate.video, preferences: run.preferences, signal: executionSignal });
-      const result = videoVerificationSchema.parse(raw);
+      const parsedResult = videoVerificationSchema.parse(raw);
+      const result = parsedResult.status === "cancelled" && executionSignal.aborted && !signal.aborted
+        ? { status: "timed_out" as const } : parsedResult;
       const args = { adoptionId: current.id, leaseId, result };
       const saved = await finish(args);
       // Retry only the exact storage receipt, never the provider lookup or lease claim.
