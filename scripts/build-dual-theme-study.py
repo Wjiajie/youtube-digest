@@ -56,7 +56,7 @@ palette = {
     "skin": material("Identity / warm skin", "CDA484", .74),
     "hair": material("Identity / hair", "3D3742" if theme == "cyberpunk" else "222F30", .6),
     "eyes": material("Identity / eyes", "292428", .6),
-    "cloth": material(theme + " / outer cloth", "304B59" if theme == "cyberpunk" else "C7C7AF", .94),
+    "cloth": material(theme + " / outer cloth", "344F60" if theme == "cyberpunk" else "D2CCB7", .9),
     "lining": material(theme + " / lining", "192C37" if theme == "cyberpunk" else "354C47", .96),
     "accent": material(theme + " / accent", "DDA26D" if theme == "cyberpunk" else "B39560", .45, .35),
     "dark": material(theme + " / dark structure", "18252C" if theme == "cyberpunk" else "43534B", .68, .25 if theme == "cyberpunk" else 0),
@@ -116,11 +116,36 @@ def box(name, position, size, surface, bevel=.025, bone=None):
     return result
 
 
-def ribbon(name, points, width, surface, bone):
-    vertices = [(x + offset, y, z) for x, y, z in points for offset in (-width / 2, width / 2)]
-    faces = [(2 * i, 2 * i + 1, 2 * i + 3, 2 * i + 2) for i in range(len(points) - 1)]
-    result = mesh_object(name, vertices, faces, surface, [{bone: 1}] * len(vertices))
-    result.data.materials[0].use_backface_culling = False
+def arc_frame(name, center, radii, width, depth, angles, surface):
+    """A solid architectural arc in the XZ plane, with a genuinely open center."""
+    vertices, faces = [], []
+    steps = 80
+    for step in range(steps + 1):
+        angle = math.radians(angles[0] + (angles[1] - angles[0]) * step / steps)
+        for radial, back in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
+            vertices.append((center[0] + (radii[0] + radial * width / 2) * math.cos(angle),
+                             center[1] + back * depth / 2,
+                             center[2] + (radii[1] + radial * width / 2) * math.sin(angle)))
+    for row in range(steps):
+        for column in range(4):
+            faces.append((row * 4 + column, row * 4 + (column + 1) % 4,
+                          (row + 1) * 4 + (column + 1) % 4, (row + 1) * 4 + column))
+    faces.extend([(3, 2, 1, 0), tuple(steps * 4 + index for index in range(4))])
+    result = mesh_object(name, vertices, faces, surface)
+    for face in result.data.polygons:
+        face.use_smooth = face.index < steps * 4 and face.index % 4 in (1, 3)
+    return result
+
+
+def plinth(name, position, radius, depth, surface, vertices=8):
+    bpy.ops.mesh.primitive_cylinder_add(vertices=vertices, radius=radius, depth=depth, location=position)
+    result = bpy.context.object
+    result.name = name
+    result.data.materials.append(surface)
+    bevel = result.modifiers.new("Finished edge", "BEVEL")
+    bevel.width, bevel.segments = .025, 3
+    bpy.context.view_layer.objects.active = result
+    bpy.ops.object.modifier_apply(modifier=bevel.name)
     return result
 
 
@@ -134,7 +159,7 @@ def surface_sampler(obj, surface):
 
     def sample(origin, direction, offset):
         hit, normal, triangle, _ = tree.ray_cast(Vector(origin), Vector(direction))
-        assert hit is not None, "Authored feature must lie on the actual source surface"
+        assert hit is not None, f"Authored feature must lie on the actual source surface: {obj.name} {origin}"
         indices = triangles[triangle]
         factors = barycentric_transform(hit, *(points[index] for index in indices),
                                         Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1)))
@@ -148,6 +173,41 @@ def surface_sampler(obj, surface):
                 weights[name] = weights.get(name, 0) + max(0, factor) * group.weight / total
         return tuple(hit + normal * offset), weights
     return sample
+
+
+def tailored_band(name, points, width, surface, offset=.004):
+    # Follow the real torso and its interpolated weights, including the collar
+    # transition, instead of fixing a flat strip to one guessed bone.
+    sampler = surface_sampler(bpy.data.objects["Casual_Body"], palette["cloth"])
+    # Endpoint-only strips cut through the curved chest between anchors.
+    # Sample the full path before binding, not just its control points.
+    dense_points = []
+    for start, end in zip(points, points[1:]):
+        segments = max(1, math.ceil(math.dist(start, end) / .008))
+        dense_points.extend(tuple(a + (b - a) * step / segments for a, b in zip(start, end))
+                            for step in range(segments))
+    points = [*dense_points, points[-1]]
+    samples = []
+    for index, (x, z) in enumerate(points):
+        previous, following = points[max(0, index - 1)], points[min(len(points) - 1, index + 1)]
+        tangent = Vector((following[0] - previous[0], following[1] - previous[1])).normalized()
+        for sign in (-1, 1):
+            samples.append(sampler((x - sign * tangent.y * width / 2, -1, z + sign * tangent.x * width / 2), (0, 1, 0), offset))
+    vertices = [point for point, _ in samples]
+    weights = [weight for _, weight in samples]
+    count = len(vertices)
+    vertices += [(x, y + .0025, z) for x, y, z in vertices]
+    weights += [dict(weight) for weight in weights]
+    faces = []
+    for row in range(len(points) - 1):
+        a, b, c, d = row * 2, row * 2 + 1, row * 2 + 3, row * 2 + 2
+        faces.extend([(a, d, c, b), (a + count, b + count, c + count, d + count),
+                      (a, a + count, d + count, d), (b, c, c + count, b + count)])
+    faces.extend([(0, 1, count + 1, count), (count - 2, 2 * count - 2, 2 * count - 1, count - 1)])
+    result = mesh_object(name, vertices, faces, surface, weights)
+    for face in result.data.polygons:
+        face.use_smooth = True
+    return result
 
 
 # Replace the source's protruding rectangular eye cubes only in this derivative;
@@ -219,7 +279,7 @@ sleeve_edges = [edge for edge, surfaces in edge_materials.items()
 for side, sign in (("L", 1), ("R", -1)):
     stations = [(.245, .009), (.29, .014), (.35, .014), (.46, .011), (.555, .009)]
     if theme == "eastern":
-        stations = [(.245, .015), (.29, .025), (.35, .033), (.46, .039), (.55, .021)]
+        stations = [(.245, .010), (.29, .018), (.35, .023), (.46, .028), (.55, .015)]
     root_indices = {index for edge in sleeve_edges for index in edge if sign * body.data.vertices[index].co.x > 0}
     assert len(root_indices) == 8
     root_center = sum((body.data.vertices[index].co for index in root_indices), Vector()) / len(root_indices)
@@ -278,7 +338,8 @@ if theme == "cyberpunk":
             faces = [tuple(reversed(face)) for face in faces]
         mesh_object("Cyber / fitted shoulder yoke " + side, [point for point, _ in samples], faces,
                     palette["dark"], [weight for _, weight in samples])
-    ribbon("Cyber / offset fastening", [(.04, -.197, 1.46), (.01, -.207, 1.34), (.015, -.18, 1.10)], .012, palette["accent"], "Torso")
+    tailored_band("Cyber / inset fastening", [(.04, 1.46), (.025, 1.40), (.01, 1.34), (.015, 1.20), (.015, 1.13)], .006, palette["accent"])
+    tailored_band("Cyber / collar facing", [(-.08, 1.48), (-.045, 1.455), (.005, 1.45), (.07, 1.48)], .022, palette["dark"])
     box("Cyber / chest device", (-.09, -.197, 1.36), (.073, .02, .052), palette["dark"], .006, "Chest")
     box("Cyber / device indicator", (-.09, -.210, 1.36), (.042, .005, .008), palette["light"], .001, "Chest")
     box("Cyber / ear receiver", (.105, -.037, 1.675), (.027, .06, .092), palette["dark"], .008, "Head")
@@ -317,10 +378,10 @@ else:
                 # overlay that self-shadows or flickers during skinning.
                 if face.index >= (rows - 2) * (columns - 1):
                     face.material_index = 1
-    ribbon("Eastern / crossing collar", [(-.08, -.168, 1.50), (.055, -.210, 1.34), (.11, -.172, 1.12)], .037, palette["lining"], "Torso")
-    ribbon("Eastern / inner collar", [(.077, -.17, 1.49), (-.008, -.206, 1.39)], .025, palette["lining"], "Chest")
-    box("Eastern / sash", (0, -.067, 1.115), (.345, .24, .055), palette["lining"], .020, "Hips")
-    box("Eastern / clasp", (.07, -.195, 1.12), (.045, .012, .04), palette["accent"], .006, "Hips")
+    tailored_band("Eastern / crossing collar", [(-.065, 1.485), (-.027, 1.44), (.014, 1.39), (.055, 1.34), (.075, 1.23), (.08, 1.15)], .029, palette["lining"], .006)
+    tailored_band("Eastern / inner collar", [(.068, 1.48), (.033, 1.44), (-.009, 1.393)], .023, palette["lining"], .003)
+    box("Eastern / sash", (0, -.067, 1.115), (.335, .215, .042), palette["lining"], .015, "Hips")
+    box("Eastern / clasp", (.07, -.18, 1.12), (.033, .009, .028), palette["accent"], .004, "Hips")
     box("Eastern / hair pin", (0, .051, 1.80), (.24, .014, .014), palette["accent"], .004, "Head")
 
 
@@ -379,43 +440,52 @@ assert hashlib.sha256(tree_path.read_bytes()).hexdigest() == "8bb157df6f49a8db04
 assert hashlib.sha256(rock_path.read_bytes()).hexdigest() == "6dd15390fd96501dcd1454765a17ba61dbbd8d47705dfe5149c8dd92b353ce25"
 stone = material(theme + " / stone", "59616A" if theme == "cyberpunk" else "777E74", .9)
 if theme == "cyberpunk":
-    box("Cyber / quiet work deck", (0, .2, -.13), (3.9, 3.3, .26), palette["dark"], .15)
-    box("Cyber / avatar step", (.28, -.5, .03), (1.35, 1.05, .08), stone, .05)
-    for sign in (-1, 1):
-        box("Cyber / portal upright", (sign * 1.18, 1.44, 1.06), (.10, .14, 2.12), palette["dark"], .025)
-        box("Cyber / portal inset", (sign * 1.135, 1.357, 1.09), (.012, .008, 1.84), palette["light"], .003)
-    # Open above the shoulders: architecture frames, rather than dwarfs, the person.
-    # Broad oblique panels leave quiet space behind the face; repeated vertical
-    # bars previously overpowered the identity silhouette.
-    mesh_object("Cyber / oblique rear panel", [(-1.08,1.64,.20),(.90,1.64,.20),(.90,1.64,.88),(.38,1.64,1.12),(-1.08,1.64,1.12)],
-                [(0,1,2,3,4)], palette["lining"])
-    mesh_object("Cyber / bevel light seam", [(.37,1.625,1.10),(.91,1.625,.85),(.91,1.625,.88),(.38,1.625,1.13)],
-                [(0,1,2,3)], palette["light"])
-    for z in (.48, .56, .64):
-        box("Cyber / quiet vent", (-.67,1.62,z), (.51,.025,.014), palette["dark"], .003)
-    box("Cyber / side console", (1.72, .75, .44), (.42, .66, .88), palette["dark"], .05)
-    mesh_object("Cyber / angled console top", [(1.40,.30,.92),(2.02,.30,.92),(2.02,1.05,1.15),(1.40,1.05,1.15)], [(0,1,2,3)], palette["lining"])
-    box("Cyber / amber console strip", (1.72, .408, .69), (.24, .013, .03), palette["accent"], .004)
-    box("Cyber / planted recess", (-1.36, .9, .14), (.78, .70, .28), stone, .05)
-    import_nature("Cyber / living canopy", tree_path, 1.48, (-1.36, .9, .28), .45)
+    graphite = material("Cyber / satin graphite", "162B38", .5, .5)
+    inset = material("Cyber / acoustic inset", "10202B", .96)
+    plinth("Cyber / faceted work deck", (.28, -.18, -.14), 1.75, .24, graphite)
+    plinth("Cyber / recessed footwell", (.28, -.5, .025), .82, .10, stone, 12)
+    # One asymmetric continuous wall, not two glowing poles competing with the face.
+    wall = mesh_object("Cyber / sculpted alcove", [(-1.25,1.33,.02),(1.42,1.33,.02),(1.42,1.33,1.62),
+                        (.85,1.33,2.34),(-.75,1.33,2.34),(-1.25,1.33,1.8)], [(0,1,2,3,4,5)], inset)
+    wall.data.materials[0].use_backface_culling = False
+    for index in range(7):
+        x = -.92 + index * .095
+        box("Cyber / fluted alcove", (x,1.28,1.08), (.025,.06,1.95), graphite, .009)
+    box("Cyber / recessed edge light", (-1.03,1.23,1.11), (.015,.018,1.88), palette["light"], .004)
+    mesh_object("Cyber / upper diagonal trim", [(.82,1.25,2.25),(1.35,1.25,1.59),(1.33,1.25,1.56),(.80,1.25,2.22)], [(0,1,2,3)], palette["accent"])
+    box("Cyber / floating worktop", (-.87,.67,.82), (.65,.62,.065), graphite, .028)
+    box("Cyber / worktop support", (-1.05,.98,.43), (.09,.11,.75), graphite, .018)
+    # box() bakes its position into vertices. Build this small assembly around
+    # its own origin so the tilt moves the face and its details together.
+    screen = box("Cyber / tilted work surface", (0,0,0), (.42,.045,.29), palette["dark"], .015)
+    screen.location = (-.82,.81,1.05)
+    screen.rotation_euler.x = math.radians(14)
     for index in range(3):
-        box("Cyber / deck inlay", (-.5 + index * .5, -.93, .007), (.17, .008, .007), palette["accent"], .002)
+        detail = box("Cyber / task surface light", (0,-.033,-.01 + index*.04), (.25-index*.04,.007,.009), palette["light"], .002)
+        detail.parent = screen
+    for sign in (-1, 1):
+        box("Cyber / floor guide", (.28 + sign*.75,-.65,-.008), (.013,.64,.009), palette["accent"], .003)
     arm.location = (.28, -.5, .08)
 else:
-    water = material("Eastern / still water", "436D68", .22, .25)
+    water = material("Eastern / still water", "44665F", .28, .12)
     box("Eastern / water field", (0, .2, -.16), (4.2, 3.7, .08), water, .06)
-    box("Eastern / terrace", (.35, -.55, -.03), (2.12, 2.02, .22), stone, .10)
-    box("Eastern / standing slab", (.35, -.6, .12), (1.25, .92, .1), material("Eastern / light stone", "A4ACA0", .92), .065)
+    plinth("Eastern / worn terrace", (.35, -.55, -.03), 1.14, .22, stone, 48)
+    plinth("Eastern / standing stone", (.35, -.6, .12), .72, .10, material("Eastern / light stone", "A1A997", .96), 12)
     for index in range(3):
         box("Eastern / stepping stone", (-.6 - .43 * index, -1.4 - .15 * index, -.06), (.39, .36, .1), stone, .055)
-    import_nature("Eastern / layered stone bank", rock_path, .42, (-1.30, 1.15, -.06), .8)
-    import_nature("Eastern / low stone bank", rock_path, .34, (1.6, 1.4, -.08), 2.1)
-    import_nature("Eastern / sheltering tree", tree_path, 1.85, (-1.40, 1.30, .28), -.7)
-    # A short open timber screen gives a human scale without a full temple set.
-    for sign in (-1, 1):
-        box("Eastern / screen post", (.6 + sign * .7, 1.35, .65), (.07, .07, 1.45), palette["lining"], .012)
-    for z in (.28, .85, 1.32):
-        box("Eastern / screen rail", (.6, 1.35, z), (1.55, .055, .04), palette["lining"], .008)
+    import_nature("Eastern / layered stone bank", rock_path, .34, (-1.15, 1.55, -.06), .8)
+    import_nature("Eastern / low stone bank", rock_path, .25, (1.65, 1.8, -.08), 2.1)
+    import_nature("Eastern / sheltering tree", tree_path, 1.65, (-1.42, 1.90, .10), -.7)
+    timber = material("Eastern / weathered gate timber", "40524A", .9)
+    arc_frame("Eastern / moon-garden opening", (.10,1.8,1.10), (1.23,1.23), .07, .12, (-65,245), timber)
+    arc_frame("Eastern / inner carved reveal", (.10,1.728,1.10), (1.17,1.17), .012, .016, (-65,245), palette["accent"])
+    # Quiet rear ridgelines are actual geometry; no billboard texture or camera-facing UI.
+    for index, (height, color) in enumerate(((.66,"819084"),(.47,"A3AEA0"))):
+        ridge = material("Eastern / distant ridge " + str(index), color, 1)
+        mesh_object("Eastern / layered garden ridge " + str(index), [(-2.0,2.3+index*.35,-.1),(-2,2.3+index*.35,height*.6),
+                    (-1.3,2.3+index*.35,height),(-.45,2.3+index*.35,height*.3),(.7,2.3+index*.35,height*.7),
+                    (1.4,2.3+index*.35,height*.45),(2.1,2.3+index*.35,height*.65),(2.1,2.3+index*.35,-.1)],
+                    [(0,1,2,3,4,5,6,7)], ridge)
     arm.location = (.35, -.6, .17)
 
 
@@ -430,8 +500,8 @@ def light(name, kind, position, energy, color, target):
     return result
 
 
-light("Study / key", "SUN", (-3, -4, 6), 2.2 if theme == "eastern" else 1.7, "FFF0D3" if theme == "eastern" else "BDDDE3", (0, 0, 1))
-light("Study / edge", "SUN", (3, 2, 4), .7 if theme == "eastern" else 1.4, "CFDBD2" if theme == "eastern" else "E3A875", (0, 0, 1))
+light("Study / key", "SUN", (-3, -4, 5), 3.1 if theme == "eastern" else 2.6, "FFF0D3" if theme == "eastern" else "DAEAF3", (0, 0, 1))
+light("Study / edge", "SUN", (3, 1, 3), 1.0 if theme == "eastern" else 2.0, "C9DAD1" if theme == "eastern" else "E5AD79", (0, 0, 1))
 camera_data = bpy.data.cameras.new("Study / composed camera")
 camera = bpy.data.objects.new("Study / composed camera", camera_data)
 bpy.context.collection.objects.link(camera)
@@ -446,6 +516,10 @@ bpy.context.view_layer.update()
 scene = bpy.context.scene
 scene["blueprint_study"] = theme
 scene["status"] = "internal look development; not licensed for product distribution or final art acceptance"
+scene["blueprint_lighting"] = {"version": 1, "environmentIntensity": .22 if theme == "eastern" else .16,
+    "hemisphereIntensity": .55 if theme == "eastern" else .28,
+    "sky": "#E4E8D8" if theme == "eastern" else "#BDD9EA", "ground": "#536B60" if theme == "eastern" else "#15232F",
+    "exposure": 1.08 if theme == "eastern" else 1.05}
 scene.render.resolution_x, scene.render.resolution_y = 1440, 1000
 scene.render.resolution_percentage = 100
 scene.world.color = (.08, .08, .08)

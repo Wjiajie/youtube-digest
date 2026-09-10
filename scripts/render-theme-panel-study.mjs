@@ -21,6 +21,7 @@ import { ThemeSurface } from "@blueprint/ui/theme";
 import { HomeDashboard } from "./apps/web/src/app/home-dashboard.tsx";
 import { loadPreviewAsset } from "./apps/web/src/lib/scene/load-preview-asset.ts";
 import { disposeAsset } from "./apps/web/src/lib/scene/asset-resources.ts";
+import { readStudyLighting } from "./scripts/study-lighting.mjs";
 import "./apps/web/src/app/globals.css";
 
 const titles = ["建立自己的摄影语言", "把日常观察写成有观点、有依据、能让读者理解取舍的长篇摄影作品集与创作复盘"];
@@ -53,8 +54,9 @@ function AssetScene({theme}) {
    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
    renderer.debug.onShaderError=(gl,program,vertex,fragment)=>shaderErrors.push([gl.getProgramInfoLog(program),gl.getShaderInfoLog(vertex),gl.getShaderInfoLog(fragment)]);
    const room=new RoomEnvironment(),pmrem=new THREE.PMREMGenerator(renderer);environment=pmrem.fromScene(room,.04);room.dispose();pmrem.dispose();
-   scene=new THREE.Scene();scene.environment=environment.texture;scene.environmentIntensity=theme==='eastern'?.35:.6;scene.add(asset.scene);
-   scene.add(new THREE.HemisphereLight(theme==='eastern'?'#E8EED8':'#AECBD4',theme==='eastern'?'#7A8980':'#283A48',theme==='eastern'?1.1:.8));
+   const lighting=readStudyLighting(asset.scene.userData,theme);renderer.toneMappingExposure=lighting.exposure;
+   scene=new THREE.Scene();scene.environment=environment.texture;scene.environmentIntensity=lighting.environmentIntensity;scene.add(asset.scene);
+   scene.add(new THREE.HemisphereLight(lighting.sky,lighting.ground,lighting.hemisphereIntensity));
    const skins=[];asset.scene.traverse(object=>{
     if(object.isMesh){object.castShadow=true;object.receiveShadow=true;}
     if(object.isSkinnedMesh)skins.push(object);
@@ -74,7 +76,7 @@ function AssetScene({theme}) {
     renderer.render(scene,camera);
     const projected=[];for(const x of [bounds.min.x,bounds.max.x])for(const y of [bounds.min.y,bounds.max.y])for(const z of [bounds.min.z,bounds.max.z])projected.push(new THREE.Vector3(x,y,z).project(camera));
     const gl=renderer.getContext(),debug=gl.getExtension('WEBGL_debug_renderer_info');
-    window.sceneReport={theme,width,height,skins:skins.length,extendedSkins:skins.filter(skin=>skin.geometry.getAttribute('weights_1')).length,animations:asset.animations.length,drawCalls:renderer.info.render.calls,avatarHeightFraction:(Math.max(...projected.map(p=>p.y))-Math.min(...projected.map(p=>p.y)))/2,shaderErrors:[...shaderErrors],renderer:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)};
+    window.sceneReport={theme,width,height,lighting,skins:skins.length,extendedSkins:skins.filter(skin=>skin.geometry.getAttribute('weights_1')).length,animations:asset.animations.length,drawCalls:renderer.info.render.calls,avatarHeightFraction:(Math.max(...projected.map(p=>p.y))-Math.min(...projected.map(p=>p.y)))/2,shaderErrors:[...shaderErrors],renderer:debug?gl.getParameter(debug.UNMASKED_RENDERER_WEBGL):gl.getParameter(gl.RENDERER)};
    };
    render();observer=new ResizeObserver(render);observer.observe(canvas);setStatus('ready');
   })().catch(error=>{if(!stopped){window.studyError=String(error);setStatus('failed');}release();});

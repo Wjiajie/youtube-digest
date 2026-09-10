@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { build } from "esbuild";
 import { chromium } from "playwright";
+import { readStudyLighting } from "./study-lighting.mjs";
 
 const revision = process.argv[2] ?? "1";
 assert.match(revision, /^[1-9][0-9]?$/);
@@ -19,10 +20,20 @@ for (const [theme, bytes] of assets) {
   const document = JSON.parse(bytes.subarray(20, 20 + jsonLength).toString());
   const binary = bytes.subarray(28 + jsonLength);
   const leaves = document.materials.find(material => material.name === "BirchTree_Leaves");
-  assert.deepEqual(leaves?.pbrMetallicRoughness?.baseColorFactor?.map(value => Math.round(value * 100)), Number(revision) >= 10 ? [10, 28, 80, 100] : [36, 62, 72, 100], `${theme}: authored canopy tint must survive export`);
-  if (Number(revision) >= 11) {
-    const bark = document.materials.find(material => material.name === "BirchTree_Bark");
-    assert.deepEqual(bark?.pbrMetallicRoughness?.baseColorFactor?.map(value => Math.round(value * 100)), [72, 68, 58, 100], `${theme}: bark must retain its separate neutral tint`);
+  if (Number(revision) >= 12 && theme === "cyberpunk") {
+    assert.equal(leaves, undefined, "The cyber alcove intentionally excludes the garden canopy");
+    assert.equal(document.materials.find(material => material.name === "BirchTree_Bark"), undefined);
+  } else {
+    assert.deepEqual(leaves?.pbrMetallicRoughness?.baseColorFactor?.map(value => Math.round(value * 100)), Number(revision) >= 10 ? [10, 28, 80, 100] : [36, 62, 72, 100], `${theme}: authored canopy tint must survive export`);
+    if (Number(revision) >= 11) {
+      const bark = document.materials.find(material => material.name === "BirchTree_Bark");
+      assert.deepEqual(bark?.pbrMetallicRoughness?.baseColorFactor?.map(value => Math.round(value * 100)), [72, 68, 58, 100], `${theme}: bark must retain its separate neutral tint`);
+    }
+  }
+  if (Number(revision) >= 12) {
+    const extras = document.scenes[document.scene ?? 0].extras;
+    assert.ok(extras?.blueprint_lighting, "New studies must export authored lighting");
+    readStudyLighting(extras, theme);
   }
   let finiteFloatValues = 0;
   for (const accessor of document.accessors.filter(accessor => accessor.componentType === 5126)) {
@@ -44,6 +55,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { loadPreviewAsset } from "./apps/web/src/lib/scene/load-preview-asset.ts";
 import { disposeAsset } from "./apps/web/src/lib/scene/asset-resources.ts";
+import { readStudyLighting } from "./scripts/study-lighting.mjs";
 const canvas = document.querySelector("canvas");
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, preserveDrawingBuffer:true});
 renderer.setSize(1440,1000); renderer.setPixelRatio(1); renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFShadowMap;
@@ -52,8 +64,9 @@ const room=new RoomEnvironment(),pmrem=new THREE.PMREMGenerator(renderer),enviro
 const shaderErrors=[];renderer.debug.onShaderError=(gl,program,vertex,fragment)=>shaderErrors.push([gl.getProgramInfoLog(program),gl.getShaderInfoLog(vertex),gl.getShaderInfoLog(fragment)]);
 window.renderTheme = async theme => {
  const asset=await loadPreviewAsset(await (await fetch('/asset/'+theme)).arrayBuffer());
- const scene=new THREE.Scene();scene.background=new THREE.Color(theme==='eastern'?'#D7DDD1':'#09141E');scene.environment=environment.texture;scene.environmentIntensity=theme==='eastern'?.35:.6;scene.add(asset.scene);
- const ambient=new THREE.HemisphereLight(theme==='eastern'?'#E8EED8':'#AECBD4',theme==='eastern'?'#7A8980':'#283A48',theme==='eastern'?1.1:.8);scene.add(ambient);
+ const lighting=readStudyLighting(asset.scene.userData,theme);renderer.toneMappingExposure=lighting.exposure;
+ const scene=new THREE.Scene();scene.background=new THREE.Color(theme==='eastern'?'#D7DDD1':'#09141E');scene.environment=environment.texture;scene.environmentIntensity=lighting.environmentIntensity;scene.add(asset.scene);
+ const ambient=new THREE.HemisphereLight(lighting.sky,lighting.ground,lighting.hemisphereIntensity);scene.add(ambient);
  let skins=0,extendedSkins=0,meshCount=0; const loadedLights=[];
  asset.scene.traverse(object=>{
   if(object.isMesh){meshCount++;object.castShadow=true;object.receiveShadow=true;}
@@ -68,7 +81,7 @@ window.renderTheme = async theme => {
  camera.position.copy(center).add(new THREE.Vector3(1.7,.45,3.35));camera.lookAt(center);camera.updateMatrixWorld(true);renderer.render(scene,camera);
  const portrait=canvas.toDataURL('image/png');mixer.setTime(.8);scene.updateMatrixWorld(true);renderer.render(scene,camera);const idleLater=canvas.toDataURL('image/png');
  const context=renderer.getContext(),debug=context.getExtension('WEBGL_debug_renderer_info');
- const result={wide,portrait,idleLater,meshCount,skins,extendedSkins,sceneCalls,renderedTrianglesIncludingShadows:renderer.info.render.triangles,animations:asset.animations.length,loadedLights,shaderErrors:[...shaderErrors],renderer:debug?context.getParameter(debug.UNMASKED_RENDERER_WEBGL):context.getParameter(context.RENDERER)};
+ const result={wide,portrait,idleLater,lighting,meshCount,skins,extendedSkins,sceneCalls,renderedTrianglesIncludingShadows:renderer.info.render.triangles,animations:asset.animations.length,loadedLights,shaderErrors:[...shaderErrors],renderer:debug?context.getParameter(debug.UNMASKED_RENDERER_WEBGL):context.getParameter(context.RENDERER)};
  mixer.stopAllAction();mixer.uncacheRoot(asset.scene);asset.scene.traverse(object=>{if(object.isLight)object.shadow?.dispose();});disposeAsset(asset);scene.clear();return result;
 };
 `;
@@ -94,6 +107,9 @@ try {
   await page.waitForFunction(() => typeof window.renderTheme === "function");
   for (const theme of themes) {
     const report = await page.evaluate(themeName => window.renderTheme(themeName), theme);
+    const bytes = assets.get(theme);
+    const document = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString());
+    assert.deepEqual(report.lighting, readStudyLighting(document.scenes[document.scene ?? 0].extras ?? {}, theme), "GLTFLoader must preserve the exported lighting");
     Object.assign(report, exportReports.get(theme));
     assert.notEqual(report.portrait, report.idleLater, "Actual idle must visibly change the character");
     for (const key of ["wide", "portrait", "idleLater"]) { await writeFile(resolve(output, `${theme}-${key}.png`), Buffer.from(report[key].split(",")[1], "base64")); delete report[key]; }
