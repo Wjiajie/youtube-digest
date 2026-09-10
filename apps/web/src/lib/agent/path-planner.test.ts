@@ -36,6 +36,13 @@ function reply(text: string): Awaited<ReturnType<MockLanguageModelV4["doGenerate
 }
 
 describe("controlled path planning", () => {
+  it("refuses a different Skill than the one reserved by the cloud run before generation", async () => {
+    const model = new MockLanguageModelV4();
+    expect(await createPathPlanner({ model }).run({ ...input(), expectedSkillSha256: "0".repeat(64) })).toEqual({
+      status: "unavailable", providerMayHaveRun: false, usage: null,
+    });
+    expect(model.doGenerateCalls).toHaveLength(0);
+  });
   it.each(["mismatched blueprint", "past deadline", "full blueprint", "invalid date"])("rejects %s before provider work", async problem => {
     const request = input();
     if (problem === "mismatched blueprint") request.brief.blueprintId = "20000000-0000-4000-8000-000000000001";

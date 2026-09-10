@@ -1,0 +1,223 @@
+begin;
+select no_plan();
+insert into auth.users(id,email) values
+ ('fa000000-0000-4000-8000-000000000001','planning-owner@example.test'),
+ ('fa000000-0000-4000-8000-000000000002','planning-other@example.test');
+insert into public.goal_briefs(id,owner_id,blueprint_id,revision,status,content)
+ select 'fa000000-0000-4000-8000-000000000010',owner_id,id,1,'confirmed',
+ jsonb_build_object('schemaVersion',1,'outcome','Speak clearly','startingPoint','Beginner','targetDate',null,
+ 'weeklyMinutes',120,'constraints','','successCriteria','Explain a topic') from public.blueprints
+ where owner_id='fa000000-0000-4000-8000-000000000001';
+select set_config('planning_test.date',((clock_timestamp() at time zone 'UTC')::date)::text,true);
+select set_config('planning_test.skill',jsonb_build_object('name','blueprint-plan-path','version','1.0.0',
+ 'sha256',encode(sha256(convert_to('fixed instructions','UTF8')),'hex'),'instructions','fixed instructions')::text,true);
+select has_function('public','begin_path_planning',array['uuid','uuid','integer','integer','date'],'begin RPC exists');
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"fa000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+select throws_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)$$,
+ 'P0001','PATH_PLANNING_QUOTA_EXHAUSTED','new account has no implicit credits');
+reset role;
+insert into private.path_planning_quotas values('fa000000-0000-4000-8000-000000000001',5);
+set local role authenticated;
+select is(public.begin_path_planning('fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)->>'status','queued','begin captures a queued run');
+select is(public.begin_path_planning('fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)->>'status','queued','exact begin replay does not queue again');
+select is(public.read_path_planning('fa000000-0000-4000-8000-000000000020')#>>'{input_brief,status}','confirmed','brief snapshot comes from confirmed database row');
+select is(public.read_path_planning('fa000000-0000-4000-8000-000000000020')->'input_blueprint',public.read_blueprint_snapshot_v2(auth.uid()),'captured blueprint is actual v2 snapshot');
+select ok(not(public.read_path_planning('fa000000-0000-4000-8000-000000000020') ? 'lease_id'),'client receipt has no lease');
+select throws_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000010',2,0,current_setting('planning_test.date')::date)$$,'22023','PATH_PLANNING_RUN_REUSED','changed request cannot reuse run identity');
+select throws_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000021','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)$$,'P0001','PATH_PLANNING_BUSY','one active run per owner');
+select throws_ok($$select public.claim_path_planning(auth.uid(),'fa000000-0000-4000-8000-000000000020',gen_random_uuid(),current_setting('planning_test.skill')::jsonb)$$,'42501',null,'user cannot claim executor role');
+select throws_ok($$select public.finish_path_planning(auth.uid(),'fa000000-0000-4000-8000-000000000020',gen_random_uuid(),'{}')$$,'42501',null,'user cannot write generated output');
+select throws_ok($$update public.path_planning_runs set status='ready'$$,'42501',null,'table cannot bypass result write authority');
+select throws_ok($$select * from private.path_planning_leases$$,'42501',null,'lease remains private');
+select throws_ok($$update private.path_planning_quotas set available_attempts=100$$,'42501',null,'user cannot grant quota');
+reset role;
+select is((select available_attempts from private.path_planning_quotas where owner_id='fa000000-0000-4000-8000-000000000001'),4,'reservation happened exactly once');
+set local role service_role;
+select set_config('request.jwt.claims','{"role":"service_role"}',true);
+select throws_ok($$select public.claim_path_planning('fa000000-0000-4000-8000-000000000002','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',current_setting('planning_test.skill')::jsonb)$$,'P0002','PATH_PLANNING_NOT_FOUND','service claim requires correct owner');
+select throws_ok($$select public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',jsonb_set(current_setting('planning_test.skill')::jsonb,'{instructions}','"tampered"'))$$,'22023','PATH_PLANNING_INVALID_SKILL','skill digest binds full instructions');
+select throws_ok($$select public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',jsonb_set(current_setting('planning_test.skill')::jsonb,'{version}',to_jsonb(repeat('1',65)||'.0.0')))$$,'22023','PATH_PLANNING_INVALID_SKILL','skill version is bounded to 64 characters');
+select throws_ok($$select public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',jsonb_build_object('name','blueprint-plan-path','version','1.0.0','instructions',repeat('😀',16001),'sha256',encode(sha256(convert_to(repeat('😀',16001),'UTF8')),'hex')))$$,'22023','PATH_PLANNING_INVALID_SKILL','instruction bound counts supplementary characters as two UTF-16 units');
+select is(public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',current_setting('planning_test.skill')::jsonb)->'acquired','true'::jsonb,'first claim grants execution');
+select is(public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',current_setting('planning_test.skill')::jsonb)->'acquired','false'::jsonb,'same lease retry never authorizes second provider call');
+select is(public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000031',current_setting('planning_test.skill')::jsonb)->'acquired','false'::jsonb,'another lease cannot reclaim running work');
+reset role;
+-- A structural planner output fixture. SQL protects identity/state; domain validates generated nodes.
+select set_config('planning_test.result',(select jsonb_build_object('status','ready','providerMayHaveRun',true,
+ 'usage',jsonb_build_object('inputTokens',10,'outputTokens',20,'totalTokens',30),
+ 'draft',jsonb_set(input_blueprint,'{goals}','[{"id":"fa000000-0000-4000-8000-000000000080","title":"Generated","position":0,"stages":[]}]'),
+ 'schedule','[{"nodeId":"fa000000-0000-4000-8000-000000000081","week":1}]'::jsonb,'assumptions','[]'::jsonb,
+ 'skill',skill,'source',jsonb_build_object('runId',id,'briefId',brief_id,'briefRevision',brief_revision,
+ 'blueprintId',blueprint_id,'blueprintVersion',blueprint_version,'startDate',start_date))::text
+ from public.path_planning_runs where id='fa000000-0000-4000-8000-000000000020'),true);
+set local role service_role;
+select throws_ok($$select public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000031',current_setting('planning_test.result')::jsonb)$$,'42501','PATH_PLANNING_FORBIDDEN','wrong lease cannot complete');
+select throws_ok($$select public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',jsonb_set(current_setting('planning_test.result')::jsonb,'{source,briefRevision}','2'))$$,'22023','PATH_PLANNING_INVALID_RESULT','ready source must match captured brief');
+select throws_ok($$select public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',(current_setting('planning_test.result')::jsonb)#-'{draft,goals}')$$,'22023','PATH_PLANNING_INVALID_RESULT','missing result structure is rejected, never treated as SQL null success');
+select throws_ok($$select public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030','{"status":"unavailable","providerMayHaveRun":true,"usage":null,"providerError":"private provider prose"}')$$,'22023','PATH_PLANNING_INVALID_RESULT','raw provider error fields cannot enter persisted results');
+select throws_ok($$select public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',jsonb_set(current_setting('planning_test.result')::jsonb,'{usage,totalTokens}','-1'))$$,'22023','PATH_PLANNING_INVALID_RESULT','negative usage is rejected');
+select throws_ok($$select public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',jsonb_set(current_setting('planning_test.result')::jsonb,'{schedule}',(select jsonb_agg(jsonb_build_object('nodeId','fa000000-0000-4000-8000-000000000081','week',1)) from generate_series(1,129))))$$,'22023','PATH_PLANNING_INVALID_RESULT','schedule is bounded to 128 items');
+select is(public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',current_setting('planning_test.result')::jsonb)->>'status','ready','valid ready result persists');
+select is(public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',current_setting('planning_test.result')::jsonb)->>'status','ready','exact completion retry is idempotent');
+select throws_ok($$select public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000030',jsonb_set(current_setting('planning_test.result')::jsonb,'{usage,totalTokens}','31'))$$,'22023','PATH_PLANNING_COMPLETION_REUSED','different payload cannot overwrite receipt');
+reset role;
+select is((select version from public.blueprints where owner_id='fa000000-0000-4000-8000-000000000001'),0::bigint,'ready never changes formal blueprint');
+select is((select count(*) from public.blueprint_proposals where owner_id='fa000000-0000-4000-8000-000000000001'),0::bigint,'ready never manufactures proposal');
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"fa000000-0000-4000-8000-000000000001"}',true);
+select is(public.cancel_path_planning('fa000000-0000-4000-8000-000000000020')->>'status','ready','finished run cannot be cancelled retroactively');
+select is(public.begin_path_planning('fa000000-0000-4000-8000-000000000021','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)->>'status','queued','next run may begin after terminal result');
+select is(public.cancel_path_planning('fa000000-0000-4000-8000-000000000021')->>'status','cancelled','queued cancellation succeeds');
+select is(public.cancel_path_planning('fa000000-0000-4000-8000-000000000021')#>'{result,providerMayHaveRun}','false'::jsonb,'queued cancellation knows provider was not claimed');
+reset role;
+select is((select available_attempts from private.path_planning_quotas where owner_id='fa000000-0000-4000-8000-000000000001'),4,'queued cancel refunds exactly once');
+set local role authenticated;
+select lives_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000022','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)$$,'start cancellation-race case');
+reset role;
+set local role service_role;
+select lives_ok($$select public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000022','fa000000-0000-4000-8000-000000000032',current_setting('planning_test.skill')::jsonb)$$,'claim cancellation-race case');
+reset role;
+set local role authenticated;
+select is(public.cancel_path_planning('fa000000-0000-4000-8000-000000000022')->>'status','cancelled','running cancellation denies later draft');
+reset role;
+set local role service_role;
+select is(public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000022','fa000000-0000-4000-8000-000000000032',jsonb_set(current_setting('planning_test.result')::jsonb,'{source,runId}','"fa000000-0000-4000-8000-000000000022"'))->'result',
+ '{"status":"cancelled","providerMayHaveRun":true,"usage":{"inputTokens":10,"outputTokens":20,"totalTokens":30}}'::jsonb,'late result drops draft and preserves only known usage');
+reset role;
+select is((select available_attempts from private.path_planning_quotas where owner_id='fa000000-0000-4000-8000-000000000001'),3,'running cancellation does not refund');
+set local role authenticated;
+select lives_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000023','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)$$,'start waiting expiry case');
+reset role;
+update public.path_planning_runs set expires_at=clock_timestamp()-interval '1 second' where id='fa000000-0000-4000-8000-000000000023';
+set local role authenticated;
+select is(public.read_path_planning('fa000000-0000-4000-8000-000000000023')->>'status','cancelled','read recovers expired queue without provider call');
+select lives_ok($$select public.read_path_planning('fa000000-0000-4000-8000-000000000023')$$,'expired read retry is stable');
+reset role;
+select is((select available_attempts from private.path_planning_quotas where owner_id='fa000000-0000-4000-8000-000000000001'),3,'waiting expiry refunds once');
+set local role authenticated;
+select lives_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000024','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)$$,'start running expiry case');
+reset role;
+set local role service_role;
+select lives_ok($$select public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000024','fa000000-0000-4000-8000-000000000034',current_setting('planning_test.skill')::jsonb)$$,'claim running expiry case');
+reset role;
+update public.path_planning_runs set expires_at=clock_timestamp()-interval '1 second' where id='fa000000-0000-4000-8000-000000000024';
+set local role service_role;
+select is(public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000024','fa000000-0000-4000-8000-000000000035',current_setting('planning_test.skill')::jsonb)#>>'{run,status}','interrupted','expired claimed work cannot be re-leased');
+select is(public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000024','fa000000-0000-4000-8000-000000000034','{"status":"unavailable","providerMayHaveRun":true,"usage":null}')->>'status','interrupted','late failure keeps interruption and unknown usage');
+reset role;
+select is((select available_attempts from private.path_planning_quotas where owner_id='fa000000-0000-4000-8000-000000000001'),2,'running expiry does not refund');
+set local role authenticated;
+select lives_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000025','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)$$,'start stale source case');
+reset role;
+set local role service_role;
+select lives_ok($$select public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000025','fa000000-0000-4000-8000-000000000035',current_setting('planning_test.skill')::jsonb)$$,'claim stale source case');
+reset role;
+update public.goal_briefs set revision=2 where id='fa000000-0000-4000-8000-000000000010';
+set local role service_role;
+select is(public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000025','fa000000-0000-4000-8000-000000000035',jsonb_set(current_setting('planning_test.result')::jsonb,'{source,runId}','"fa000000-0000-4000-8000-000000000025"'))->>'status','stale','ready becomes stale when confirmed brief revision changed');
+reset role;
+set local role authenticated;
+select is(public.begin_path_planning('fa000000-0000-4000-8000-000000000025','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)->>'status','stale','exact replay survives later source edits');
+select throws_ok($$select public.begin_path_planning(gen_random_uuid(),'fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)$$,'40001','PATH_PLANNING_VERSION_CONFLICT','new run cannot use stale brief revision');
+select throws_ok($$select public.begin_path_planning(gen_random_uuid(),'fa000000-0000-4000-8000-000000000010',2,0,current_setting('planning_test.date')::date+2)$$,'22023','PATH_PLANNING_INVALID','start beyond UTC tolerance rejected');
+select is(public.read_path_planning('fa000000-0000-4000-8000-000000000020')->>'status','stale','later reads invalidate previously ready runs after source edit');
+select is(public.read_path_planning('fa000000-0000-4000-8000-000000000020')->'result',current_setting('planning_test.result')::jsonb,'stale marking preserves original result evidence');
+reset role;
+update private.path_planning_quotas set available_attempts=10 where owner_id='fa000000-0000-4000-8000-000000000001';
+update public.goal_briefs set status='draft' where id='fa000000-0000-4000-8000-000000000010';
+set local role authenticated;
+select throws_ok($$select public.begin_path_planning(gen_random_uuid(),'fa000000-0000-4000-8000-000000000010',2,0,current_setting('planning_test.date')::date)$$,'22023','PATH_PLANNING_INVALID','real unconfirmed definition is rejected');
+reset role;
+update public.goal_briefs set status='confirmed',content=jsonb_set(content,'{targetDate}',to_jsonb((current_setting('planning_test.date')::date-2)::text)) where id='fa000000-0000-4000-8000-000000000010';
+set local role authenticated;
+select throws_ok($$select public.begin_path_planning(gen_random_uuid(),'fa000000-0000-4000-8000-000000000010',2,0,current_setting('planning_test.date')::date)$$,'22023','PATH_PLANNING_INVALID','deadline before requested start is rejected');
+reset role;
+update public.goal_briefs set content=jsonb_set(content,'{targetDate}','null') where id='fa000000-0000-4000-8000-000000000010';
+insert into public.goals(id,owner_id,blueprint_id,title,position)
+ select gen_random_uuid(),owner_id,id,'capacity fixture',n from public.blueprints cross join generate_series(0,11) n
+ where owner_id='fa000000-0000-4000-8000-000000000001';
+set local role authenticated;
+select throws_ok($$select public.begin_path_planning(gen_random_uuid(),'fa000000-0000-4000-8000-000000000010',2,0,current_setting('planning_test.date')::date)$$,'22023','PATH_PLANNING_INVALID','goal capacity is checked against real blueprint');
+reset role;
+delete from public.goals where owner_id='fa000000-0000-4000-8000-000000000001';
+select is((select available_attempts from private.path_planning_quotas where owner_id='fa000000-0000-4000-8000-000000000001'),10,'invalid source/date/capacity do not consume credit');
+set local role authenticated;
+select lives_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000026','fa000000-0000-4000-8000-000000000010',2,0,current_setting('planning_test.date')::date)$$,'start expired queued claim case');
+reset role;
+update public.path_planning_runs set expires_at=clock_timestamp()-interval '1 second' where id='fa000000-0000-4000-8000-000000000026';
+set local role service_role;
+select is(public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000026',gen_random_uuid(),current_setting('planning_test.skill')::jsonb)->'acquired','false'::jsonb,'expired queued run never acquires lease');
+reset role;
+select is((select available_attempts from private.path_planning_quotas where owner_id='fa000000-0000-4000-8000-000000000001'),10,'expired queued claim refunds reservation');
+set local role authenticated;
+select lives_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000027','fa000000-0000-4000-8000-000000000010',2,0,current_setting('planning_test.date')::date)$$,'start blueprint version change case');
+reset role;
+set local role service_role;
+select lives_ok($$select public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000027','fa000000-0000-4000-8000-000000000037',current_setting('planning_test.skill')::jsonb)$$,'claim blueprint version change case');
+reset role;
+update public.blueprints set version=1 where owner_id='fa000000-0000-4000-8000-000000000001';
+set local role service_role;
+select is(public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000027','fa000000-0000-4000-8000-000000000037',
+ jsonb_set(jsonb_set(current_setting('planning_test.result')::jsonb,'{source,runId}','"fa000000-0000-4000-8000-000000000027"'),'{source,briefRevision}','2'))->>'status','stale','formal blueprint version change also marks result stale');
+reset role;
+set local role authenticated;
+select lives_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000028','fa000000-0000-4000-8000-000000000010',2,1,current_setting('planning_test.date')::date)$$,'start failed output mapping case');
+reset role;
+set local role service_role;
+select lives_ok($$select public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000028','fa000000-0000-4000-8000-000000000038',jsonb_build_object('name','blueprint-plan-path','version','1.0.0','instructions',repeat('😀',16000),'sha256',encode(sha256(convert_to(repeat('😀',16000),'UTF8')),'hex')))$$,'exactly 32000 UTF-16 instruction units are accepted');
+select is(public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000028','fa000000-0000-4000-8000-000000000038','{"status":"invalid_output","providerMayHaveRun":true,"usage":null}')->>'status','failed','invalid output maps to failed without fabricated usage');
+reset role;
+set local role authenticated;
+select lives_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000029','fa000000-0000-4000-8000-000000000010',2,1,current_setting('planning_test.date')::date)$$,'start executor cancellation mapping case');
+reset role;
+set local role service_role;
+select lives_ok($$select public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000029','fa000000-0000-4000-8000-000000000039',current_setting('planning_test.skill')::jsonb)$$,'claim executor cancellation mapping case');
+select is(public.finish_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000029','fa000000-0000-4000-8000-000000000039','{"status":"cancelled","providerMayHaveRun":false,"usage":null}')->>'status','cancelled','executor cancellation maps to cancelled, not failed');
+reset role;
+set local role authenticated;
+select lives_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000040','fa000000-0000-4000-8000-000000000010',2,1,current_setting('planning_test.date')::date)$$,'start source edit before claim case');
+reset role;
+update public.goal_briefs set revision=3 where id='fa000000-0000-4000-8000-000000000010';
+set local role service_role;
+select is(public.claim_path_planning('fa000000-0000-4000-8000-000000000001','fa000000-0000-4000-8000-000000000040','fa000000-0000-4000-8000-000000000050',current_setting('planning_test.skill')::jsonb)->'acquired','false'::jsonb,'queued source change cannot acquire execution rights');
+reset role;
+set local role authenticated;
+select is(public.read_path_planning('fa000000-0000-4000-8000-000000000040')->'result','{"status":"invalid_input","providerMayHaveRun":false,"usage":null}'::jsonb,'unclaimed source change records safe invalid input');
+select is(public.begin_path_planning('fa000000-0000-4000-8000-000000000040','fa000000-0000-4000-8000-000000000010',2,1,current_setting('planning_test.date')::date)->>'status','failed','exact stale reservation replay does not begin again');
+reset role;
+select is((select available_attempts from private.path_planning_quotas where owner_id='fa000000-0000-4000-8000-000000000001'),7,'unclaimed source invalidation refunds exactly once');
+select is_empty($$select run_id from private.path_planning_leases where run_id='fa000000-0000-4000-8000-000000000040'$$,'source invalidation creates no private lease');
+set local role authenticated;
+select lives_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000041','fa000000-0000-4000-8000-000000000010',3,1,current_setting('planning_test.date')::date)$$,'start queued blueprint edit case');
+reset role;
+update public.blueprints set version=2 where owner_id='fa000000-0000-4000-8000-000000000001';
+set local role authenticated;
+select is(public.read_path_planning('fa000000-0000-4000-8000-000000000041')->>'status','failed','read recovers source invalidation after queued blueprint edit');
+reset role;
+select is((select available_attempts from private.path_planning_quotas where owner_id='fa000000-0000-4000-8000-000000000001'),7,'queued blueprint invalidation also refunds reservation');
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"fa000000-0000-4000-8000-000000000002"}',true);
+select is_empty($$select id from public.path_planning_runs$$,'RLS prevents other owner reads');
+select throws_ok($$select public.read_path_planning('fa000000-0000-4000-8000-000000000020')$$,'P0002','PATH_PLANNING_NOT_FOUND','RPC prevents other owner reads');
+select throws_ok($$select public.cancel_path_planning('fa000000-0000-4000-8000-000000000020')$$,'P0002','PATH_PLANNING_NOT_FOUND','other owner cannot cancel');
+select throws_ok($$select public.begin_path_planning('fa000000-0000-4000-8000-000000000020','fa000000-0000-4000-8000-000000000010',1,0,current_setting('planning_test.date')::date)$$,'P0002','PATH_PLANNING_NOT_FOUND','run identity cannot cross accounts');
+select set_config('request.jwt.claims','{"sub":"fa000000-0000-4000-8000-000000000001","client_id":"any-extension"}',true);
+select is_empty($$select id from public.path_planning_runs$$,'all OAuth extensions are excluded by RLS');
+select throws_ok($$select public.read_path_planning('fa000000-0000-4000-8000-000000000020')$$,'42501','PATH_PLANNING_FORBIDDEN','extension cannot access run RPC');
+select set_config('request.jwt.claims','{"sub":"fa000000-0000-4000-8000-000000000001","is_anonymous":true}',true);
+select is_empty($$select id from public.path_planning_runs$$,'anonymous auth users cannot read');
+select throws_ok($$select public.cancel_path_planning('fa000000-0000-4000-8000-000000000020')$$,'42501','PATH_PLANNING_FORBIDDEN','anonymous auth users cannot cancel');
+reset role;
+set local role anon;
+select throws_ok($$select public.read_path_planning('fa000000-0000-4000-8000-000000000020')$$,'42501',null,'anonymous role has no RPC execute grant');
+select throws_ok($$select * from public.path_planning_runs$$,'42501',null,'anonymous direct table reads denied');
+reset role;
+select ok(has_table_privilege('service_role','private.path_planning_quotas','SELECT,INSERT,UPDATE'),'platform may read and grant quota');
+select ok(not has_table_privilege('service_role','private.path_planning_quotas','DELETE'),'platform quota grant cannot delete rows');
+select ok(not has_table_privilege('service_role','private.path_planning_quotas','TRUNCATE'),'platform quota grant cannot truncate ledger');
+select ok(not p.prosecdef and p.proconfig=array['search_path=""']::text[],'public planning wrappers are invoker and fix search_path')
+ from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in
+ ('begin_path_planning','read_path_planning','cancel_path_planning','claim_path_planning','finish_path_planning');
+select * from finish();
+rollback;

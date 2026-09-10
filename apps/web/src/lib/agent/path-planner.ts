@@ -1,23 +1,16 @@
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { ToolLoopAgent, Output, isStepCount, NoObjectGeneratedError, NoOutputGeneratedError, wrapLanguageModel, type LanguageModel, type LanguageModelUsage } from "ai";
-import { blueprintSnapshotSchema, goalBriefSchema, parseCurrentBlueprintSnapshot, prepareBlueprintDraft, type BlueprintSnapshot } from "@blueprint/domain";
+import { blueprintSnapshotSchema, goalBriefSchema, parseCurrentBlueprintSnapshot, prepareBlueprintDraft } from "@blueprint/domain";
 import { loadPlanningSkill } from "./planning-skill";
 import { pathCandidateSchema, isFeasibleCandidate } from "./path-candidate";
+import type { PlanningResult as Result, PlanningUsage as Usage } from "./planning-result";
 
 const requestSchema = z.strictObject({
   runId: z.uuid(), startDate: z.iso.date().refine(value => !value.startsWith("0000-")), signal: z.instanceof(AbortSignal),
   brief: goalBriefSchema, blueprint: blueprintSnapshotSchema,
+  expectedSkillSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
-
-type Usage = { inputTokens: number | null; outputTokens: number | null; totalTokens: number | null };
-type Result = { status: "invalid_input" | "needs_confirmation" | "unavailable" | "invalid_output" | "cancelled" | "timed_out";
-  providerMayHaveRun: boolean; usage: Usage | null } | {
-  status: "ready"; providerMayHaveRun: true; usage: Usage; draft: BlueprintSnapshot;
-  schedule: Array<{ nodeId: string; week: number }>; assumptions: string[];
-  skill: { name: string; version: string; sha256: string; instructions: string };
-  source: { runId: string; briefId: string; briefRevision: number; blueprintId: string; blueprintVersion: number; startDate: string };
-};
 
 function usageSummary(usage: LanguageModelUsage): Usage {
   return { inputTokens: usage.inputTokens ?? null, outputTokens: usage.outputTokens ?? null, totalTokens: usage.totalTokens ?? null };
@@ -55,6 +48,9 @@ export function createPathPlanner(dependencies: { model: Exclude<LanguageModel, 
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         const skill = await loadPlanningSkill();
+        if (parsed.data.expectedSkillSha256 && parsed.data.expectedSkillSha256 !== skill.identity.sha256) {
+          return { status: "unavailable", providerMayHaveRun, usage };
+        }
         if (signal.aborted) return { status: "cancelled", providerMayHaveRun, usage };
         const generationSignal = AbortSignal.any([signal, deadline.signal]);
         timer = setTimeout(() => deadline.abort(), 60_000);
