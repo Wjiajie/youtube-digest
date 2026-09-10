@@ -44,7 +44,7 @@ export function GoalPathView({ goal, selectedNodeId }: { goal: GoalProgressView;
       <p>{goal.next.completion === "needs_review" ? "节点名称、类型或完成依据已变化，请重新核对旧自评。前置关系见下方完整路径。" : "按当前前置关系与自评状态，先关注这一步。"}</p>
     </aside> : goal.awaitingPlan ? <div className="path-empty"><h2>等待规划</h2><p>这条路径还没有节点。通过编辑路径提案补充，并审阅确认后生效。</p></div>
       : <div className="path-notice"><h2>{goal.allSelfConfirmed ? "所有节点已自我确认" : "先核对前置关系"}</h2><p>{goal.allSelfConfirmed ? "这是你对节点的自评，不代表目标已经达成。仍可回看依据或重新打开节点。" : "暂无前置条件满足的下一步，请沿下方依赖关系核对。"}</p></div>}
-    <div className="path-tools"><Link className="bp-button" href="/progress/status">确认节点状态</Link><Link className="bp-button" href="/progress">记录成果</Link><Link className="bp-button" href="/progress/notes">视频笔记</Link><p className="path-muted">进入后选择对应节点，再核对并确认。</p></div>
+    <div className="path-tools"><Link className="bp-button" href="/progress/status">确认节点状态</Link><Link className="bp-button" href="/progress">记录成果</Link><Link className="bp-button" href="/progress/notes">视频笔记</Link><Link className="bp-button" href="/progress/resume">继续学习</Link><p className="path-muted">进入后选择对应节点，再核对并确认。</p></div>
     <ol className="path-stages" aria-label="路径阶段">{stages.map((stage, stageIndex) => <li key={stage.id}><section>
       <p className="path-eyebrow">阶段 {String(stageIndex + 1).padStart(2, "0")}</p><h2>{stage.title}</h2>
       {stage.nodes.length ? <ol className="path-nodes" aria-label="完整节点路径">{goal.nodes.filter(view => view.stageId === stage.id).map(view => {

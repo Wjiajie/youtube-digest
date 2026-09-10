@@ -36,6 +36,19 @@ test("own sidepanel explicitly reads the matching active player's integer positi
   expect(fixture.sendMessage).toHaveBeenCalledExactlyOnceWith(7, { type: "BLUEPRINT_READ_PLAYER_POSITION", videoId: "abcdefghijk" }, { frameId: 0 });
   expect(fixture.query).toHaveBeenCalledTimes(2);
 });
+test("neutral learning-position alias retains own-sidepanel, owner and active-video guards without saving", async () => {
+  const learningMessage = { ...message, type: "READ_LEARNING_POSITION" };
+  fixture.sendMessage.mockResolvedValue({ ok: true, value: { videoId: "abcdefghijk", positionSeconds: 0 } });
+  expect(await background(learningMessage, sidepanel)).toEqual({ ok: true, value: { videoId: "abcdefghijk", positionSeconds: 0 } });
+  expect(fixture.sendMessage).toHaveBeenCalledExactlyOnceWith(7, { type: "BLUEPRINT_READ_PLAYER_POSITION", videoId: "abcdefghijk" }, { frameId: 0 });
+  fixture.sendMessage.mockClear();
+  expect(await background(learningMessage, { ...sidepanel, url: "https://www.youtube.com/watch?v=abcdefghijk" })).toEqual({ ok: false, code: "forbidden" });
+  expect(await background({ ...learningMessage, ownerId: "another-owner" }, sidepanel)).toEqual({ ok: false, code: "forbidden" });
+  fixture.query.mockResolvedValue([{ id: 7, url: "https://www.youtube.com/watch?v=lmnopqrstuv" }]);
+  expect(await background(learningMessage, sidepanel)).toEqual({ ok: false, code: "unavailable" });
+  expect(fixture.sendMessage).not.toHaveBeenCalled();
+  expect(fixture.stored.blueprint_session_outbox_v1 ?? []).toEqual([]);
+});
 test("the exact own sidepanel document is authorized when Chrome hosts it in an extension tab", async () => {
   fixture.sendMessage.mockResolvedValue({ ok: true, value: { videoId: "abcdefghijk", positionSeconds: 12 } });
   expect(await background(message, { ...sidepanel, tab: { id: 9, url: sidepanel.url } })).toEqual({ ok: true, value: { videoId: "abcdefghijk", positionSeconds: 12 } });

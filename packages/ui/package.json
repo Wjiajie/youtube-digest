@@ -14,6 +14,8 @@
     "./node-status-workspace.css": "./src/node-status-workspace.css",
     "./learning-notes": "./src/learning-notes.tsx",
     "./learning-notes.css": "./src/learning-notes.css",
+    "./learning-positions": "./src/learning-positions.tsx",
+    "./learning-positions.css": "./src/learning-positions.css",
     ".": "./src/index.tsx"
   },
   "scripts": {

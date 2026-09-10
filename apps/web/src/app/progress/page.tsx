@@ -20,7 +20,7 @@ export default async function ProgressPage() {
   const { actor, client } = identity.value;
   const workspace = await readEvidenceWorkspace(client, actor);
   return <AccountThemeShell accountId={actor.userId} client={client}><main className="shell evidence-shell">
-    <nav className="evidence-nav" aria-label="成长档案导航"><Link href="/" className="bp-button">← 返回蓝图</Link><Link href="/progress/status" className="bp-button">确认节点状态</Link><Link href="/progress/notes" className="bp-button">视频笔记</Link><span className="brand">Blueprint / Journal</span></nav>
+    <nav className="evidence-nav" aria-label="成长档案导航"><Link href="/" className="bp-button">← 返回蓝图</Link><Link href="/progress/status" className="bp-button">确认节点状态</Link><Link href="/progress/notes" className="bp-button">视频笔记</Link><Link href="/progress/resume" className="bp-button">继续学习</Link><span className="brand">Blueprint / Journal</span></nav>
     <header className="evidence-intro">
       <div><p className="brand">每一步，都有回声</p><h1>成长档案</h1><p className="subtle">把做过的尝试、发现的变化，留给未来的自己。</p></div>
       <div className="evidence-seal" aria-hidden="true">记<span>YOUR JOURNEY</span></div>

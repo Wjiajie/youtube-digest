@@ -92,6 +92,30 @@ test("record view offers explicit video notes without automatically reading priv
   expect(transport.sendMessage).not.toHaveBeenCalled();
 });
 
+test("continue-learning stays mounted across task, theme and video changes but resets on account change", async () => {
+  localStorage.clear();
+  const original = transport.sendMessage.getMockImplementation()!;
+  transport.sendMessage.mockImplementation(async message => message.type === "LOAD_LEARNING_POSITIONS"
+    ? { ok: true, value: { blueprint: { schemaVersion: 2, id: "fd580000-0000-4000-8000-000000000001", version: 2, title: "私人位置路径", goals: [] }, records: [] } }
+    : original(message));
+  await act(async () => root.render(<App />));
+  expect(transport.sendMessage.mock.calls.some(([message]) => message.type === "LOAD_LEARNING_POSITIONS")).toBe(false);
+  await clickButton("继续学习");
+  const field = host.querySelector('[aria-label="继续学习位置（秒）"]'); expect(field).not.toBeNull();
+  expect(field!.closest<HTMLElement>('[role="tabpanel"]')!.hidden).toBe(false);
+  transport.sendMessage.mockClear();
+  await clickButton("记录"); expect(field!.closest<HTMLElement>('[role="tabpanel"]')!.hidden).toBe(true);
+  await clickButton("学习"); expect(host.querySelector('[aria-label="继续学习位置（秒）"]')).toBe(field);
+  preferences = { theme: { id: "eastern", version: 1 }, revision: 2 };
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await act(async () => tabs.onActivated.addListener.mock.calls[0]![0]({ tabId: 8 }));
+  expect(host.querySelector('[aria-label="继续学习位置（秒）"]')).toBe(field);
+  expect(transport.sendMessage.mock.calls.some(([message]) => message.type === "LOAD_LEARNING_POSITIONS" || message.type === "SAVE_LEARNING_POSITION")).toBe(false);
+  transport.sendMessage.mockResolvedValue({ connected: true, userId: "user-b", nodes: [], preferences });
+  await act(async () => storage.addListener.mock.calls[0]![0]({ blueprint_cloud_session_v1: { oldValue: { userId: "user-a" }, newValue: { userId: "user-b" } } }, "local"));
+  expect(host.querySelector('[aria-label="继续学习位置（秒）"]')).toBeNull();
+});
+
 test("video notes stay mounted across tasks, themes and active video changes but are hidden on account change", async () => {
   localStorage.clear();
   const original = transport.sendMessage.getMockImplementation()!;
