@@ -15,7 +15,7 @@ type Result = { status: "invalid_input" | "needs_confirmation" | "unavailable" |
   providerMayHaveRun: boolean; usage: Usage | null } | {
   status: "ready"; providerMayHaveRun: true; usage: Usage; draft: BlueprintSnapshot;
   schedule: Array<{ nodeId: string; week: number }>; assumptions: string[];
-  skill: { name: string; version: string; sha256: string };
+  skill: { name: string; version: string; sha256: string; instructions: string };
   source: { runId: string; briefId: string; briefRevision: number; blueprintId: string; blueprintVersion: number; startDate: string };
 };
 
@@ -96,7 +96,7 @@ export function createPathPlanner(dependencies: { model: Exclude<LanguageModel, 
           })),
         }] });
         return { status: "ready", providerMayHaveRun: true, usage, draft, schedule,
-          assumptions: candidate.assumptions, skill: skill.identity,
+          assumptions: candidate.assumptions, skill: { ...skill.identity, instructions: skill.instructions },
           source: { runId, briefId: brief.id, briefRevision: brief.revision, blueprintId: blueprint.id, blueprintVersion: blueprint.version, startDate },
         };
       } catch (error) {

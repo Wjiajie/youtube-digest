@@ -212,6 +212,15 @@ describe("controlled path planning", () => {
     expect(result.draft.version).toBe(4);
   });
 
+  it("retains the exact fixed Skill instructions used by this run for checkpoint provenance", async () => {
+    const model = new MockLanguageModelV4({ doGenerate: reply(JSON.stringify(plan())) });
+    const result = await createPathPlanner({ model }).run(input());
+    expect(result.status).toBe("ready");
+    if (result.status !== "ready") throw new Error("Expected draft with provenance");
+    expect(result.skill).toHaveProperty("instructions", model.doGenerateCalls[0].prompt.find(message => message.role === "system")?.content);
+    expect(result.skill).toHaveProperty("instructions", expect.stringContaining("# 可审阅路径规划"));
+  });
+
   it("accepts an exact weekly budget and inclusive deadline without assuming daily availability", async () => {
     const request = input(); request.brief.content.weeklyMinutes = 90; request.brief.content.targetDate = "2026-09-17";
     const model = new MockLanguageModelV4({ doGenerate: reply(JSON.stringify(plan())) });
