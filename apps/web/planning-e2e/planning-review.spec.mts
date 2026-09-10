@@ -6,7 +6,8 @@ import { readFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { localSupabaseTestConfig } from "../../../scripts/local-supabase-test-config.mjs";
 
-test("real local account recovers, reads and cancels planning across both themes", async ({ page, context }, testInfo) => {
+for (const longText of [false, true]) {
+test(`real local account recovers, reads and cancels planning across both themes (${longText ? "long text" : "ordinary text"})`, async ({ page, context }, testInfo) => {
   const local = localSupabaseTestConfig();
   const admin = createClient(local.API_URL, local.SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
   const id = randomUUID(), email = `${id}@planning-ui.example.test`, password = randomUUID(), briefId = randomUUID();
@@ -23,7 +24,8 @@ test("real local account recovers, reads and cancels planning across both themes
       if (ready.error.code !== "PGRST303" || attempt === 5) throw new Error(`Read readiness: ${ready.error.code}`);
       await new Promise(resolve => setTimeout(resolve, 500));
     }
-    const content = { schemaVersion: 1, outcome: "制作一组摄影作品", startingPoint: "会使用相机", weeklyMinutes: 180, targetDate: null,
+    const title = longText ? "B".repeat(240) : "摄影作品路径";
+    const content = { schemaVersion: 1, outcome: longText ? "A".repeat(240) : "制作一组摄影作品", startingPoint: "会使用相机", weeklyMinutes: 180, targetDate: null,
       constraints: "只在周末练习", successCriteria: "展示六张作品并写下取舍" };
     expect((await client.rpc("save_goal_brief", { p_id: briefId, p_expected_revision: 0, p_content: content, p_confirm: true, p_client_mutation_id: randomUUID() })).error).toBeNull();
     execFileSync("docker", ["exec", "supabase_db_blueprint-local", "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c",
@@ -39,7 +41,7 @@ test("real local account recovers, reads and cancels planning across both themes
     const leaseId = randomUUID();
     expect((await admin.rpc("claim_path_planning", { p_owner_id: id, p_run_id: command.runId, p_lease_id: leaseId, p_skill: skill })).error).toBeNull();
     const shootId = randomUUID(), checkId = randomUUID();
-    const draft = { ...begun.data.input_blueprint, goals: [{ id: randomUUID(), position: 0, title: "摄影作品路径", description: "拍摄后挑选作品",
+    const draft = { ...begun.data.input_blueprint, goals: [{ id: randomUUID(), position: 0, title, description: "拍摄后挑选作品",
       stages: [{ id: randomUUID(), title: "拍摄与筛选", position: 0, nodes: [
         { id: shootId, position: 0, type: "practice", title: "拍摄同一主题", description: "尝试不同视角后整理照片", estimatedMinutes: 60, completionCriteria: "挑选六张并记录取舍", dependencyIds: [], resources: [] },
         { id: checkId, position: 1, type: "checkpoint", title: "检查照片取舍", description: "对照自己的判断记录改进", estimatedMinutes: 30, completionCriteria: "写出两项改进方向", dependencyIds: [shootId], resources: [] },
@@ -53,6 +55,9 @@ test("real local account recovers, reads and cancels planning across both themes
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
     await page.goto(`/goals/${briefId}`);
     await page.getByRole("link", { name: "查看规划记录", exact: true }).click();
+    await page.setViewportSize({ width: 320, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.setViewportSize({ width: 1440, height: 1000 });
     await page.getByRole("link", { name: "查看这次规划", exact: true }).click();
     await expect(page.getByRole("heading", { name: "草案已保存", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "拍摄同一主题", exact: true })).toBeVisible();
@@ -77,14 +82,15 @@ test("real local account recovers, reads and cancels planning across both themes
     await page.reload(); await expect(page.getByRole("heading", { name: "已取消", exact: true })).toBeVisible();
     expect((await client.rpc("save_goal_brief", { p_id: briefId, p_expected_revision: 1, p_content: { ...content, weeklyMinutes: 90 }, p_confirm: false, p_client_mutation_id: randomUUID() })).error).toBeNull();
     await page.goto(`/planning/${command.runId}`); await expect(page.getByRole("heading", { name: "来源已变化", exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "摄影作品路径", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
     expect((await client.rpc("read_blueprint_snapshot_v2", { p_owner_id: id })).data.goals).toEqual([]);
     expect(errors).toEqual([]);
     await context.clearCookies(); await page.reload(); await expect(page).toHaveURL(/\/login\?next=/);
-    await expect(page.getByText("摄影作品路径", { exact: true })).toHaveCount(0);
+    await expect(page.getByText(title, { exact: true })).toHaveCount(0);
   } finally {
     await context.setOffline(false); await context.clearCookies(); await client.auth.signOut().catch(() => {});
     expect((await admin.auth.admin.deleteUser(id)).error).toBeNull();
     console.log("Removed only this test's local planning account and cascaded records; no email or live provider call.");
   }
 });
+}

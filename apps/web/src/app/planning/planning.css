@@ -16,6 +16,8 @@
 .planning-path h3 { margin-top: 28px; overflow-wrap: anywhere; }
 .planning-path li { line-height: 1.8; overflow-wrap: anywhere; }
 .planning-shell a.bp-button { display: inline-flex; align-items: center; text-decoration: none; margin-top: 12px; }
+.planning-shell h2, .planning-history .brief-intro p { overflow-wrap: anywhere; }
+.planning-history .brief-intro > div { min-width: 0; }
 [data-bp-theme="eastern"] .planning-nodes li::before { border-radius: 50%; box-shadow: 0 0 0 4px var(--bp-bg); }
 [data-bp-theme="eastern"] .planning-status { border-top-width: 1px; border-inline-start: 3px solid var(--bp-accent); }
 @media (max-width: 850px) { .planning-columns { grid-template-columns: 1fr; } .planning-source { order: 2; } }

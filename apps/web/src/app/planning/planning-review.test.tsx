@@ -27,8 +27,17 @@ it("cancels pending work without generating or applying a path", async () => {
   expect(host.textContent).toContain("等待执行");
   await act(async () => button("取消本次规划").click());
   expect(cancel).toHaveBeenCalledTimes(1); expect(host.textContent).toContain("已取消");
+  expect([...host.querySelectorAll('[role="status"]')].some(element => element.textContent === "已核对云端记录：已取消。")).toBe(true);
   expect(button("取消本次规划")).toBeUndefined();
   expect(host.textContent).not.toContain("已应用路径");
+});
+
+it("announces a successful refresh even when the run status has not changed", async () => {
+  const initial = queued();
+  await act(async () => root.render(<PlanningReview accountId={owner} initial={initial}
+    readAction={async () => ({ ok: true, run: initial })} cancelAction={async () => ({ ok: true, run: initial })} />));
+  await act(async () => button("刷新运行状态").click());
+  expect([...host.querySelectorAll('[role="status"]')].some(element => element.textContent === "已核对云端记录：等待执行。")).toBe(true);
 });
 
 it("keeps recoverable content on network failure but hides it when identity is lost", async () => {

@@ -8,6 +8,7 @@ import { readGoalBrief } from "@/lib/goal-briefs";
 import { AccountThemeShell } from "../../../account-theme-shell";
 import { AuthUnavailable } from "../../../auth-unavailable";
 import "../../goal-brief.css";
+import "../../../planning/planning.css";
 
 export const metadata = { title: "目标规划记录 · Blueprint" };
 export default async function PlanningListPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ page?: string }> }) {
@@ -21,7 +22,7 @@ export default async function PlanningListPage({ params, searchParams }: { param
   const { actor, client } = identity.value;
   const brief = await readGoalBrief(client, actor, id).catch(() => ({ ok: false as const, code: "unavailable" as const }));
   const records = brief.ok ? await createPlanningRunAccess(client, actor).list(id, (page - 1) * 20) : null;
-  return <AccountThemeShell accountId={actor.userId} client={client}><main className="shell brief-shell">
+  return <AccountThemeShell accountId={actor.userId} client={client}><main className="shell brief-shell planning-history">
     <nav className="brief-nav"><Link href={`/goals/${id}`} prefetch={false} className="bp-button">← 目标定义</Link><span className="brand">Blueprint / History</span></nav>
     <header className="brief-intro"><div><p className="brand">让建议有迹可循</p><h1>规划记录</h1><p>{brief.ok ? brief.value.content.outcome : "无法读取目标定义"}</p></div><span className="brief-emblem" aria-hidden="true">策<span>PLANNING</span></span></header>
     {records?.ok ? <><p className="subtle">按创建时间排列。进入记录核对当前状态，不会重新生成路径。</p>

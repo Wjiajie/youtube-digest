@@ -17,10 +17,11 @@ export function PlanningReview(props: Props) {
 
 function ReviewSession({ accountId, initial, readAction, cancelAction }: Props) {
   const [run, setRun] = useState(initial), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
+  const [announcement, setAnnouncement] = useState("");
   const [hidden, setHidden] = useState(false); const locked = useRef(false);
   async function perform(action: () => Promise<PlanningResponse>) {
     if (locked.current || hidden) return;
-    locked.current = true; setBusy(true); setMessage("");
+    locked.current = true; setBusy(true); setMessage(""); setAnnouncement("");
     try {
       const result = await action();
       if (!result.ok) {
@@ -29,6 +30,7 @@ function ReviewSession({ accountId, initial, readAction, cancelAction }: Props) 
       }
       if (result.run.ownerId !== accountId || result.run.id !== initial.id) { setHidden(true); return; }
       setRun(result.run);
+      setAnnouncement(`已核对云端记录：${labels[result.run.status]}。`);
     } catch { setMessage("网络中断，下面保留的内容不是最新状态。请重新读取，不会自动生成或应用路径。"); }
     finally { locked.current = false; setBusy(false); }
   }
@@ -47,7 +49,7 @@ function ReviewSession({ accountId, initial, readAction, cancelAction }: Props) 
       <div><p className="brand">PATH / REVIEW</p><h1>{labels[run.status]}</h1><p>这是规划记录，不是正式路径。阅读与刷新不会调用模型。</p></div>
       <div className="brief-actions"><Button disabled={busy} onClick={() => void perform(readAction)}>刷新运行状态</Button>
         {active && <Button disabled={busy} onClick={() => void perform(cancelAction)}>取消本次规划</Button>}</div>
-      {busy && <Status tone="progress">正在核对云端记录…</Status>}
+      <Status tone={busy ? "progress" : "neutral"}>{busy ? "正在核对云端记录…" : announcement}</Status>
       {message && <Status tone="warning">{message}</Status>}
       {run.status === "stale" && <Status tone="warning">目标定义或蓝图已修改。以下是旧来源的建议，不能当作当前可应用草案。</Status>}
       {active && <p className="subtle">可离开并通过本页地址返回。不会因为刷新而重新生成；取消执行中的请求不保证供应商停止计费。</p>}
