@@ -65,6 +65,7 @@ try {
     const resourceUpgrade = file.endsWith("_resource_runs.sql") ? await captureResourceUpgrade() : null;
     const adoptionUpgrade = file.endsWith("_resource_adoption.sql") ? await seedAdoptionUpgrade() : null;
     const resourceOrderUpgrade = file.endsWith("_resource_order.sql") ? await seedResourceOrderUpgrade() : null;
+    const notesUpgrade = file.endsWith("_learning_notes.sql") ? await captureResourceUpgrade() : null;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
     if (legacy) await verifyLegacyPlanningUpgrade(legacy);
@@ -73,6 +74,7 @@ try {
     if (resourceUpgrade) await verifyResourceUpgrade(resourceUpgrade);
     if (adoptionUpgrade) await verifyAdoptionUpgrade(adoptionUpgrade);
     if (resourceOrderUpgrade) await verifyResourceOrderUpgrade(resourceOrderUpgrade);
+    if (notesUpgrade) await verifyLearningNotesUpgrade(notesUpgrade);
   }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
@@ -457,6 +459,28 @@ async function captureResourceUpgrade() {
     before[`${schema}.${table}`] = (await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb) as rows from "${schema}"."${table}" t`)).rows[0].rows;
   }
   return before;
+}
+
+async function verifyLearningNotesUpgrade(before) {
+  assert.deepEqual(await captureResourceUpgrade(), { ...before, "public.learning_notes": [] },
+    "notes migration preserves every existing source, proposal, formal path, evidence, status and learning-session row; no fabricated notes");
+  const acl = (await db.query(`select
+    has_table_privilege('authenticated','public.learning_notes','SELECT') as owner_read,
+    has_table_privilege('authenticated','public.learning_notes','INSERT') as direct_insert,
+    has_table_privilege('authenticated','public.learning_notes','UPDATE') as direct_update,
+    has_table_privilege('authenticated','public.learning_notes','DELETE') as direct_delete,
+    has_function_privilege('anon','public.record_learning_note(uuid,uuid,bigint,text,integer,uuid)','EXECUTE') as anon_write,
+    has_function_privilege('anon','public.read_learning_note_workspace(uuid)','EXECUTE') as anon_read,
+    has_function_privilege('service_role','private.record_learning_note(uuid,uuid,bigint,text,integer,uuid)','EXECUTE') as service_write,
+    (select relrowsecurity from pg_class where oid='public.learning_notes'::regclass) as rls`)).rows[0];
+  assert.deepEqual(acl, { owner_read: true, direct_insert: false, direct_update: false, direct_delete: false,
+    anon_write: false, anon_read: false, service_write: false, rls: true }, "notes upgrade exposes only owner reads and narrow explicit authenticated RPCs");
+  await becomeUser("d8000000-0000-4000-8000-000000000001");
+  const workspace = (await db.query("select public.read_learning_note_workspace($1) as value", ["d8000000-0000-4000-8000-000000000001"])).rows[0].value;
+  assert.deepEqual(workspace.records, [], "existing populated accounts start with no manufactured notes");
+  assert.equal(workspace.blueprint.version, 2, "coherent read retains previously confirmed Blueprint revision");
+  await db.exec("reset role");
+  assert.deepEqual(await captureResourceUpgrade(), { ...before, "public.learning_notes": [] }, "upgrade workspace read is non-mutating");
 }
 
 async function verifyResourceUpgrade(before) {

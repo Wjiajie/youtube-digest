@@ -30,8 +30,8 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // These exact routes validate/refresh Cookie Auth themselves. Next's proxy body
+    // These exact routes independently verify Auth. Next's proxy body
     // finalization waits for EOF, hiding a stalled upload from its read deadline.
-    "/((?!api/(?:resources/runs|planning/runs|clarification/turns)/?$|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api/(?:resources/runs|planning/runs|clarification/turns|v1/learning-notes)/?$|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
