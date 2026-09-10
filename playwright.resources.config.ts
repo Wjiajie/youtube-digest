@@ -2,7 +2,8 @@ import { defineConfig } from "@playwright/test";
 import journal from "./playwright.journal.config";
 import { localSupabaseTestConfig } from "./scripts/local-supabase-test-config.mjs";
 const local = localSupabaseTestConfig();
-export default defineConfig({ ...journal, testDir: "./apps/web/resource-e2e", outputDir: ".goal-loop/evidence/resource-entry",
+export default defineConfig({ ...journal, testDir: "./apps/web/resource-e2e",
+  outputDir: process.env.BLUEPRINT_RESOURCE_ENTRY_TEST_DISABLED === "true" ? ".goal-loop/evidence/resource-entry-disabled" : ".goal-loop/evidence/resource-entry",
   globalSetup: "./scripts/resource-edge-test-setup.mjs",
   webServer: { ...journal.webServer, command: "npm run build:web && npm run start --workspace @blueprint/web -- --port 3100",
     url: "http://127.0.0.1:3100/login", reuseExistingServer: false, timeout: 120000,

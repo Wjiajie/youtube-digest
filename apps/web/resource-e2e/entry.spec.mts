@@ -39,7 +39,7 @@ test.afterEach(async ({ context }) => {
   }
 });
 
-test(disabled ? "disabled resource entry keeps a real signed-in account from reserving or calling providers" : "real Cookie → Next production → verified Edge → DB → provider HTTP completes three explicit stages without replay consumption", async ({ context }) => {
+test(disabled ? "disabled resource entry keeps a real signed-in account from reserving or calling providers" : "real Cookie → Next production → verified Edge → DB → provider HTTP completes three explicit stages without replay consumption", async ({ context, page }) => {
   const owner = await account(context), nodeId = randomUUID();
   const store = createSupabaseBlueprintStore(owner.client), current = await store.getMainBlueprint(owner.id);
   if (!current) throw new Error("Missing fixture Blueprint");
@@ -61,6 +61,19 @@ test(disabled ? "disabled resource entry keeps a real signed-in account from res
     expect(response.status()).toBe(503); expect(await response.json()).toEqual({ ok: false, code: "disabled" });
     expect(response.headers()["cache-control"]).toBe("private, no-store");
     expect((await owner.client.from("resource_runs").select("id")).data).toEqual([]);
+    expect(await calls()).toEqual([]);
+    await page.goto(`${origin}/resources/nodes/${nodeId}`);
+    await expect(page.getByRole("button", { name: "查找视频", exact: true })).toBeDisabled();
+    // A previously queued operation remains readable/cancellable while execution is off.
+    execFileSync("docker", ["exec", "-i", "supabase_db_blueprint-local", "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1"], {
+      input: `insert into private.resource_quotas(owner_id,kind,available_attempts) values ('${owner.id}','discover',1);`, stdio: "pipe",
+    });
+    const { accountId: _accountId, ...queued } = command;
+    expect((await owner.client.rpc("begin_resource_run", { p_request: queued })).error).toBeNull();
+    await page.goto(`${origin}/resources/${queued.runId}`);
+    await page.getByRole("button", { name: "取消本次运行", exact: true }).click();
+    await expect(page.getByRole("button", { name: "取消本次运行", exact: true })).toHaveCount(0);
+    expect((await owner.client.rpc("read_resource_run", { p_run_id: queued.runId })).data.status).toBe("cancelled");
     expect(await calls()).toEqual([]); return;
   }
   expect((await request(command, { origin: "https://outside.example" })).status()).toBe(403);
@@ -137,4 +150,89 @@ test("a stalled authenticated upload reaches its deadline without reserving an o
   expect(JSON.parse(response.body)).toEqual({ ok: false, code: "invalid" });
   expect((await owner.client.from("resource_runs").select("id")).data).toEqual([]);
   expect(await (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json()).toEqual([]);
+});
+
+for (const theme of ["cyberpunk", "eastern"] as const) test(`resource workbench ${theme}: real node → discovery → captions → matching → recover and cancel`, async ({ page, context }, testInfo) => {
+  test.skip(disabled, "The separate off-switch test verifies disabled execution; this journey explicitly enables fixtures.");
+  const owner = await account(context), actor = { userId: owner.id, client: "web" as const };
+  const store = createSupabaseBlueprintStore(owner.client), current = await store.getMainBlueprint(owner.id);
+  if (!current) throw new Error("Missing Blueprint");
+  const nodeId = randomUUID(), goalId = randomUUID();
+  const app = createBlueprintApplication({ store, newId: randomUUID, now: () => new Date() });
+  const proposed = await app.createProposal(actor, { baseVersion: 0, clientMutationId: randomUUID(), draft: { ...current,
+    goals: [{ id: goalId, title: "用照片讲一个真实的故事", position: 0, stages: [{ id: randomUUID(), title: "掌握光线与曝光", position: 0,
+      nodes: [{ id: nodeId, title: "比较光圈与快门的组合", type: "learn", position: 0, estimatedMinutes: 30,
+        description: "在同一场景拍摄，观察主体与背景的变化。", completionCriteria: "提交三组照片，解释参数取舍。", dependencyIds: [], resources: [] }] }] }] } });
+  if (!proposed.ok) throw new Error("Missing proposal");
+  expect((await app.applyProposal(actor, { proposalId: proposed.value.id, expectedVersion: 0, clientMutationId: randomUUID() })).ok).toBe(true);
+  execFileSync("docker", ["exec", "-i", "supabase_db_blueprint-local", "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1"], {
+    input: `insert into private.resource_quotas(owner_id,kind,available_attempts) values ('${owner.id}','discover',3),('${owner.id}','captions',1),('${owner.id}','match',1);`, stdio: "pipe",
+  });
+  const errors: string[] = []; context.on("page", tab => tab.on("pageerror", error => errors.push(error.message)));
+  page.on("pageerror", error => errors.push(error.message));
+  await context.request.post("http://127.0.0.1:3166/fixture/reset");
+  await page.goto(`${origin}/paths/${goalId}`);
+  if (theme === "eastern") {
+    await page.getByRole("combobox", { name: "界面主题", exact: true }).selectOption(theme);
+    await page.getByRole("button", { name: "保存到账号", exact: true }).click();
+    await expect(page.getByText("主题已保存到账号。扩展将在重新读取时跟随。", { exact: true })).toBeVisible();
+  }
+  await page.getByRole("link", { name: "查找与审阅学习资源" }).click();
+  await expect(page.locator("[data-bp-theme]").first()).toHaveAttribute("data-bp-theme", theme);
+  await expect(page.getByRole("button", { name: "查找视频", exact: true })).toBeVisible();
+  expect(await (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json()).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath(`${theme}-node-wide.png`), fullPage: true });
+  await page.setViewportSize({ width: 320, height: 900 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: testInfo.outputPath(`${theme}-node-narrow.png`), fullPage: true });
+  await page.getByLabel("观看地区代码", { exact: true }).fill("US");
+  await page.getByLabel("允许使用其他语言的原生字幕", { exact: true }).check();
+  const submitted = page.waitForResponse(response => response.url().endsWith("/api/resources/runs") && response.request().method() === "POST");
+  await page.getByRole("button", { name: "查找视频", exact: true }).click();
+  expect((await submitted).status()).toBe(200);
+  const openRecord = async (from: typeof page) => {
+    const popup = context.waitForEvent("page");
+    await from.getByRole("link", { name: "打开本次运行记录", exact: true }).click();
+    const opened = await popup; await opened.waitForLoadState("domcontentloaded"); return opened;
+  };
+  const discoveryPage = await openRecord(page);
+  await expect(discoveryPage.getByRole("button", { name: "读取待处理字幕", exact: true })).toBeEnabled();
+  expect(await discoveryPage.content()).not.toContain("resource-entry-native-job");
+  const continueRequest = discoveryPage.waitForResponse(response => response.url().endsWith("/api/resources/runs") && response.request().method() === "POST");
+  await discoveryPage.getByRole("button", { name: "读取待处理字幕", exact: true }).click();
+  expect((await continueRequest).status()).toBe(200);
+  const captionPage = await openRecord(discoveryPage);
+  const matchingRequest = captionPage.waitForResponse(response => response.url().endsWith("/api/resources/runs") && response.request().method() === "POST");
+  await captionPage.getByRole("button", { name: "生成匹配建议", exact: true }).click();
+  expect((await matchingRequest).status()).toBe(200);
+  const matchPage = await openRecord(captionPage);
+  await expect(matchPage.getByText("Compare aperture and shutter speed.", { exact: true })).toBeVisible();
+  await expect(matchPage.locator("[data-bp-theme]").first()).toHaveAttribute("data-bp-theme", theme);
+  expect(await matchPage.content()).not.toContain("Match Resources to a Learning Path Node");
+  await matchPage.setViewportSize({ width: 1440, height: 1000 });
+  await matchPage.screenshot({ path: testInfo.outputPath(`${theme}-match-wide.png`), fullPage: true });
+  await matchPage.setViewportSize({ width: 320, height: 900 });
+  expect(await matchPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await matchPage.screenshot({ path: testInfo.outputPath(`${theme}-match-narrow.png`), fullPage: true });
+  await matchPage.getByRole("button", { name: "读取最新状态", exact: true }).click();
+  await discoveryPage.reload();
+  await expect(discoveryPage.getByRole("button", { name: "读取待处理字幕", exact: true })).toHaveCount(0);
+  await expect(discoveryPage.getByRole("link", { name: "查看已有后续运行", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.locator(`a[href="${new URL(matchPage.url()).pathname}"]`)).toHaveCount(1);
+  const queued = randomUUID();
+  expect((await owner.client.rpc("begin_resource_run", { p_request: { kind: "discover", runId: queued, nodeId, expectedBlueprintVersion: 1,
+    preferences: { regionCode: "US", language: "zh", allowLanguageFallback: true, maxDurationSeconds: 1800, publishedAfter: null }, learnerContext: { startingPoint: null, constraints: null } } })).error).toBeNull();
+  await page.goto(`${origin}/resources/${queued}`);
+  await page.getByRole("button", { name: "取消本次运行", exact: true }).click();
+  await expect(page.getByRole("button", { name: "取消本次运行", exact: true })).toHaveCount(0);
+  expect((await owner.client.rpc("read_resource_run", { p_run_id: queued })).data.status).toBe("cancelled");
+  expect((await store.getMainBlueprint(owner.id))?.version).toBe(1);
+  expect(await (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json()).toHaveLength(5);
+  await account(context);
+  await matchPage.getByRole("button", { name: "读取最新状态", exact: true }).click();
+  await expect(matchPage.getByRole("heading", { name: "比较光圈与快门的组合", exact: true })).toHaveCount(0);
+  await expect(matchPage.getByText("Compare aperture and shutter speed.", { exact: true })).toHaveCount(0);
+  expect((await owner.client.rpc("read_resource_run", { p_run_id: queued })).data.status).toBe("cancelled");
+  expect(errors).toEqual([]);
 });

@@ -1,5 +1,14 @@
 import { test, expect } from "@playwright/test";
 
+test("private resource workspaces preserve login destinations without exposing node context", async ({ page }) => {
+  for (const destination of ["/resources/nodes/00000000-0000-4000-8000-000000000001", "/resources/00000000-0000-4000-8000-000000000002"]) {
+    await page.goto(destination);
+    await expect(page.getByRole("heading", { name: "进入你的蓝图" })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get("next")).toContain(destination);
+    await expect(page.getByText("查找视频", { exact: true })).toHaveCount(0);
+  }
+});
+
 test("resource execution rejects cross-origin and bearer requests without exposing stored evidence", async ({ request, baseURL }) => {
   for (const headers of [{ origin: "https://outside.example" }, { origin: baseURL!, authorization: "Bearer caller-token" }]) {
     const response = await request.post("/api/resources/runs", { headers, data: {} });

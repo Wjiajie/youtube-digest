@@ -7,6 +7,7 @@ import { createBlueprintApplication } from "@blueprint/domain";
 import { localSupabaseTestConfig } from "../../../scripts/local-supabase-test-config.mjs";
 import { createCloudResourceRunner } from "../src/lib/agent/cloud-resource-runner";
 import { createResourceRunAccess } from "../src/lib/agent/resource-run-access";
+import { createResourceWorkspace } from "../src/lib/agent/resource-workspace";
 import type { ResourceWorker } from "../src/lib/agent/resource-worker";
 import { createSupabaseBlueprintStore } from "../src/lib/supabase/store";
 import { createResourceProvider } from "../src/lib/resources/provider";
@@ -127,6 +128,72 @@ it("persists an account's discovery → explicit native-job read → grounded ma
   expect(JSON.stringify(matched)).not.toMatch(/fixture-.*key|PRIVATE_PROVIDER_FAILURE/);
   expect(localSql(`select kind || ':' || available_attempts from private.resource_quotas where owner_id='${owner.id}' order by kind`)).toBe("captions:4\ndiscover:4\nmatch:4");
   expect((await owner.store.getMainBlueprint(owner.id))?.version).toBe(1);
+});
+
+it("serves a private resource workbench with current node context, safe evidence, history and only one follow-up", async () => {
+  const owner = await fixture(), outsider = await fixture(), external = await externalFixture({ pending: true });
+  const runner = createCloudResourceRunner({ ...owner, ...external });
+  const workspace = createResourceWorkspace(owner.client, owner.actor);
+  expect(await workspace.node(owner.nodeId)).toMatchObject({ ok: true, value: { nodeTitle: "曝光", blueprintVersion: 1, records: [], hasMore: false } });
+  expect((await runner.run(owner.command, signal())).ok).toBe(true);
+  const first = await workspace.read(owner.command.runId);
+  expect(first).toMatchObject({ ok: true, value: { nextKind: "captions", childId: null, result: { candidates: [{ transcriptStatus: "pending", assessment: null }] } } });
+  expect(JSON.stringify(first)).not.toMatch(/owned-native-job|input_blueprint|instructions|segments|apiKey/);
+  const next = { kind: "captions", sourceRunId: owner.command.runId, runId: randomUUID() };
+  expect((await runner.run(next, signal())).ok).toBe(true);
+  expect(await workspace.read(owner.command.runId)).toMatchObject({ ok: true, value: { nextKind: null, childId: next.runId } });
+  expect(await workspace.read(next.runId)).toMatchObject({ ok: true, value: { nextKind: "match", result: { candidates: [{ language: "en", languageFallback: true }] } } });
+  const matched = { kind: "match", sourceRunId: next.runId, runId: randomUUID() };
+  expect((await runner.run(matched, signal())).ok).toBe(true);
+  expect(await workspace.read(matched.runId)).toMatchObject({ ok: true, value: { nextKind: null, skillVersion: "1.0.0", result: { candidates: [{ assessment: {
+    role: "recommended", evidence: [{ quote: "Compare aperture and shutter speed.", offsetMs: 1500 }], totalSegments: 1, sampledSegments: 1,
+  } }] } } });
+  const listed = await workspace.node(owner.nodeId);
+  if (!listed.ok) throw new Error("Missing resource workspace");
+  expect(listed.value.records.map(row => row.id)).toEqual([matched.runId, next.runId, owner.command.runId]);
+  expect(await workspace.node(owner.nodeId, -1)).toEqual({ ok: false, code: "invalid" });
+  expect(await createResourceWorkspace(outsider.client, outsider.actor).read(matched.runId)).toEqual({ ok: false, code: "not_found" });
+  expect(await createResourceWorkspace(outsider.client, outsider.actor).node(owner.nodeId)).toEqual({ ok: false, code: "not_found" });
+  expect(await createResourceWorkspace(owner.client, { ...owner.actor, client: "extension" }).node(owner.nodeId)).toEqual({ ok: false, code: "forbidden" });
+  expect(external.calls).toHaveLength(5);
+});
+
+it("resource history paginates without executing work, and explicit cancellation recovers a queued operation", async () => {
+  const owner = await fixture(1), workspace = createResourceWorkspace(owner.client, owner.actor), ids: string[] = [];
+  for (let i = 0; i < 22; i++) {
+    const runId = randomUUID(); ids.push(runId);
+    expect((await owner.client.rpc("begin_resource_run", { p_request: { ...owner.command, runId } })).error).toBeNull();
+    expect(await workspace.cancel(runId)).toMatchObject({ ok: true, value: { status: "cancelled", nextKind: null } });
+  }
+  const first = await workspace.node(owner.nodeId), second = await workspace.node(owner.nodeId, 20);
+  if (!first.ok || !second.ok) throw new Error("Missing history");
+  expect(first.value.hasMore).toBe(true); expect(first.value.records).toHaveLength(20);
+  expect(second.value.hasMore).toBe(false); expect(second.value.records).toHaveLength(2);
+  expect([...first.value.records, ...second.value.records].map(row => row.id)).toEqual(ids.reverse());
+  expect(await workspace.node(owner.nodeId, 40)).toMatchObject({ ok: true, value: { records: [], hasMore: false } });
+  expect(localSql(`select available_attempts from private.resource_quotas where owner_id='${owner.id}' and kind='discover'`)).toBe("1");
+});
+
+it("resource review reconciles expired and changed sources, preserving a cancelled successor link", async () => {
+  const owner = await fixture(), workspace = createResourceWorkspace(owner.client, owner.actor), external = await externalFixture({ pending: true });
+  const runner = createCloudResourceRunner({ ...owner, ...external });
+  expect((await runner.run(owner.command, signal())).ok).toBe(true);
+  const childId = randomUUID();
+  expect((await owner.client.rpc("begin_resource_run", { p_request: { kind: "captions", runId: childId, sourceRunId: owner.command.runId } })).error).toBeNull();
+  localSql(`update public.resource_runs set expires_at=clock_timestamp()-interval '1 second' where id='${childId}';`);
+  expect(await workspace.read(childId)).toMatchObject({ ok: true, value: { status: "cancelled", nextKind: null } });
+  expect(await workspace.read(owner.command.runId)).toMatchObject({ ok: true, value: { childId, nextKind: null } });
+  const queued = randomUUID();
+  expect((await owner.client.rpc("begin_resource_run", { p_request: { ...owner.command, runId: queued } })).error).toBeNull();
+  expect((await workspace.cancel(queued)).ok).toBe(true);
+  const current = await owner.store.getMainBlueprint(owner.id);
+  if (!current) throw new Error("Missing blueprint");
+  const proposal = await owner.application.createProposal(owner.actor, { draft: { ...current, goals: [] }, baseVersion: current.version, clientMutationId: randomUUID() });
+  if (!proposal.ok) throw new Error("Missing proposal");
+  expect((await owner.application.applyProposal(owner.actor, { proposalId: proposal.value.id, expectedVersion: current.version, clientMutationId: randomUUID() })).ok).toBe(true);
+  expect(await workspace.read(owner.command.runId)).toMatchObject({ ok: true, value: { status: "stale", nextKind: null, nodeTitle: "曝光", childId } });
+  expect(await workspace.node(owner.nodeId)).toEqual({ ok: false, code: "not_found" });
+  expect(external.calls).toHaveLength(3);
 });
 
 it("zero per-stage quota rejects execution before any external request", async () => {
