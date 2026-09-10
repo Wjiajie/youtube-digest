@@ -4,9 +4,12 @@ import { useRef, useState } from "react";
 import { Button, Panel, Status } from "@blueprint/ui";
 import type { PlanningRun } from "@/lib/agent/planning-run";
 import type { RunResponse } from "@/lib/agent/planning-access";
+import type { PlanningApprovalResponse } from "@/lib/agent/planning-approval";
+import { PlanningApproval, type ApprovalActions } from "./planning-approval";
 
 export type PlanningResponse = RunResponse | { ok: false; code: "unauthenticated" };
-type Props = { accountId: string; initial: PlanningRun; readAction: () => Promise<PlanningResponse>; cancelAction: () => Promise<PlanningResponse> };
+type Props = { accountId: string; initial: PlanningRun; readAction: () => Promise<PlanningResponse>; cancelAction: () => Promise<PlanningResponse>;
+  approval?: { initial: PlanningApprovalResponse; actions: ApprovalActions } };
 const labels = { queued: "等待执行", running: "正在规划", ready: "草案已保存", stale: "来源已变化", cancelled: "已取消", interrupted: "执行已中断", failed: "本次未完成" };
 const kinds = { learn: "学习", practice: "实践", checkpoint: "检查点", reflection: "复盘" };
 
@@ -15,10 +18,14 @@ export function PlanningReview(props: Props) {
   return <ReviewSession key={`${props.accountId}:${props.initial.id}`} {...props} />;
 }
 
-function ReviewSession({ accountId, initial, readAction, cancelAction }: Props) {
+function ReviewSession({ accountId, initial, readAction, cancelAction, approval }: Props) {
   const [run, setRun] = useState(initial), [busy, setBusy] = useState(false), [message, setMessage] = useState("");
   const [announcement, setAnnouncement] = useState("");
-  const [hidden, setHidden] = useState(false); const locked = useRef(false);
+  const approvalIdentity = approval?.initial;
+  const [hidden, setHidden] = useState(Boolean(approvalIdentity && (approvalIdentity.ok
+    ? approvalIdentity.value.ownerId !== accountId || approvalIdentity.value.runId !== initial.id
+    : ["unauthenticated", "forbidden", "not_found"].includes(approvalIdentity.code))));
+  const locked = useRef(false);
   async function perform(action: () => Promise<PlanningResponse>) {
     if (locked.current || hidden) return;
     locked.current = true; setBusy(true); setMessage(""); setAnnouncement("");
@@ -80,7 +87,8 @@ function ReviewSession({ accountId, initial, readAction, cancelAction }: Props) 
               {node.dependencyIds.length > 0 && <p className="subtle">先完成：{node.dependencyIds.map(id => nodes.find(item => item.id === id)?.title ?? "未知前置节点").join("、")}</p>}
             </li>)}</ol></section>)}
           </Panel>)}
-          <Panel className="brief-card"><h2>你的决定仍在下一步</h2><p>本页目前用于阅读已保存建议。将规划转为正式提案并确认应用的流程尚未开放，当前蓝图不会改变。</p><a href="/paths" className="bp-button">查看正式路径</a></Panel>
+          {approval && <PlanningApproval accountId={accountId} runId={run.id} runStatus={run.status} initial={approval.initial}
+            actions={approval.actions} onIdentityLost={() => setHidden(true)} />}
         </> : <Panel className="brief-card"><h2>这里将保留可审阅的建议</h2><p>尚无可展示的完整草案。取消或失败不会用示例内容填充你的路径。</p></Panel>}
       </section>
     </div>

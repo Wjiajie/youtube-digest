@@ -80,10 +80,33 @@ test(`real local account recovers, reads and cancels planning across both themes
     await page.goto(`/planning/${queuedId}`); await page.getByRole("button", { name: "取消本次规划", exact: true }).click();
     await expect(page.getByRole("heading", { name: "已取消", exact: true })).toBeVisible();
     await page.reload(); await expect(page.getByRole("heading", { name: "已取消", exact: true })).toBeVisible();
+    await page.goto(`/planning/${command.runId}`);
+    await expect(page.getByRole("button", { name: "确认并应用", exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "准备确认提案", exact: true }).click();
+    await expect(page.getByRole("button", { name: "确认并应用", exact: true })).toBeEnabled();
+    expect((await client.rpc("read_blueprint_snapshot_v2", { p_owner_id: id })).data.goals).toEqual([]);
+    await page.reload(); await expect(page.getByRole("button", { name: "确认并应用", exact: true })).toBeEnabled();
+    if (!longText) {
+      await page.getByRole("button", { name: "确认并应用", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "已写入正式蓝图 v1", exact: true })).toBeVisible();
+      await page.reload(); await expect(page.getByRole("heading", { name: "已写入正式蓝图 v1", exact: true })).toBeVisible();
+      await page.getByRole("link", { name: "查看正式路径", exact: true }).click();
+      await expect(page.getByRole("link", { name: new RegExp("摄影作品路径") })).toBeVisible();
+    }
     expect((await client.rpc("save_goal_brief", { p_id: briefId, p_expected_revision: 1, p_content: { ...content, weeklyMinutes: 90 }, p_confirm: false, p_client_mutation_id: randomUUID() })).error).toBeNull();
     await page.goto(`/planning/${command.runId}`); await expect(page.getByRole("heading", { name: "来源已变化", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
-    expect((await client.rpc("read_blueprint_snapshot_v2", { p_owner_id: id })).data.goals).toEqual([]);
+    if (longText) {
+      await expect(page.getByRole("button", { name: "确认并应用", exact: true })).toBeDisabled();
+      await page.getByRole("button", { name: "拒绝这份提案", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "已拒绝这份提案", exact: true })).toBeVisible();
+      await page.reload(); await expect(page.getByRole("heading", { name: "已拒绝这份提案", exact: true })).toBeVisible();
+      expect((await client.rpc("read_blueprint_snapshot_v2", { p_owner_id: id })).data.goals).toEqual([]);
+    } else {
+      await expect(page.getByRole("heading", { name: "已写入正式蓝图 v1", exact: true })).toBeVisible();
+      expect((await client.rpc("read_blueprint_snapshot_v2", { p_owner_id: id })).data.version).toBe(1);
+    }
+    await page.screenshot({ path: testInfo.outputPath("approval-recovered.png"), fullPage: true });
     expect(errors).toEqual([]);
     await context.clearCookies(); await page.reload(); await expect(page).toHaveURL(/\/login\?next=/);
     await expect(page.getByText(title, { exact: true })).toHaveCount(0);

@@ -1,5 +1,5 @@
 begin;
-select plan(16);
+select plan(17);
 
 select has_table('public', 'blueprints', 'blueprints exists');
 select has_table('public', 'path_nodes', 'path nodes exist');
@@ -25,7 +25,8 @@ select ok(
 );
 select policies_are('public', 'learning_sessions', array['sessions_owner_insert', 'sessions_owner_select'], 'sessions expose only owner select and append policies');
 select ok(has_function_privilege('authenticated', 'public.apply_blueprint_proposal(uuid,bigint,uuid)', 'EXECUTE'), 'authenticated Web users may apply proposals');
-select ok((select prosecdef from pg_proc where oid = 'public.apply_blueprint_proposal(uuid,bigint,uuid)'::regprocedure), 'proposal apply owns its transaction boundary');
+select ok(not (select prosecdef from pg_proc where oid = 'public.apply_blueprint_proposal(uuid,bigint,uuid)'::regprocedure), 'public proposal apply uses caller privileges');
+select ok((select prosecdef from pg_proc where oid = 'private.apply_blueprint_proposal_guard(uuid,bigint,uuid)'::regprocedure), 'private source guard owns the transaction boundary');
 
 select * from finish();
 rollback;

@@ -58,3 +58,13 @@ it("does not carry private data across an account change", async () => {
   await act(async () => root.render(<PlanningReview accountId={id} {...props} />));
   expect(host.textContent).not.toContain("PRIVATE_PHOTOGRAPHY");
 });
+
+it("hides the entire review when its initial approval read reports identity loss", async () => {
+  const response = async () => ({ ok: false as const, code: "forbidden" as const });
+  await act(async () => root.render(<PlanningReview accountId={owner} initial={queued()}
+    readAction={response} cancelAction={response} approval={{ initial: await response(), actions: {
+      read: response, prepare: response, reject: response, apply: response,
+    } }} />));
+  expect(host.textContent).not.toContain("PRIVATE_PHOTOGRAPHY");
+  expect(host.textContent).toContain("重新登录");
+});

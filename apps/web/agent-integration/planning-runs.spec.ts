@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { localSupabaseTestConfig } from "../../../scripts/local-supabase-test-config.mjs";
 import { createCloudPathPlanner } from "../src/lib/agent/cloud-path-planner";
 import { createPlanningRunAccess } from "../src/lib/agent/planning-access";
+import { createPlanningApprovalAccess } from "../src/lib/agent/planning-approval";
 
 const local = localSupabaseTestConfig();
 const authOptions = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
@@ -83,6 +84,61 @@ it("does not run a provider without account credits", async () => {
   expect(await planner.run(owner.command, new AbortController().signal)).toEqual({ ok: false, code: "quota_exhausted" });
   expect(model.doGenerateCalls).toHaveLength(0);
   expect(await planner.read(owner.command.runId)).toEqual({ ok: false, code: "not_found" });
+});
+
+it("prepares once, explicitly applies, and recovers the exact planning approval after source changes", async () => {
+  const owner = await fixture(); const model = new MockLanguageModelV4({ doGenerate: providerReply() });
+  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  expect(await planner.run(owner.command, new AbortController().signal)).toMatchObject({ ok: true, run: { status: "ready" } });
+  const approval = createPlanningApprovalAccess(owner.client, { userId: owner.id, client: "web" });
+  expect(await approval.read(owner.command.runId)).toMatchObject({ ok: true, value: { proposal: null, sourceCurrent: true } });
+  const prepared = await approval.prepare(owner.command.runId);
+  expect(prepared).toMatchObject({ ok: true, value: { proposal: { status: "pending", appliedVersion: null } } });
+  expect(await approval.prepare(owner.command.runId)).toEqual(prepared);
+  expect((await owner.client.rpc("read_blueprint_snapshot_v2", { p_owner_id: owner.id })).data.goals).toEqual([]);
+  if (!prepared.ok || !prepared.value.proposal) throw new Error("Expected persisted proposal");
+  const proposal = prepared.value.proposal;
+  expect(await approval.apply(owner.command.runId, proposal.id, proposal.baseVersion)).toMatchObject({ ok: true,
+    value: { proposal: { id: proposal.id, status: "applied", appliedVersion: 1 } } });
+  const formal = await owner.client.rpc("read_blueprint_snapshot_v2", { p_owner_id: owner.id });
+  expect(formal.error).toBeNull(); expect(formal.data.version).toBe(1); expect(formal.data.goals).toHaveLength(1);
+  const brief = await owner.client.from("goal_briefs").select("content").eq("id", owner.briefId).single();
+  expect((await owner.client.rpc("save_goal_brief", { p_id: owner.briefId, p_expected_revision: 1, p_confirm: false,
+    p_content: brief.data!.content, p_client_mutation_id: randomUUID() })).error).toBeNull();
+  expect(await approval.apply(owner.command.runId, proposal.id, proposal.baseVersion)).toMatchObject({ ok: true,
+    value: { sourceCurrent: false, proposal: { status: "applied", appliedVersion: 1 } } });
+  expect(await approval.apply(owner.command.runId, proposal.id, proposal.baseVersion + 1)).toEqual({ ok: false, code: "version_conflict" });
+  expect(model.doGenerateCalls).toHaveLength(1);
+});
+
+it("binds concurrent preparations to one immutable proposal, rejects changed sources and isolates owners", async () => {
+  const owner = await fixture(), outsider = await fixture();
+  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" },
+    model: new MockLanguageModelV4({ doGenerate: providerReply() }) });
+  expect((await planner.run(owner.command, new AbortController().signal)).ok).toBe(true);
+  const approval = createPlanningApprovalAccess(owner.client, { userId: owner.id, client: "web" });
+  const [one, two] = await Promise.all([approval.prepare(owner.command.runId), approval.prepare(owner.command.runId)]);
+  expect(one).toEqual(two);
+  if (!one.ok || !one.value.proposal) throw new Error("Expected proposal");
+  const proposal = one.value.proposal;
+  const forbidden = createPlanningApprovalAccess(outsider.client, { userId: outsider.id, client: "web" });
+  for (const operation of [() => forbidden.read(owner.command.runId), () => forbidden.prepare(owner.command.runId),
+    () => forbidden.reject(owner.command.runId), () => forbidden.apply(owner.command.runId, proposal.id, 0)])
+    expect(await operation()).toEqual({ ok: false, code: "not_found" });
+  const tamper = await owner.client.from("blueprint_proposals").update({ status: "rejected" }).eq("id", proposal.id).select("id");
+  expect(tamper.error).toBeNull(); expect(tamper.data).toEqual([]);
+  const brief = await owner.client.from("goal_briefs").select("content").eq("id", owner.briefId).single();
+  expect((await owner.client.rpc("save_goal_brief", { p_id: owner.briefId, p_expected_revision: 1, p_confirm: false,
+    p_content: brief.data!.content, p_client_mutation_id: randomUUID() })).error).toBeNull();
+  // The old public entry must enforce the same final source guard, not just the new adapter.
+  expect((await owner.client.rpc("apply_blueprint_proposal", { proposal_id: proposal.id, expected_version: 0, mutation_id: proposal.id })).error?.code).toBe("40001");
+  expect(await approval.apply(owner.command.runId, proposal.id, 0)).toEqual({ ok: false, code: "version_conflict" });
+  expect(await approval.read(owner.command.runId)).toMatchObject({ ok: true, value: { sourceCurrent: false, proposal: { status: "pending" } } });
+  const rejected = await approval.reject(owner.command.runId);
+  expect(rejected).toMatchObject({ ok: true, value: { proposal: { status: "rejected" } } });
+  expect(await approval.reject(owner.command.runId)).toEqual(rejected);
+  expect(await approval.prepare(owner.command.runId)).toEqual(rejected);
+  expect((await owner.client.rpc("read_blueprint_snapshot_v2", { p_owner_id: owner.id })).data.goals).toEqual([]);
 });
 
 it("lets an owner discover and recover runs without a model or worker credential", async () => {
