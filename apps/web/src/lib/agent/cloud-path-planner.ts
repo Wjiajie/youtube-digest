@@ -61,6 +61,7 @@ export function createCloudPathPlanner(dependencies: {
         if (run.status !== "queued") return started;
         if (signal.aborted) return cancel(run.id);
         const loaded = await loadPlanningSkill();
+        if (signal.aborted) return cancel(run.id);
         const skill = { ...loaded.identity, instructions: loaded.instructions };
         const leaseId = randomUUID();
         const claimed = await dependencies.workerClient.rpc("claim_path_planning", {

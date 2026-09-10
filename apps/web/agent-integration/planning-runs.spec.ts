@@ -240,3 +240,32 @@ it("returns an unclaimed reservation if its confirmed source was edited before e
   expect(model.doGenerateCalls).toHaveLength(0);
   expect(localSql(`select available_attempts from private.path_planning_quotas where owner_id='${owner.id}'`)).toBe("5");
 });
+
+it("returns the reservation when the caller cancels while preparing the unclaimed run", async () => {
+  const owner = await fixture(); const controller = new AbortController(); let claims = 0;
+  const session = await owner.client.auth.getSession();
+  expect(session.data.session).not.toBeNull();
+  const client = createClient(local.API_URL, local.PUBLISHABLE_KEY, { auth: authOptions, global: {
+    headers: { Authorization: `Bearer ${session.data.session!.access_token}` },
+    fetch: async (request, init) => {
+      const response = await fetch(request, init);
+      if (String(request).endsWith("/rpc/begin_path_planning") && response.ok) {
+        const body = await response.text();
+        // Deliver the real, buffered receipt; cancel on the next I/O turn during preparation.
+        setImmediate(() => controller.abort());
+        return new Response(body, { status: response.status, headers: response.headers });
+      }
+      return response;
+    },
+  } });
+  const worker = createClient(local.API_URL, local.SERVICE_ROLE_KEY, { auth: authOptions, global: { fetch: async (request, init) => {
+    if (String(request).endsWith("/rpc/claim_path_planning")) claims++;
+    return fetch(request, init);
+  } } });
+  const model = new MockLanguageModelV4();
+  const planner = createCloudPathPlanner({ client, workerClient: worker, actor: { userId: owner.id, client: "web" }, model });
+  const result = await planner.run(owner.command, controller.signal);
+  expect(result).toMatchObject({ ok: true, run: { status: "cancelled", result: { providerMayHaveRun: false } } });
+  expect(claims).toBe(0); expect(model.doGenerateCalls).toHaveLength(0);
+  expect(localSql(`select available_attempts from private.path_planning_quotas where owner_id='${owner.id}'`)).toBe("5");
+});

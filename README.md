@@ -58,9 +58,12 @@ npm run check:m1
 npm run check:m1-wizard
 npm run test:e2e
 npm run supabase:test
+npm run test:agent-runs
 ```
 
 `check:m1` runs type checks, domain/extension tests, an embedded PostgreSQL migration contract, both production builds, and an extension security-surface check. `supabase:test` requires the local Supabase stack and is the final RLS integration gate.
+
+`test:agent-runs` verifies durable planning through real local Auth/PostgREST with an offline provider response. It requires the migrated local stack and Supabase CLI (or `BLUEPRINT_SUPABASE_BIN` pointing to it); it creates and removes only temporary test accounts, sends no emails, and never calls paid models. See [planning-run evidence and remaining limits](docs/agent-planning-runs.md).
 
 ## Documentation
 
