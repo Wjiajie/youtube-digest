@@ -39,6 +39,13 @@ const boundSnapshot = { ...snapshot, schemaVersion: 2, goals: [{ id: "018f6f68-9
   }],
 }] }] };
 const boundContext = { nodeId: "018f6f68-9b4d-7c93-a134-c8571b8f7803", resourceBindingId: "018f6f68-9b4d-7c93-a134-c8571b8f7804" };
+const statusInput = { nodeId: boundContext.nodeId, expectedVersion: 1, expectedStatusRevision: 0, status: "completed", evidenceId: null,
+  clientMutationId: "018f6f68-9b4d-7c93-a134-c8571b8f7820" };
+const statusRecord = { id: "018f6f68-9b4d-7c93-a134-c8571b8f7821", clientMutationId: statusInput.clientMutationId,
+  context: { blueprintId: ownerA, blueprintVersion: 1, goalId: "018f6f68-9b4d-7c93-a134-c8571b8f7805", goalTitle: "目标",
+    stageId: "018f6f68-9b4d-7c93-a134-c8571b8f7806", stageTitle: "起步", nodeId: boundContext.nodeId, nodeTitle: "当前视频节点", nodeType: "learn" },
+  estimatedMinutes: 45, completionCriteria: "能独立解释", status: "completed", revision: 1, evidenceId: null, createdAt: "2026-09-10T00:00:00Z" };
+const statusWorkspace = { blueprint: boundSnapshot, current: [statusRecord], history: [statusRecord], evidence: { ok: true, value: [] } };
 
 function signIn(userId = ownerA) {
   platform.stored[sessionKey] = { userId, accessToken: `token-${userId}`, refreshToken: "refresh", expiresAt: Date.now() + 3600_000 };
@@ -69,6 +76,123 @@ test("the real extension runtime reads the authorized account theme separately f
   expect(result).toMatchObject({ connected: true, userId: ownerA, snapshot, stale: false, preferences: eastern, preferencesStatus: "current" });
   const request = http.mock.calls.find(([url]) => String(url).endsWith("/account-preferences"));
   expect(request?.[1]).toMatchObject({ headers: { Authorization: `Bearer token-${ownerA}` } });
+});
+
+test("node status workspace reads the real bare HTTP value through owner-bound background messages", async () => {
+  http.mockImplementation(async (url) => Response.json(String(url).endsWith("/node-status") ? statusWorkspace : snapshot));
+  expect(await platform.listener!({ type: "LOAD_NODE_STATUS", ownerId: ownerA })).toEqual({ ok: true, value: statusWorkspace });
+  const read = http.mock.calls.find(([url]) => String(url).endsWith("/node-status"));
+  expect(read?.[1]).toMatchObject({ method: "GET", headers: { Authorization: `Bearer token-${ownerA}` }, credentials: "omit", cache: "no-store" });
+  expect(http.mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(0);
+});
+
+test("explicit node status confirmation sends the original command and returns its exact receipt", async () => {
+  http.mockResolvedValue(Response.json(statusRecord));
+  expect(await platform.listener!({ type: "CONFIRM_NODE_STATUS", ownerId: ownerA, input: statusInput })).toEqual({ ok: true, value: statusRecord });
+  const writes = http.mock.calls.filter(([, options]) => options?.method === "POST");
+  expect(writes).toHaveLength(1);
+  expect(String(writes[0]![0])).toBe("https://blueprint.example.test/api/v1/node-status");
+  expect(writes[0]![1]).toMatchObject({ credentials: "omit", cache: "no-store", headers: { Authorization: `Bearer token-${ownerA}` } });
+  expect(JSON.parse(String(writes[0]![1]?.body))).toEqual(statusInput);
+  expect(platform.stored.blueprint_session_outbox_v1 ?? []).toEqual([]);
+});
+
+test("status workspace rejects malformed or incoherent sources instead of inventing an empty history", async () => {
+  const evidence = { id: ownerB, clientMutationId: ownerB, context: statusRecord.context, text: "实践记录", artifactUrl: null, createdAt: statusRecord.createdAt };
+  const invalid = [
+    { ok: true, value: statusWorkspace },
+    { ...statusWorkspace, blueprint: snapshot },
+    { ...statusWorkspace, history: undefined },
+    { ...statusWorkspace, current: [{ ...statusRecord, unexpected: true }] },
+    { ...statusWorkspace, current: [{ ...statusRecord, context: { ...statusRecord.context, blueprintId: ownerB } }] },
+    { ...statusWorkspace, history: [{ ...statusRecord, context: { ...statusRecord.context, blueprintVersion: 2 } }] },
+    { ...statusWorkspace, current: [statusRecord, statusRecord] },
+    { ...statusWorkspace, history: Array.from({ length: 51 }, () => statusRecord) },
+    { ...statusWorkspace, history: [{ ...statusRecord, status: "in_progress" }] },
+    { ...statusWorkspace, evidence: { ok: true, value: [{ ...evidence, context: { ...evidence.context, blueprintId: ownerB } }] } },
+    { ...statusWorkspace, evidence: { ok: true, value: [{ ...evidence, context: { ...evidence.context, blueprintVersion: 2 } }] } },
+    { ...statusWorkspace, evidence: { ok: true, value: [evidence, evidence] } },
+  ];
+  for (const value of invalid) {
+    http.mockImplementation(async () => Response.json(value));
+    expect(await platform.listener!({ type: "LOAD_NODE_STATUS", ownerId: ownerA })).toEqual({ ok: false, code: "unavailable" });
+  }
+  const unavailableEvidence = { ...statusWorkspace, evidence: { ok: false, code: "unavailable" } };
+  http.mockImplementation(async () => Response.json(unavailableEvidence));
+  expect(await platform.listener!({ type: "LOAD_NODE_STATUS", ownerId: ownerA })).toEqual({ ok: true, value: unavailableEvidence });
+});
+
+test("status current rows are not capped at history's 50 and historical contexts may be removed or renamed", async () => {
+  const many = structuredClone(boundSnapshot);
+  const node = many.goals[0]!.stages[0]!.nodes[0]!;
+  const id = (n: number) => `018f6f68-9b4d-7c93-a134-${String(n).padStart(12, "0")}`;
+  many.goals[0]!.stages[0]!.nodes = Array.from({ length: 51 }, (_, index) => ({ ...node, id: id(index + 100), position: index, resources: [] }));
+  const current = many.goals[0]!.stages[0]!.nodes.map((item, index) => ({ ...statusRecord, id: id(index + 200), clientMutationId: id(index + 300), context: { ...statusRecord.context, nodeId: item.id } }));
+  const history = [{ ...statusRecord, context: { ...statusRecord.context, nodeTitle: "已移除节点的旧名称", goalId: ownerB, stageTitle: "旧阶段" } }];
+  const workspace = { ...statusWorkspace, blueprint: many, current, history };
+  http.mockImplementation(async () => Response.json(workspace));
+  expect(await platform.listener!({ type: "LOAD_NODE_STATUS", ownerId: ownerA })).toEqual({ ok: true, value: workspace });
+});
+
+test("status confirmation rejects every mismatched receipt axis without classifying the write as unsaved", async () => {
+  for (const value of [
+    { ...statusRecord, clientMutationId: ownerB },
+    { ...statusRecord, context: { ...statusRecord.context, nodeId: ownerB } },
+    { ...statusRecord, context: { ...statusRecord.context, blueprintVersion: 2 } },
+    { ...statusRecord, revision: 2 },
+    { ...statusRecord, status: "in_progress" },
+    { ...statusRecord, evidenceId: ownerB },
+  ]) {
+    http.mockImplementation(async () => Response.json(value));
+    expect(await platform.listener!({ type: "CONFIRM_NODE_STATUS", ownerId: ownerA, input: statusInput })).toEqual({ ok: false, code: "unavailable" });
+  }
+  http.mockClear();
+  expect(await platform.listener!({ type: "CONFIRM_NODE_STATUS", ownerId: ownerA, input: { ...statusInput, status: "automatically_mastered" } })).toEqual({ ok: false, code: "invalid" });
+  expect(http).not.toHaveBeenCalled();
+  expect(platform.stored.blueprint_session_outbox_v1 ?? []).toEqual([]);
+});
+
+test.each(["LOAD_NODE_STATUS", "CONFIRM_NODE_STATUS"])("%s rejects wrong owners and drops late private responses after real auth identity changes", async (type) => {
+  expect(await platform.listener!({ type, ownerId: ownerB, input: statusInput })).toEqual({ ok: false, code: "forbidden" });
+  expect(http).not.toHaveBeenCalled();
+  let release!: (response: Response) => void;
+  http.mockImplementation(async () => new Promise((resolve) => { release = resolve; }));
+  const pending = platform.listener!({ type, ownerId: ownerA, input: statusInput });
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  signIn(ownerB);
+  release(Response.json(type === "LOAD_NODE_STATUS" ? statusWorkspace : statusRecord));
+  expect(await pending).toEqual({ ok: false, code: "forbidden" });
+  expect(platform.stored.blueprint_session_outbox_v1 ?? []).toEqual([]);
+});
+
+test("status transport preserves generic gateway uncertainty and accepts only matching application error statuses", async () => {
+  const send = () => platform.listener!({ type: "CONFIRM_NODE_STATUS", ownerId: ownerA, input: statusInput });
+  for (const [status, body, code] of [
+    [401, "<html>gateway</html>", "unavailable"], [401, JSON.stringify({ code: "invalid" }), "unavailable"],
+    [503, JSON.stringify({ code: "invalid" }), "unavailable"], [409, JSON.stringify({ code: "invalid" }), "unavailable"],
+    [409, JSON.stringify({ code: "version_conflict" }), "version_conflict"], [422, JSON.stringify({ code: "invalid" }), "invalid"],
+    [403, JSON.stringify({ code: "forbidden" }), "forbidden"], [404, JSON.stringify({ code: "not_found" }), "not_found"],
+  ] as const) {
+    http.mockImplementation(async () => new Response(body, { status }));
+    expect(await send()).toEqual({ ok: false, code });
+    expect(await platform.listener!({ type: "AUTH_STATUS" })).toEqual({ connected: true, userId: ownerA });
+  }
+  http.mockImplementation(async () => Response.json({ code: "unauthenticated" }, { status: 401 }));
+  expect(await send()).toEqual({ ok: false, code: "unauthenticated" });
+  expect(await platform.listener!({ type: "AUTH_STATUS" })).toEqual({ connected: false });
+});
+
+test("lost status receipt has no automatic retry or outbox and explicit retry preserves the original mutation", async () => {
+  http.mockRejectedValueOnce(new TypeError("response lost after commit"));
+  const send = () => platform.listener!({ type: "CONFIRM_NODE_STATUS", ownerId: ownerA, input: statusInput });
+  expect(await send()).toEqual({ ok: false, code: "unavailable" });
+  expect(http).toHaveBeenCalledTimes(1);
+  expect(platform.stored.blueprint_session_outbox_v1 ?? []).toEqual([]);
+  http.mockImplementation(async () => Response.json(statusRecord));
+  expect(await send()).toEqual({ ok: true, value: statusRecord });
+  expect(http).toHaveBeenCalledTimes(2);
+  expect(http.mock.calls.map(([, options]) => JSON.parse(String(options?.body)))).toEqual([statusInput, statusInput]);
+  expect(http.mock.calls.every(([, options]) => options?.signal instanceof AbortSignal)).toBe(true);
 });
 
 test("starting learning rejects the panel's previous owner before any write or outbox command", async () => {

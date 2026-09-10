@@ -43,6 +43,7 @@
 37. [明确采用与替换资源](resource-adoption.md)：单视频重新核验、不可变提案、用户确认／拒绝、新增／替换和历史学习归属；本地已接通，真实服务及托管仍待验收。
 38. [提案资源顺序一致性](resource-order.md)：手工／规划／采用的共用写入修复、已有数据不回填、历史会话与确认回执保留。
 39. [扩展目标学习上下文](extension-learning-context.md)：真实节点说明／完成依据、明确多绑定选择、返回原路径与草稿保留；本地双主题 MV3 切片。
+40. [扩展明确节点自评](extension-node-assessment.md)：复用 Web 确认规则、核对完成依据、原提交恢复及双主题私人历史；本地增量。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 
