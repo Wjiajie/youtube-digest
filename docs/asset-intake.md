@@ -157,3 +157,5 @@ bash scripts/with-m1-runtime.sh npx playwright test --config playwright.environm
 导出器增加固定修复件的哈希白名单，其他原有保护不变。生成 `Casual.weight-repaired-study.glb`，与上一批 `Casual.source-study.glb` **cmp 逐字节一致**：1,761,476 字节，SHA-256 `1d134055076acbc47737c37925c1415198027a1718544d6b2917ce3c6338dfe5`。无效网格警告消失，但超过四影响、约束烘焙和 NumPy 矩阵警告仍存在，不声称全部修复。导出继续使用已有四骨骼策略，只用于对照，未纳入产品。
 
 原 glTF、旧导出和修复导出三条真实浏览器旅程通过（16.0 秒）；新增修复件静止／待机／减少动态效果三张截图已查看，位于 `.goal-loop/evidence/casual-weight-repair/`。353 项 Vitest、四工作区和可选旅程严格 TypeScript 通过；Blender 修复／重新打开／变形探针均实际执行。软件 GPU、候选造型和生产状态未改变；没有新下载、费用、上传、部署、数据库或 push。当前源码质量修复通过，但完整四骨骼兼容、美术与性能门槛仍不通过。
+
+源码 `89c1f22` 两路独立只读复核：**Standards** 0 项确认违反／0 项新增异味建议；**Spec** 0 项确认缺陷／0 项范围扩张。Spec 另行核对两个源文件和两个 GLB 的哈希、忽略状态及 GLB 逐字节相同；没有代跑 Blender、变形或浏览器验收。54 个相关本地链接有效，修复脚本重复执行按预期拒绝覆盖，原件与修复件哈希保持不变。剩余完整影响适配不可因本次审查通过而标记完成。
