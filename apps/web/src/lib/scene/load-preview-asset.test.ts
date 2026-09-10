@@ -46,3 +46,15 @@ test("ordinary four-influence files keep their existing position", async () => {
     expect(mesh.getVertexPosition(0, new Vector3()).toArray()).toEqual([1, 0, 0]);
   } finally { disposeAsset(asset); }
 });
+
+test("near-unit weights preserve homogeneous translation through an inverse bind", async () => {
+  const asset = await loadPreviewAsset(fiveJointFixture({}, { secondWeight: .499 }));
+  try {
+    const mesh = asset.scene.children.find(object => object instanceof SkinnedMesh);
+    if (!(mesh instanceof SkinnedMesh)) throw new Error("Fixture skin missing");
+    mesh.position.x = 100;
+    asset.scene.updateMatrixWorld(true);
+    // .5 * 1 + .499 * 3 - 100 * .999 = -97.903; float accessor quantization allowed.
+    expect(mesh.getVertexPosition(0, new Vector3()).x).toBeCloseTo(-97.903, 4);
+  } finally { disposeAsset(asset); }
+});

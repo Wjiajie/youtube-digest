@@ -94,9 +94,11 @@ function useEightBoneTransform(mesh: SkinnedMesh) {
         result.addScaledVector(transformed.copy(base).applyMatrix4(matrix), weight);
       }
     }
-    if (target instanceof Vector4) target.set(result.x, result.y, result.z, base.w);
+    // Keep the weighted homogeneous component until after inverse binding,
+    // exactly as the GPU matrix does, including quantized near-unit sums.
+    result.applyMatrix4(mesh.bindMatrixInverse);
+    if (target instanceof Vector4) target.set(result.x, result.y, result.z, result.w);
     else target.set(result.x, result.y, result.z);
-    target.applyMatrix4(mesh.bindMatrixInverse);
     return target;
   };
   // Animated bounds need a fresh pose; do not cull from a stale rest-pose sphere.
