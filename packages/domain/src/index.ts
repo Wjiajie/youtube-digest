@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./learning-transcript";
 export * from "./blueprint-progress";
 export * from "./learning-notes";
 export * from "./learning-positions";

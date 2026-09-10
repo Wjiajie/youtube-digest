@@ -67,7 +67,8 @@ export function GoalPathView({ goal, selectedNodeId }: { goal: GoalProgressView;
           <div className="path-resources"><h4>可选资源</h4>{node.resources.length ? <ul>{node.resources.map((resource, index) => {
             const canonical = canonicalYouTubeUrl(resource.url);
             return <li key={resource.id}>{resource.kind === "youtube_video" && canonical?.externalId === resource.externalId
-              ? <a className="path-resource-link" href={canonical.url} target="_blank" rel="noopener noreferrer">在 YouTube 打开视频 {index + 1}<span className="path-muted"> · 新标签页</span></a>
+              ? <><a className="path-resource-link" href={canonical.url} target="_blank" rel="noopener noreferrer">在 YouTube 打开视频 {index + 1}<span className="path-muted"> · 新标签页</span></a>
+                <Link className="bp-button" prefetch={false} href={`/learn/${resource.id}`}>阅读视频 {index + 1} 的原始字幕</Link></>
               : <p className="path-muted">资源链接暂不可用，请在路径提案中核对。</p>}</li>;
           })}</ul> : <p className="path-muted">未绑定视频，仍可完成这一步的学习或实践。</p>}
           {node.type === "learn" ? <Link className="bp-button" prefetch={false} href={`/resources/nodes/${node.id}`}>查找与审阅学习资源</Link> : null}</div>

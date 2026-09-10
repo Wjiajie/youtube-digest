@@ -56,9 +56,13 @@ test("real MV3 keeps explicit learning context, safe return paths and private dr
     await expect(panel.getByText(secondCriteria, { exact: true })).toBeVisible();
     await expect(panel.getByText("45 分钟", { exact: true })).toBeVisible();
     const learn = panel.getByRole("tab", { name: "学习", exact: true });
+    const understand = panel.getByRole("tab", { name: "理解", exact: true });
     const record = panel.getByRole("tab", { name: "记录", exact: true });
     await learn.focus();
     await learn.press("ArrowRight");
+    await expect(understand).toBeFocused();
+    await expect(panel.getByRole("button", { name: "读取原始字幕", exact: true })).toBeVisible();
+    await understand.press("ArrowRight");
     await expect(record).toBeFocused();
     await expect(record).toHaveAttribute("aria-selected", "true");
     await expect(panel.getByText("45 分钟", { exact: true })).toBeHidden();
@@ -105,6 +109,9 @@ test("real MV3 keeps explicit learning context, safe return paths and private dr
     await expect(record).toBeFocused();
     await expect(panel.getByRole("tabpanel", { name: "记录", exact: true })).toBeVisible();
     await record.press("ArrowLeft");
+    await expect(understand).toBeFocused();
+    await expect(panel.getByRole("tabpanel", { name: "记录", exact: true })).toBeHidden();
+    await understand.press("ArrowLeft");
     await expect(learn).toBeFocused();
     await expect(panel.getByRole("tabpanel", { name: "记录", exact: true })).toBeHidden();
     await panel.emulateMedia({ forcedColors: "none", reducedMotion: "no-preference" });

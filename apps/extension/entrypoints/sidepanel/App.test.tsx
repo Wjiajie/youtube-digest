@@ -53,35 +53,36 @@ async function clickButton(label: string) {
   await act(async () => button!.click());
 }
 
-test("learning and records are separate keyboard task views without starting private reads or losing the current path", async () => {
+test("learning, understanding and records are keyboard task views without automatic private reads", async () => {
   await act(async () => root.render(<App />));
   const list = host.querySelector('[role="tablist"][aria-label="学习工作台"]');
   expect(list).not.toBeNull();
   const items = [...list!.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-  expect(items.map(item => item.textContent)).toEqual(["学习", "记录"]);
+  expect(items.map(item => item.textContent)).toEqual(["学习", "理解", "记录"]);
   const panels = [...host.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
-  expect(panels.map(panel => panel.hidden)).toEqual([false, true]);
+  expect(panels.map(panel => panel.hidden)).toEqual([false, true, true]);
   transport.sendMessage.mockClear();
   items[0]!.focus();
   await act(async () => items[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
   expect(document.activeElement).toBe(items[1]);
-  expect(items.map(item => item.tabIndex)).toEqual([-1, 0]);
-  expect(items.map(item => item.getAttribute("aria-selected"))).toEqual(["false", "true"]);
-  expect(panels.map(panel => panel.hidden)).toEqual([true, false]);
+  expect(items.map(item => item.tabIndex)).toEqual([-1, 0, -1]);
+  expect(items.map(item => item.getAttribute("aria-selected"))).toEqual(["false", "true", "false"]);
+  expect(panels.map(panel => panel.hidden)).toEqual([true, false, true]);
+  expect(panels[1]!.textContent).toContain("读取原始字幕");
   expect(host.querySelector('.context-card')?.closest('[hidden]')).toBeNull();
   expect(host.textContent).toContain("了解基础");
   expect(transport.sendMessage.mock.calls).toHaveLength(0);
   await act(async () => items[1]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })));
   expect(document.activeElement).toBe(items[0]);
-  expect(panels.map(panel => panel.hidden)).toEqual([false, true]);
-  for (const [key, selected] of [["ArrowLeft", 1], ["ArrowRight", 0], ["End", 1]] as const) {
+  expect(panels.map(panel => panel.hidden)).toEqual([false, true, true]);
+  for (const [key, selected] of [["ArrowLeft", 2], ["ArrowRight", 0], ["End", 2]] as const) {
     await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
     expect(document.activeElement).toBe(items[selected]);
     expect(items[selected]!.getAttribute("aria-controls")).toBe(panels[selected]!.id);
     expect(panels[selected]!.getAttribute("aria-labelledby")).toBe(items[selected]!.id);
   }
   await clickButton("学习");
-  expect(panels.map(panel => panel.hidden)).toEqual([false, true]);
+  expect(panels.map(panel => panel.hidden)).toEqual([false, true, true]);
 });
 
 test("record view offers explicit video notes without automatically reading private notes", async () => {
@@ -105,6 +106,7 @@ test("continue-learning stays mounted across task, theme and video changes but r
   expect(field!.closest<HTMLElement>('[role="tabpanel"]')!.hidden).toBe(false);
   transport.sendMessage.mockClear();
   await clickButton("记录"); expect(field!.closest<HTMLElement>('[role="tabpanel"]')!.hidden).toBe(true);
+  await clickButton("理解"); expect(host.querySelector('[aria-label="继续学习位置（秒）"]')).toBe(field);
   await clickButton("学习"); expect(host.querySelector('[aria-label="继续学习位置（秒）"]')).toBe(field);
   preferences = { theme: { id: "eastern", version: 1 }, revision: 2 };
   await act(async () => window.dispatchEvent(new Event("focus")));
@@ -127,6 +129,7 @@ test("video notes stay mounted across tasks, themes and active video changes but
   const textarea = host.querySelector('[aria-label="笔记原文"]'); expect(textarea).not.toBeNull();
   transport.sendMessage.mockClear();
   await clickButton("学习"); expect(textarea!.closest<HTMLElement>('[role="tabpanel"]')!.hidden).toBe(true);
+  await clickButton("理解"); expect(host.querySelector('[aria-label="笔记原文"]')).toBe(textarea);
   await clickButton("记录"); expect(host.querySelector('[aria-label="笔记原文"]')).toBe(textarea);
   preferences = { theme: { id: "eastern", version: 1 }, revision: 2 };
   await act(async () => window.dispatchEvent(new Event("focus")));

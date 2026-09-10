@@ -11,6 +11,7 @@ import { StatusPanel } from "./StatusPanel";
 import { NotesPanel } from "./NotesPanel";
 import { PositionsPanel } from "./PositionsPanel";
 import { LearningWorkspace } from "./LearningWorkspace";
+import { TranscriptPanel } from "./TranscriptPanel";
 
 type BoundNodeListItem = {
   goalTitle: string;
@@ -331,7 +332,7 @@ export function App() {
               </button>
             )) : <p className="empty">蓝图中还没有 YouTube 资源绑定。</p>}
           </section>
-          </>} record={<>
+          </>} understand={state.userId ? <TranscriptPanel ownerId={state.userId} expectedTabId={state.tabId} context={context} /> : null} record={<>
             <div className="record-introduction"><h2>把经历留作证据</h2><p className="muted">记录实际收获，再核对完成依据。观看不等于掌握，草稿也不会随当前视频改选节点。</p></div>
             {state.userId ? <EvidencePanel ownerId={state.userId} /> : null}
             {state.userId ? <NotesPanel ownerId={state.userId} /> : null}
