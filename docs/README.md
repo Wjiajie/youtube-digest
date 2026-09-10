@@ -25,6 +25,7 @@
 19. [首页与正式路径](home-paths.md)：只读焦点、可解释下一步、历史成果、完整路径和独立编辑入口；本地 P5 增量，不代表正式 3D 或托管已交付。
 20. [可跳过的公开示例](public-preview.md)：双主题虚构示例、登录入口分流及演示／私人数据隔离；不调用 Agent 或导入虚构成果。
 21. [双主题环境构图试验](environment-study.md)：四件真实自然素材的本地组合、实际 WebGL／降级证据及不予正式采用的美术判断；内部工具不对生产公开。
+22. [免费人物候选跟进](avatar-candidate-followup.md)：已核实的 A2 单体／源工程入口、动画分支和许可错配；Universal 免费层与付费源工程边界。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 
