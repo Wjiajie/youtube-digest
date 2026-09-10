@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { resolve } from "node:path";
 
 // Optional acquired-asset journey: actual model bytes and the existing preview UI.
-for (const filename of ["Casual.gltf", "Casual.source-study.glb"]) test(`${filename} avatar renders and idle playback stops under reduced motion`, async ({ page }, info) => {
+for (const filename of ["Casual.gltf", "Casual.source-study.glb", "Casual.weight-repaired-study.glb"]) test(`${filename} avatar renders and idle playback stops under reduced motion`, async ({ page }, info) => {
   const errors: string[] = [], external: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("request", request => {

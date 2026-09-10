@@ -1,7 +1,8 @@
 """Bounded source-to-GLB feasibility check, not a production art build.
 
 Invoke in Blender with factory startup, disabled autoexec and offline mode,
-after opening the acquired Casual.blend. Never saves or alters that source.
+after opening the acquired Casual.blend or the pinned weight-repair study.
+Never saves or alters that source. This is not a general-purpose exporter.
 """
 import hashlib
 from pathlib import Path
@@ -10,9 +11,13 @@ import bpy
 assert not bpy.context.preferences.filepaths.use_scripts_auto_execute
 assert not bpy.app.online_access
 source = Path(bpy.data.filepath)
-assert source.name == "Casual.blend"
-assert hashlib.sha256(source.read_bytes()).hexdigest() == "204d82f2f481116cbb4433e69075b52e99f49b0df60ac04b44462f5704f3ee9f"
-output = source.with_name("Casual.source-study.glb")
+variants = {
+    "Casual.blend": ("204d82f2f481116cbb4433e69075b52e99f49b0df60ac04b44462f5704f3ee9f", "Casual.source-study.glb"),
+    "Casual.weight-repaired-study.blend": ("216fc727182f827c9774d862e2f161c58d3d7e63367f43ad9c3984d386cc0395", "Casual.weight-repaired-study.glb"),
+}
+expected_hash, output_name = variants[source.name]
+assert hashlib.sha256(source.read_bytes()).hexdigest() == expected_hash
+output = source.with_name(output_name)
 assert not output.exists(), "Keep prior study evidence; do not overwrite it."
 # Apply Mirror geometry, retain the Armature and export its separate actions.
 # Shape keys would be lost by export_apply; the acquired source has none.
