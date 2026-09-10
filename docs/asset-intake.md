@@ -3,7 +3,7 @@
 核验日期：2026-09-10。阶段状态以 [执行路线](execution-roadmap.md) 为准。
 本台账证明已获取文件及许可证据，不证明美术、骨架运行或商用品质已验收。
 
-最新补充：B1 桦树已取得原工程和依赖，完成基础颜色衍生样本的实际 WebGL 观察，见本文末节。四件 Kenney 环境候选已完成双主题组合与实际 WebGL 运行验证，详见[环境构图试验](environment-study.md)。当前候选均未获正式美术认可、未随产品分发；下文取得文件时的“尚未进行 GPU 试装”保留为历史记录，不覆盖后续进展。人物后续入口见[人物候选跟进](avatar-candidate-followup.md)。
+最新补充：A2 Casual 已完成实际人物与源工程导出 GLB 的浏览器检查，Blender 已在外置盘运行，见本文末节。B1 桦树已取得原工程和依赖，完成基础颜色衍生样本的实际 WebGL 观察。四件 Kenney 环境候选已完成双主题组合与实际 WebGL 运行验证，详见[环境构图试验](environment-study.md)。当前候选均未获正式美术认可、未随产品分发；下文取得文件时的“尚未进行 GPU 试装”保留为历史记录，不覆盖后续进展。人物后续入口见[人物候选跟进](avatar-candidate-followup.md)。
 
 ## Quaternius / Cyberpunk Game Kit / Character
 
@@ -87,3 +87,47 @@ glTF 结构检查：1,500,456 字节，4 个 mesh、1 个 skin、22 个动画，
 回归：353 项 Vitest／34 文件、四工作区 TypeScript 通过；新增可选浏览器测试另以显式 `--types node` 的严格 TypeScript 检查通过，衍生脚本语法和重复执行校验值一致。单独测试检查首次漏配 Node 类型而失败，补全命令后通过，未修改产品代码。未重跑生产构建、数据库或托管验收；这些不属于本次仅工具／资产记录改动的新增证据。
 
 源码 `39e165d` 独立复核（两位均未参与本批实现）：**Standards** 0 项确认违反、0 项新增异味建议；**Spec** 0 项确认缺陷或范围扩张。Spec 额外核对八个本地文件哈希、衍生样本几何／UV／变换／透明模式及内嵌数据保持一致；两路审查均没有代替主线程的浏览器与截图验收，未作许可法律审查。69 个相关文档本地链接及五个作者／许可入口 HTTP 200 检查通过。原始模型及截图仍在忽略目录；此提交只固化工具与证据记录，没有 push。
+
+## 2026-09-10 A2 / Casual 人物与制作链路
+
+固定点 `de814e0`。从[人物候选跟进](avatar-candidate-followup.md)已经核实的作者公共入口，匿名取得下列原件；全部保存在外置盘 `.tools/asset-intake/quaternius-women/`，Git 忽略、不上传、不随产品分发。许可正文为 CC0，但标题 **Ultimate Modular Males** 与 Women 包不符，差异仍待解决；未增加付费或账号操作。
+
+| 原文件 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| [Casual.gltf](https://drive.google.com/file/d/18b3WwlrwrFYWAM7BcnjWeIxKJyxAQiGh/view) | 3,131,788 | `b0fe6e92219cd71808844a20a1a8b960fd1cf640a6546dc6362b5add6604e87c` |
+| [Casual.blend](https://drive.google.com/file/d/1nxFlRC0tj4XIbuxGEzEgMV9O4DgeKfS_/view) | 5,321,436 | `204d82f2f481116cbb4433e69075b52e99f49b0df60ac04b44462f5704f3ee9f` |
+| [License.txt](https://drive.google.com/file/d/1lIFL16xEpoPbr0j_HUATgmcEnAmYoIK2/view) | 372 | `e8dbf915a2b82229913e301a0787696611241bdefec4832bc084f54161db1efe` |
+
+原 glTF：四个 mesh／九个 primitive，**6,424 三角形、62 骨骼、一套 skin、24 动作**，含 `Idle_Neutral`；单 buffer 内嵌、没有图片依赖、七个基础颜色材质。作者导出器标记为 Blender I/O v1.7.33。它是可直接运行的候选，但文件里的数字不能证明人体比例、所有动作或后续改装质量。
+
+### 外置盘 Blender 与真实源工程检查
+
+从 [Blender 官方 4.5 发布目录](https://download.blender.org/release/Blender4.5/)取得 `blender-4.5.13-macos-arm64.dmg`，311,910,354 字节，与[官方 SHA-256 清单](https://download.blender.org/release/Blender4.5/blender-4.5.13.sha256)匹配：`663ce944257c61ff1d6aa09e15c8f57bbd8d59023adb2fa7edde33a9ed960b53`。实际运行版本 **4.5.13 LTS / daeeeca98fb0**。应用只复制到 `.tools/blender-4.5.13/Blender.app`（约 814 MiB），安装包也留外置盘；未写入系统 Applications、安装扩展或请求管理员权限。指定外置目录挂载首次被拒绝，改用 macOS 正常只读挂载后复制并卸载镜像；没有关闭系统保护。
+
+[只读检查脚本](../scripts/inspect-blender-source.py)通过实际 Blender 数据接口检查源工程，不执行工程内文本、不保存原件。调用始终包含 `--background --factory-startup --disable-autoexec --offline-mode`，脚本也断言自动脚本和联网均关闭；这些选项来自[官方命令行说明](https://docs.blender.org/manual/en/4.5/advanced/command_line/arguments.html)。这不是声称 Blender 进程被 OS 网络沙箱隔离。
+
+实际读取了 Blender 2.79 原工程：`Casual_Head`、`Casual_Body`、`Casual_Legs`、`Casual_Feet` 四个独立网格均绑定 `CharacterArmature`；62 骨骼、24 个 Action／NLA 轨道，`Idle_Neutral` 为 0–50 帧。身体／腿／鞋保留 Mirror 和 Armature 修改器，头保留 Armature；**没有形态键**，现有分组可以作为换装加工起点，但不能声称已经支持捏脸。没有外部链接库或内嵌文本，七个旧材质尚未使用节点。
+
+工程含一张未打包、文件不存在的 `Texture.png` 引用（users=1），不能声称工程完全自包含。当前原 glTF 和下述导出均不含图片、实际画面有基础颜色；这不证明该缺失引用对全部编辑／渲染工作流都无影响。旧 Info 区域兼容警告亦保留。
+
+### 源工程导出与浏览器验证
+
+[受限导出脚本](../scripts/export-casual-source-study.py)先验证原 `.blend` 哈希，应用非骨架修改器，保留骨架并分别导出动作；不会保存 `.blend`，已有同名试样会拒绝覆盖。先前检查确认没有形态键，因此本次应用修改器没有丢弃现存捏脸数据。不下载解码器、不启用 Draco 压缩或付费工具。
+
+仓库根目录的复现命令（前提是已按上文取得运行时和原件）：
+
+```sh
+.tools/blender-4.5.13/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --offline-mode .tools/asset-intake/quaternius-women/Casual.blend --python-exit-code 1 --python scripts/inspect-blender-source.py
+.tools/blender-4.5.13/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --offline-mode .tools/asset-intake/quaternius-women/Casual.blend --python-exit-code 1 --python scripts/export-casual-source-study.py
+bash scripts/with-m1-runtime.sh npx playwright test --config playwright.environment.config.ts --grep Casual --output .goal-loop/evidence/casual-source
+```
+
+导出 `Casual.source-study.glb`：**1,761,476 字节**，SHA-256 `1d134055076acbc47737c37925c1415198027a1718544d6b2917ce3c6338dfe5`；6,424 三角形、62 骨骼、24 个同名动画，无必需解码扩展或图片。224,403 个浮点 accessor 值逐一检查均有限，原件哈希不变。导出器曾报告两个网格不合法、矩阵运算警告、超过四骨骼影响被截取归一化、约束和帧通道需要烘焙；**没有把输出成功当作这些警告已解决**，也没有证明所有动画逐帧等价。
+
+实际浏览器旅程 **2 项通过，12.5 秒**：分别加载原 glTF 和源工程 GLB，看到 24 动作；静止画面在采样窗口内不变，开启待机后像素变化，减少动态效果后再次稳定，清除后无 Canvas。无未捕获页面错误、外部 HTTP 请求和应用缓存写入；已知 Three.Clock 弃用警告仍在。测试见 [casual.spec.ts](../apps/web/environment-e2e/casual.spec.ts)，依赖本地取得的实物，不加入默认离线单元套件。软件渲染器仍是 SwiftShader，不能替代硬件 FPS 或显存验收。
+
+原文件首轮三张截图和源工程输出三张截图均已查看，位于 `.goal-loop/evidence/casual/` 与 `.goal-loop/evidence/casual-source/`。日常人形比此前机器人更接近身份映射，静态与待机没有观察到明显肢体分离；脸、头发和服装仍有明显折面，缺少赛博／东方身份设计，**不认可它为正式主角**。本批交付的是一条实际跑通但仍有质量警告的制作链路，不是完成双主题角色或捏脸换装系统。
+
+下一步围绕这份真实源工程处理旧网格／权重和材质，制作少量明确的主题造型对照，或在证据表明改造代价过高时更换候选；不以重复获取类似资产代替美术加工。正式分发许可、人体／服装精修、完整动画质量、与场景融合及目标硬件预算仍未过门槛。
+
+本批回归：353 项 Vitest、四工作区 TypeScript、新增可选浏览器测试的独立严格类型检查通过；51 个相关本地文档链接有效。导出脚本重复执行在已有文件处按预期退出 1，输出哈希不变。Blender 检查与导出均已实际执行，没有用语法检查代替运行；上述导出警告仍未解决。无产品运行源码改动，未重跑生产构建、SQL 或托管旅程，不沿用这些层面的旧结果作为本批新证据。

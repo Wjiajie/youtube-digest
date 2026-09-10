@@ -2,6 +2,8 @@
 
 核查日期：2026-09-10。范围仅 A2 Ultimate Modular Women 与 Universal Base Characters Standard；补充 [9 月 6 日初查](open-asset-research.md)，不改写其历史记录。B2 环境对照未获正式美术认可，并不证明其他人物已合格；完整 P2／P1–P9 仍未完成。
 
+后续进展：A2 Casual 的模型和源工程现已取得，并完成原 glTF、Blender 源工程检查、源工程导出 GLB 的浏览器验证，见[资产接收台账](asset-intake.md#2026-09-10-a2--casual-人物与制作链路)。下文“未下载／未导入”保留为本次入口研究时的历史事实，不覆盖后续接收进展；Universal 状态未变。
+
 本轮仅读取官方页面、作者链接的公共目录和两份小型 TXT 元数据；没有下载人物／压缩包、导入 Blender、试装、登录、发邮件或付费。下列“目录已见”不等于已打开制作文件。
 
 ## A2：可以定位单个人物，不必先取整包
