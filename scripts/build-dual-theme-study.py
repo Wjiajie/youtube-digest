@@ -9,7 +9,10 @@ import re
 import sys
 from pathlib import Path
 import bpy
+import bmesh
 from mathutils import Vector
+from mathutils.bvhtree import BVHTree
+from mathutils.geometry import barycentric_transform
 
 assert not bpy.context.preferences.filepaths.use_scripts_auto_execute
 assert not bpy.app.online_access
@@ -118,18 +121,115 @@ def ribbon(name, points, width, surface, bone):
     return result
 
 
+def surface_sampler(obj, surface):
+    """Sample the real surface and its normalized skinning, not guessed offsets."""
+    obj.data.calc_loop_triangles()
+    triangles = [tuple(face.vertices) for face in obj.data.loop_triangles
+                 if obj.data.materials[face.material_index] == surface]
+    points = [obj.matrix_world @ vertex.co for vertex in obj.data.vertices]
+    tree = BVHTree.FromPolygons(points, triangles, all_triangles=True)
+
+    def sample(origin, direction, offset):
+        hit, normal, triangle, _ = tree.ray_cast(Vector(origin), Vector(direction))
+        assert hit is not None, "Authored feature must lie on the actual source surface"
+        indices = triangles[triangle]
+        factors = barycentric_transform(hit, *(points[index] for index in indices),
+                                        Vector((1, 0, 0)), Vector((0, 1, 0)), Vector((0, 0, 1)))
+        weights = {}
+        for index, factor in zip(indices, factors):
+            groups = obj.data.vertices[index].groups
+            total = sum(group.weight for group in groups)
+            assert total > 0
+            for group in groups:
+                name = obj.vertex_groups[group.group].name
+                weights[name] = weights.get(name, 0) + max(0, factor) * group.weight / total
+        return tuple(hit + normal * offset), weights
+    return sample
+
+
+# Replace the source's protruding rectangular eye cubes only in this derivative;
+# facial features follow the existing Skin surface and Head/Neck deformation.
+head = bpy.data.objects["Casual_Head"]
+sample_face = surface_sampler(head, palette["skin"])
+eye_white = material("Identity / warm sclera", "E5DED0", .64)
+iris = material("Identity / iris", "3C4D48", .48)
+lip = material("Identity / lip", "A87567", .75)
+mouth_line = material("Identity / mouth line", "73534D", .8)
+
+
+def face_patch(name, outline, center, surface, offset, bulge=0):
+    points = [center, *outline]
+    samples = [sample_face((x, -1, z), (0, 1, 0), offset + (bulge if index == 0 else 0))
+               for index, (x, z) in enumerate(points)]
+    faces = [(0, index + 1, (index + 1) % len(outline) + 1) for index in range(len(outline))]
+    result = mesh_object(name, [point for point, _ in samples], faces, surface, [weight for _, weight in samples])
+    for face in result.data.polygons:
+        face.use_smooth = True
+
+
+def face_stroke(name, points, width, surface, offset):
+    samples = [sample_face((x, -1, z + delta), (0, 1, 0), offset)
+               for x, z in points for delta in (-width / 2, width / 2)]
+    faces = [(2 * index, 2 * index + 1, 2 * index + 3, 2 * index + 2) for index in range(len(points) - 1)]
+    mesh_object(name, [point for point, _ in samples], faces, surface, [weight for _, weight in samples])
+
+
+for side, sign in (("L", 1), ("R", -1)):
+    center_x, center_z = sign * .047, 1.689
+    outline = [(center_x + .020 * math.cos(step * math.tau / 32),
+                center_z + .0085 * math.sin(step * math.tau / 32)) for step in range(32)]
+    face_patch("Identity / eye white " + side, outline, (center_x, center_z), eye_white, .001, .001)
+    for label, radius_x, radius_z, surface, offset in [("iris", .006, .0073, iris, .003),
+                                                     ("pupil", .0031, .0051, palette["eyes"], .004)]:
+        outline = [(center_x + radius_x * math.cos(step * math.tau / 24),
+                    center_z + radius_z * math.sin(step * math.tau / 24)) for step in range(24)]
+        face_patch("Identity / " + label + " " + side, outline, (center_x, center_z), surface, offset)
+    face_stroke("Identity / upper lid " + side,
+                [(center_x + .020 * math.cos(step * math.pi / 16), center_z + .0085 * math.sin(step * math.pi / 16)) for step in range(17)],
+                .0017, palette["eyes"], .0027)
+face_patch("Identity / lower lip", [(.022 * math.cos(step * math.tau / 32),
+                                     1.6135 + .004 * math.sin(step * math.tau / 32)) for step in range(32)],
+           (0, 1.6135), lip, .0007, .001)
+face_stroke("Identity / closed smile", [(x / 1000, 1.614 + .0018 * (x / 22) ** 2) for x in range(-22, 23, 2)],
+            .0009, mouth_line, .002)
+edit_head = bmesh.new()
+edit_head.from_mesh(head.data)
+bmesh.ops.delete(edit_head, geom=[face for face in edit_head.faces if head.data.materials[face.material_index] == palette["eyes"]], context="FACES")
+edit_head.to_mesh(head.data)
+edit_head.free()
+
+
 # Fit the sleeve center and minimum radius to the actual source skin cross-section.
 body = bpy.data.objects["Casual_Body"]
 skin_vertices = {index for face in body.data.polygons if body.data.materials[face.material_index] == palette["skin"] for index in face.vertices}
 skin_points = [body.matrix_world @ body.data.vertices[index].co for index in skin_vertices]
+edge_materials = {}
+for face in body.data.polygons:
+    surface = body.data.materials[face.material_index]
+    for edge in face.edge_keys:
+        edge_materials.setdefault(tuple(sorted(edge)), set()).add(surface)
+sleeve_edges = [edge for edge, surfaces in edge_materials.items()
+                if palette["skin"] in surfaces and palette["cloth"] in surfaces
+                and all(abs(body.data.vertices[index].co.x) > .15 for index in edge)]
 
 # Sleeves follow the existing rest-pose bones, with a blended elbow, not rigid props.
 for side, sign in (("L", 1), ("R", -1)):
-    stations = [(.18, .018), (.27, .014), (.34, .014), (.46, .011), (.555, .009)]
+    stations = [(.245, .009), (.29, .014), (.35, .014), (.46, .011), (.555, .009)]
     if theme == "eastern":
-        stations = [(.18, .021), (.27, .025), (.34, .033), (.46, .039), (.55, .021)]
-    vertices, weights, faces = [], [], []
-    segments = 24
+        stations = [(.245, .015), (.29, .025), (.35, .033), (.46, .039), (.55, .021)]
+    root_indices = {index for edge in sleeve_edges for index in edge if sign * body.data.vertices[index].co.x > 0}
+    assert len(root_indices) == 8
+    root_center = sum((body.data.vertices[index].co for index in root_indices), Vector()) / len(root_indices)
+    root_indices = sorted(root_indices, key=lambda index: math.atan2(body.data.vertices[index].co.z - root_center.z,
+                                                                    body.data.vertices[index].co.y - root_center.y))
+    vertices = [tuple(body.matrix_world @ body.data.vertices[index].co) for index in root_indices]
+    # The coincident seam must deform exactly like the torso, including Shoulder
+    # influences and original weight sums. Approximate UpperArm binding opens it.
+    weights = [{body.vertex_groups[group.group].name: group.weight for group in body.data.vertices[index].groups}
+               for index in root_indices]
+    angles = [math.atan2(point[2] - root_center.z, point[1] - root_center.y) for point in vertices]
+    faces = []
+    segments = len(root_indices)
     for x, padding in stations:
         section = [point for point in skin_points if abs(point.x - sign * x) < .038 and point.z > 1.36]
         assert section, "Missing source sleeve fit section"
@@ -138,11 +238,10 @@ for side, sign in (("L", 1), ("R", -1)):
         radius_y = max(abs(point.y - center_y) for point in section) + padding
         radius_z = max(abs(point.z - center_z) for point in section) + padding
         elbow = min(1, max(0, (x - .29) / .10))
-        for step in range(segments):
-            angle = 2 * math.pi * step / segments
+        for angle in angles:
             vertices.append((sign * x, center_y + math.cos(angle) * radius_y, center_z + math.sin(angle) * radius_z))
             weights.append({"UpperArm." + side: 1 - elbow, "LowerArm." + side: elbow})
-    for row in range(len(stations) - 1):
+    for row in range(len(stations)):
         for step in range(segments):
             following = (step + 1) % segments
             faces.append((row * segments + step, row * segments + following, (row + 1) * segments + following, (row + 1) * segments + step))
@@ -152,10 +251,30 @@ for side, sign in (("L", 1), ("R", -1)):
     for face in sleeve.data.polygons:
         face.use_smooth = True
 
+# Long sleeves own this surface now. Remove only covered upper-arm skin from
+# the derivative, avoiding skin piercing an otherwise coincident garment seam.
+# Original files, shoulder cloth, exposed wrists and hands remain untouched.
+edit_body = bmesh.new()
+edit_body.from_mesh(body.data)
+covered_faces = [face for face in edit_body.faces
+                 if body.data.materials[face.material_index] == palette["skin"]
+                 and .20 < abs(face.calc_center_median().x) < .515]
+assert covered_faces
+bmesh.ops.delete(edit_body, geom=covered_faces, context="FACES")
+edit_body.to_mesh(body.data)
+edit_body.free()
+
 if theme == "cyberpunk":
+    sample_cloth = surface_sampler(body, palette["cloth"])
     for side, sign in (("L", 1), ("R", -1)):
-        box("Cyber / shoulder shell " + side, (sign * .155, -.055, 1.523), (.155, .17, .058), palette["dark"], .015, "UpperArm." + side)
-        ribbon("Cyber / shoulder seam " + side, [(sign * .10, -.145, 1.52), (sign * .22, -.145, 1.48)], .015, palette["light"], "UpperArm." + side)
+        samples = [sample_cloth((sign * x, y, 2), (0, 0, -1), .004)
+                   for x in (.115, .145, .175, .20) for y in (-.087, -.065, -.045)]
+        faces = [(row * 3 + column, (row + 1) * 3 + column, (row + 1) * 3 + column + 1, row * 3 + column + 1)
+                 for row in range(3) for column in range(2)]
+        if sign < 0:
+            faces = [tuple(reversed(face)) for face in faces]
+        mesh_object("Cyber / fitted shoulder yoke " + side, [point for point, _ in samples], faces,
+                    palette["dark"], [weight for _, weight in samples])
     ribbon("Cyber / offset fastening", [(.04, -.197, 1.46), (.01, -.207, 1.34), (.015, -.18, 1.10)], .012, palette["accent"], "Torso")
     box("Cyber / chest device", (-.09, -.197, 1.36), (.073, .02, .052), palette["dark"], .006, "Chest")
     box("Cyber / device indicator", (-.09, -.210, 1.36), (.042, .005, .008), palette["light"], .001, "Chest")
@@ -242,13 +361,19 @@ if theme == "cyberpunk":
         box("Cyber / portal upright", (sign * 1.3, 1.44, 1.48), (.15, .18, 2.96), palette["dark"], .025)
         box("Cyber / portal inset", (sign * 1.235, 1.337, 1.57), (.018, .012, 2.34), palette["light"], .004)
     box("Cyber / portal lintel", (0, 1.44, 2.93), (2.6, .18, .16), palette["dark"], .03)
-    for index in range(6):
-        box("Cyber / rear acoustic slat", (-.95 + index * .38, 1.63, 1.55), (.027, .035, 2.6), palette["dark"], .006)
+    # Broad oblique panels leave quiet space behind the face; repeated vertical
+    # bars previously overpowered the identity silhouette.
+    mesh_object("Cyber / oblique rear panel", [(-1.08,1.64,.30),(.90,1.64,.30),(.90,1.64,2.38),(.38,1.64,2.72),(-1.08,1.64,2.72)],
+                [(0,1,2,3,4)], palette["lining"])
+    mesh_object("Cyber / bevel light seam", [(.37,1.625,2.70),(.91,1.625,2.35),(.91,1.625,2.38),(.38,1.625,2.73)],
+                [(0,1,2,3)], palette["light"])
+    for z in (.48, .56, .64):
+        box("Cyber / quiet vent", (-.67,1.62,z), (.51,.025,.014), palette["dark"], .003)
     box("Cyber / side console", (1.72, .75, .44), (.42, .66, .88), palette["dark"], .05)
     mesh_object("Cyber / angled console top", [(1.40,.30,.92),(2.02,.30,.92),(2.02,1.05,1.15),(1.40,1.05,1.15)], [(0,1,2,3)], palette["lining"])
     box("Cyber / amber console strip", (1.72, .408, .69), (.24, .013, .03), palette["accent"], .004)
-    box("Cyber / planted recess", (-1.5, .7, .16), (.94, .84, .32), stone, .05)
-    import_nature("Cyber / living canopy", tree_path, 2.45, (-1.5, .7, .32), .45)
+    box("Cyber / planted recess", (-1.36, .9, .14), (.78, .70, .28), stone, .05)
+    import_nature("Cyber / living canopy", tree_path, 1.90, (-1.36, .9, .28), .45)
     for index in range(3):
         box("Cyber / deck inlay", (-.5 + index * .5, -.93, .007), (.17, .008, .007), palette["accent"], .002)
     arm.location = (.28, -.5, .08)
@@ -259,9 +384,9 @@ else:
     box("Eastern / standing slab", (.35, -.6, .12), (1.25, .92, .1), material("Eastern / light stone", "A4ACA0", .92), .065)
     for index in range(3):
         box("Eastern / stepping stone", (-.6 - .43 * index, -1.4 - .15 * index, -.06), (.39, .36, .1), stone, .055)
-    import_nature("Eastern / layered stone bank", rock_path, 1.1, (-1.5, .9, -.06), .8)
-    import_nature("Eastern / low stone bank", rock_path, .46, (1.6, 1.4, -.08), 2.1)
-    import_nature("Eastern / sheltering tree", tree_path, 2.7, (-1.45, 1.30, .38), -.7)
+    import_nature("Eastern / layered stone bank", rock_path, .62, (-1.30, 1.15, -.06), .8)
+    import_nature("Eastern / low stone bank", rock_path, .34, (1.6, 1.4, -.08), 2.1)
+    import_nature("Eastern / sheltering tree", tree_path, 2.1, (-1.40, 1.30, .42), -.7)
     # A short open timber screen gives a human scale without a full temple set.
     for sign in (-1, 1):
         box("Eastern / screen post", (.6 + sign * .7, 1.35, .65), (.07, .07, 1.45), palette["lining"], .012)

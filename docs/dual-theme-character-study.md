@@ -2,6 +2,8 @@
 
 固定点 `04a5f0d`，2026-09-10，P2 实际资产加工切片。两套内部制作件已生成并通过导出／WebGL 检查，**正式美术未通过**。目的：验证现有真实人物能否通过造型、服装与环境加工形成两种身份表达；不新建通用编辑器，不把样片当作正式首页。
 
+最新制作修订为 **v9**，增量固定点 `276de22`。已处理袖口拓扑贴合、被覆盖皮肤穿插、面部表情与环境主次；具体证据见下方“v9 精修”。v5 表格与命令保留为上一批的历史证据，不代表最新资产。
+
 ## 制作约定
 
 - 从已核验的 Casual 修复源出发，保留完整骨架与源权重；新增服饰绑定原骨架。每主题独立制作文件与 GLB，不覆盖原件，不新增采购或外部服务。
@@ -43,7 +45,7 @@
 bash scripts/with-m1-runtime.sh node scripts/render-dual-theme-study.mjs 5
 ```
 
-制作命令只在输出不存在时运行，修改制作内容需换新的 1–99 修订号。渲染可重复运行，会更新同修订号的本地截图和报告。`.tools/asset-studies/dual-theme-v5/` 保存四件最新输出；`.goal-loop/evidence/dual-theme-v5/` 保存每主题远景、近景、稍后待机图和报告。旧修订均保留。均被 Git 忽略；提交包含配方与文档，不向产品包或公开仓库分发素材。
+制作命令只在输出不存在时运行，修改制作内容需换新的 1–99 修订号。渲染可重复运行，会更新同修订号的本地截图和报告。`.tools/asset-studies/dual-theme-v5/` 保存上一批四件输出；`.goal-loop/evidence/dual-theme-v5/` 保存每主题远景、近景、稍后待机图和报告。旧修订均保留。均被 Git 忽略；提交包含配方与文档，不向产品包或公开仓库分发素材。
 
 | 输出 | 字节数 | SHA-256 |
 | --- | --- | --- |
@@ -80,3 +82,31 @@ bash scripts/with-m1-runtime.sh node scripts/render-dual-theme-study.mjs 5
 ```bash
 .tools/blender-4.5.13/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --offline-mode .tools/asset-studies/dual-theme-v5/cyberpunk.blend --python-exit-code 1 --python-expr 'import bpy; a=bpy.data.objects["CharacterArmature"].animation_data; assert a.action.name=="Idle_Neutral" and not a.use_nla, "Editable study must open in the isolated neutral idle"'
 ```
+
+## v9 精修：接缝、面部与环境主次
+
+固定点 `276de22`，2026-09-10。本批不改应用、数据库或托管边界，仍是 P2 实际制作而非正式发布。
+
+- **袖口**：从原身体的 Skin／cloth 材质边界提取每侧八个真实顶点，保留不共面的 X 坐标和原 Shoulder／UpperArm 权重，再向下生成长袖。旧版用 X=.18 的近似圆环，真实边界位于 X≈.205–.210。新增[实际接缝检查](../scripts/check-study-sleeve-joins.py)在旧 v5 上先失败（首点差 31.744 mm）；v6 与最终 v9 两主题的 16 个根部顶点，在静止和三个中性待机帧中误差均为 0。
+- **遮挡皮肤**：真实渲染发现仅对齐根部仍会让被衣服覆盖的上臂皮肤穿出。v9 只在衍生身体中移除中心 X 绝对值处于 `.20–.515` 的 Skin 面；手部、袖口原衣料与原始文件保留。不是把失败画面隐藏或改成透明贴片。该造型只验证了当前长袖与待机，不适用于任意换装／大幅动作。
+- **面部与肩饰**：用原 Skin 表面射线采样和重心插值权重制作眼白、虹膜、瞳孔、眼睑与嘴部，替换衍生件中原突出的方块眼睛。赛博肩甲改为沿真实衣料表面与权重制作的薄肩饰，避免悬空。原身体／头部已有顶点的权重不改写；被遮盖皮肤和旧眼睛的衍生面有意删除，不再宣称 v9 与源网格完全相同。
+- **主次关系**：赛博树木高度 2.45→1.90，重复格栅改为斜切背板；东方主岩块 1.10→.62、树木 2.70→2.10，给人物与前景路径留出更多空间。没有新增模型下载或购买。
+
+主线程已检查 v9 真实人物近景与两套远景：眼睛／嘴部可读，旧袖根皮肤穿出在当前采样画面中消失，环境压迫感减轻。仍有服装接缝的着色过渡、袍片和裤装僵硬、树冠色彩、环境缺乏细节及构图过于简陋的问题。**当前依然不达到商用首页标准，不以接缝数值通过代替完整视觉验收。** 下一步需要服装材质与空间层次的整体完善，并在真实面板构图中评估；不是继续堆叠小饰件就算完成。
+
+| v9 输出 | 字节数 | SHA-256 |
+| --- | --- | --- |
+| cyberpunk.blend | 7,908,317 | `30400c23b83f7462f89dc93b291dca6421d5a9caa3d2edc8a9f73b9c713ecb3b` |
+| cyberpunk.glb | 2,940,632 | `757000d66fc916b9780546badfa322661933184bc986de4e99373cc88e8e0ef9` |
+| eastern.blend | 8,016,486 | `4aa5bff5e2845e22764857c4098cb1bbfcff41a06e0e06a8d16435220b1e399b` |
+| eastern.glb | 2,917,332 | `2ad44aa54291a270115b780a4d9d116adf6985758066f5403eebcb9b1bd7b4a0` |
+
+当前资产目录 `.tools/asset-studies/dual-theme-v9/`，截图与报告 `.goal-loop/evidence/dual-theme-v9/`，继续忽略、不打包发布。使用上方制作命令时修订号改为 `9`；已有输出不可覆盖。真实渲染与静态接缝检查：
+
+```bash
+bash scripts/with-m1-runtime.sh node scripts/render-dual-theme-study.mjs 9
+.tools/blender-4.5.13/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --offline-mode .tools/asset-studies/dual-theme-v9/cyberpunk.blend --python-exit-code 1 --python scripts/check-study-sleeve-joins.py
+.tools/blender-4.5.13/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --offline-mode .tools/asset-studies/dual-theme-v9/eastern.blend --python-exit-code 1 --python scripts/check-study-sleeve-joins.py
+```
+
+最终主线程验证：双主题各 24 动作／62 骨骼，几何三角形 13,303／12,942；228,977／222,705 个浮点值有限，实际待机画面变化，无页面／着色器／外部 HTTP 请求错误。367 项 Vitest、四工作区类型检查通过。旧 v5 仍能复现接缝失败，原件未覆盖。软件 GPU、选定待机帧和这些内部样片，不代表全动作、硬件帧率、许可对应或 P2 商用品质通过。
