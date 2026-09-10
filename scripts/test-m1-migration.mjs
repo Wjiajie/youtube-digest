@@ -67,6 +67,7 @@ try {
     const resourceOrderUpgrade = file.endsWith("_resource_order.sql") ? await seedResourceOrderUpgrade() : null;
     const notesUpgrade = file.endsWith("_learning_notes.sql") ? await captureResourceUpgrade() : null;
     const clearingUpgrade = file.endsWith("_resource_evidence_clearing.sql") ? await seedResourceClearingUpgrade() : null;
+    const positionsUpgrade = file.endsWith("_learning_positions.sql") ? await captureResourceUpgrade() : null;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
     if (legacy) await verifyLegacyPlanningUpgrade(legacy);
@@ -77,6 +78,7 @@ try {
     if (resourceOrderUpgrade) await verifyResourceOrderUpgrade(resourceOrderUpgrade);
     if (notesUpgrade) await verifyLearningNotesUpgrade(notesUpgrade);
     if (clearingUpgrade) await verifyResourceClearingUpgrade(clearingUpgrade);
+    if (positionsUpgrade) await verifyLearningPositionsUpgrade(positionsUpgrade);
   }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
@@ -519,6 +521,33 @@ async function verifyLearningNotesUpgrade(before) {
   assert.equal(workspace.blueprint.version, 2, "coherent read retains previously confirmed Blueprint revision");
   await db.exec("reset role");
   assert.deepEqual(await captureResourceUpgrade(), { ...before, "public.learning_notes": [] }, "upgrade workspace read is non-mutating");
+}
+
+async function verifyLearningPositionsUpgrade(before) {
+  const expected = { ...before, "public.learning_positions": [] };
+  assert.deepEqual(await captureResourceUpgrade(), expected,
+    "position upgrade preserves every populated formal, proposal, evidence, lease, quota, note and session row; no manufactured playback positions");
+  const acl = (await db.query(`select
+    has_table_privilege('authenticated','public.learning_positions','SELECT') as owner_read,
+    has_table_privilege('authenticated','public.learning_positions','INSERT') as direct_insert,
+    has_table_privilege('authenticated','public.learning_positions','UPDATE') as direct_update,
+    has_table_privilege('authenticated','public.learning_positions','DELETE') as direct_delete,
+    has_function_privilege('anon','public.record_learning_position(uuid,uuid,integer,integer,integer,uuid)','EXECUTE') as anon_write,
+    has_function_privilege('anon','public.read_learning_position_workspace(uuid,uuid)','EXECUTE') as anon_read,
+    has_function_privilege('service_role','private.record_learning_position(uuid,uuid,integer,integer,integer,uuid)','EXECUTE') as service_write,
+    (select relrowsecurity from pg_class where oid='public.learning_positions'::regclass) as rls,
+    (select prosecdef from pg_proc where oid='public.read_learning_position_workspace(uuid,uuid)'::regprocedure) as definer_read,
+    (select provolatile::text from pg_proc where oid='public.read_learning_position_workspace(uuid,uuid)'::regprocedure) as read_volatility`)).rows[0];
+  assert.deepEqual(acl, { owner_read: true, direct_insert: false, direct_update: false, direct_delete: false,
+    anon_write: false, anon_read: false, service_write: false, rls: true, definer_read: false, read_volatility: "s" },
+    "position upgrade exposes only owner reads and narrow authenticated writes with a stable invoker workspace");
+  await becomeUser("d8000000-0000-4000-8000-000000000001");
+  const workspace = (await db.query("select public.read_learning_position_workspace($1) as value", ["d8000000-0000-4000-8000-000000000001"])).rows[0].value;
+  assert.deepEqual(workspace.records, [], "existing accounts start without fabricated positions");
+  assert.equal(workspace.blueprint.version, 2, "position workspace retains previously confirmed revision");
+  assert.equal(Number((await db.query("select public.apply_blueprint_proposal('d8000000-0000-4000-8000-000000000030',0,'d8000000-0000-4000-8000-000000000030') as version")).rows[0].version), 1,
+    "historical approved proposal still recovers original revision after position upgrade");
+  assert.deepEqual(await captureResourceUpgrade(), expected, "position workspace and historical replay mutate no upgraded data");
 }
 
 async function verifyResourceUpgrade(before) {

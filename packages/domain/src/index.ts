@@ -1,6 +1,7 @@
 import { z } from "zod";
 export * from "./blueprint-progress";
 export * from "./learning-notes";
+export * from "./learning-positions";
 
 import { NODE_TYPES } from "./node-types";
 export { NODE_TYPES } from "./node-types";
