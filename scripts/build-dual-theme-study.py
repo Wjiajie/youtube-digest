@@ -384,8 +384,27 @@ else:
                     face.material_index = 1
     tailored_band("Eastern / crossing collar", [(-.065, 1.485), (-.027, 1.44), (.014, 1.39), (.055, 1.34), (.075, 1.23), (.08, 1.15)], .029, palette["lining"], .006)
     tailored_band("Eastern / inner collar", [(.068, 1.48), (.033, 1.44), (-.009, 1.393)], .023, palette["lining"], .003)
-    box("Eastern / sash", (0, -.067, 1.115), (.335, .215, .042), palette["lining"], .015, "Hips")
-    box("Eastern / clasp", (.07, -.18, 1.12), (.033, .009, .028), palette["accent"], .004, "Hips")
+    # Follow the upper waist's real cloth and local binding. The old Hips-only
+    # box floated at rest; a lower fitted trial folded into the thigh crease.
+    # This is an internal art study, not a claim of collision-free animation.
+    sample_shirt = surface_sampler(bpy.data.objects["Casual_Body"], palette["cloth"])
+    vertices, weights = [], []
+    segments = 80
+    sash_rows = ((1.145, .005), (1.152, .008), (1.165, .008), (1.178, .005))
+    for height, offset in sash_rows:
+        for segment in range(segments):
+            angle = math.tau * segment / segments
+            radial = Vector((math.cos(angle), math.sin(angle), 0))
+            point, binding = sample_shirt(Vector((0, -.052, height)) + radial * .4, -radial, offset)
+            vertices.append(point)
+            weights.append(binding)
+    faces = [(row * segments + column, row * segments + (column + 1) % segments,
+              (row + 1) * segments + (column + 1) % segments, (row + 1) * segments + column)
+             for row in range(len(sash_rows) - 1) for column in range(segments)]
+    sash = mesh_object("Eastern / sash", vertices, faces, palette["lining"], weights)
+    for face in sash.data.polygons:
+        face.use_smooth = True
+    tailored_band("Eastern / clasp", [(.056, 1.162), (.084, 1.162)], .021, palette["accent"], .012)
     box("Eastern / hair pin", (0, .051, 1.80), (.24, .014, .014), palette["accent"], .004, "Head")
 
 

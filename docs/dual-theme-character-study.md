@@ -2,7 +2,38 @@
 
 固定点 `04a5f0d`，2026-09-10，P2 实际资产加工切片。两套内部制作件已生成并通过导出／WebGL 检查，**正式美术未通过**。目的：验证现有真实人物能否通过造型、服装与环境加工形成两种身份表达；不新建通用编辑器，不把样片当作正式首页。
 
-最新制作修订为 **v15**，增量固定点 `3688ae4`。已实际检查双主题全部 24 个动作，并修复东方袍片在站姿、交互和行走中的明显穿插；仍有 9 个动作的采样帧存在交叉，**完整动作门槛不通过**。旧修订保留为历史证据，正式首页仍未装载这些资产。
+最新内部制作修订为 **v17**，增量固定点 `c066eec`。东方腰带改为贴合上衣的高腰织带与扣件，正式首页仍未装载这些资产。v15 袍片的 9 个动作交叉问题仍在，v17 腰带也未通过完整动作贴合门槛；旧修订保留，不把内部制作增量当作正式美术通过。
+
+## v17 高腰织带与扣件
+
+2026-09-11，固定点 `c066eec`。将旧配方只跟随 Hips 的方盒腰带替换为实际上衣表面取样、重心插值配重的连续织带；相较未采用的 v16，四行取样高度整体提高 30 mm，扣件同步提高。衣襟、身体、袍片、24 个动作与检查门槛保持不变。当前[内部制作脚本](../scripts/build-dual-theme-study.py)保留这个增量，**不是碰撞修复完成或商用发布版本**。
+
+- 实际旧 v15 静止贴合检查失败；新 v17 静止距离约 5–8 mm，通过原门槛。完整静止加动作检查仍为 **54/806 失败**（v16 为 70/806），最小最近距离约 0.009 mm。未放宽门槛，亦未删除高踢腿／翻滚等失败动作；这些是素材压力检查，不是新增游戏功能。
+- 新导出上衣的 488 个三角面与源拓扑匹配。生产八影响 CPU 四姿态对照仍通过，1576 个顶点最大位置差约 **0.0188 mm**；本版明确报告八个被导出器过滤极小权重的腰带顶点，不沿用 v16 的四项数量，也不宣称全动作／GPU 等价。
+- 24 动作的 805 个源姿态袖根检查通过，16 个根点最大误差为 0；袍片检查仍 **165/805 失败**，没有因腰带局部改善而结项。
+- 额外只读探针核对新导出腰带 480 个三角面与源的世界坐标／轴向／绕序对应（六位小数量化）。在这版实际拓扑上重新运行双向边交叉检查，806 个姿态有 **7 个交叉，全部 Roll**；不是复用前批内存实验计数，也不覆盖共面／面包含或全部碰撞情形。脚本保留在忽略的 `.goal-loop/debug/v17-sash-export-topology.py` 与 `sash-surface-crossings.py`。
+- 实际 WebGL 导出检查通过：两套各 24 动作、62 骨骼，有限数值／着色器检查通过。东方全部动作各三个姿态，共 72 张采样画面组成四页图集。真实 `HomeDashboard` 两主题 × 三宽度 × 场景／回退，共 12 项检查通过。使用隔离的本地虚构目标，不接真实账号或用户浏览器。
+
+主线程检查东方人物近景、四页动作图集、东方 1440／390 页面和赛博 1440 页面：相比 v15 方盒，腰带更贴身，扣件仍清楚；但高腰带与旧裙腰之间形成双线间隙，衣襟／裙腰还需整体协调。大幅动作穿插仍可见，人物材质、面部与环境完整度也没有达到精品首页标准。**保留这一有边界的内部制作进展，不进入产品资产包。** 不连续盲调腰带高度，也不以软件 GPU 的截图当作真实硬件性能验收。
+
+| v17 输出 | SHA-256 |
+| --- | --- |
+| eastern.blend | `18e231261cb1b6068f5c1422d6db4268e4bd2e4a1c9ec84af1806e935d42579c` |
+| eastern.glb | `79bb1bc691addc12ad8ee469d1fa47ac033dc68b7afc9950dcef40db4ffee325` |
+| cyberpunk.blend | `9e8583990596c818680443d5d9e102941580ec2ec96c6da2ec667ba9d4b7ace3` |
+| cyberpunk.glb | `523d0269ef91c9dee76605cc401df0ac834607ffc6750381a815a32fbcee88d5` |
+
+赛博配方未改变，但重新导出的 GLB **不是逐字节相同**：与 v16 JSON 相同，二进制差异限于 19 个 UV accessor 的微小浮点变化，最大约 `1.2e-7`；位置、权重、动画 accessor 未变。东方 GLB 2,920,608 字节，赛博 1,599,244 字节。制作件在 `.tools/asset-studies/dual-theme-v17/`，截图在 `.goal-loop/evidence/dual-theme-v17/`、`study-actions-v17/`、`dual-theme-panel-v17/`；仍忽略、不分发。
+
+```bash
+bash scripts/with-m1-runtime.sh node scripts/check-study-pose-parity.mjs 17
+bash scripts/with-m1-runtime.sh node scripts/render-dual-theme-study.mjs 17
+bash scripts/with-m1-runtime.sh node scripts/render-study-actions.mjs 17 eastern
+bash scripts/with-m1-runtime.sh node scripts/render-theme-panel-study.mjs 17
+.tools/blender-4.5.13/Blender.app/Contents/MacOS/Blender --background --factory-startup --disable-autoexec --offline-mode .tools/asset-studies/dual-theme-v17/eastern.blend --python-exit-code 1 --python scripts/check-study-sash-fit.py -- --all-actions
+```
+
+最后一条按预期退出 1，不能把检查器执行成功混写成资产通过。9 项既有脚本回归通过；没有修改应用、SQL 或托管，本批未重跑应用全量／构建，没有费用、push 或正式资产分发。原始修复源、v15／v16 证据保持原样。
 
 ## 源姿态与导出采样对照
 
