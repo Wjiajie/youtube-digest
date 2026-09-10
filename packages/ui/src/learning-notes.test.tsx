@@ -154,3 +154,15 @@ test("recovering an older receipt does not promote it above newer history", asyn
   await act(async () => button("确认原笔记提交").click());
   expect(host.querySelector(".note-history .note-text")?.textContent).toBe("更新的另一条笔记");
 });
+
+test("a malformed stored video identity enters copyable recovery instead of freezing an unconfirmable request", async () => {
+  save = async () => ({ ok: false, code: "unavailable" }); await render(); await compose();
+  await act(async () => button("保存笔记").click());
+  await act(async () => root.unmount()); root = createRoot(host);
+  const corrupt = JSON.parse(localStorage.getItem(storageKey)!); corrupt.videoId = "invalid!";
+  const raw = JSON.stringify(corrupt); localStorage.setItem(storageKey, raw);
+  await render(); expect(host.querySelector<HTMLTextAreaElement>('[aria-label="原始笔记恢复内容"]')?.value).toBe(raw);
+  expect(localStorage.getItem(storageKey)).toBe(raw);
+  expect(button("已另行保存原文，重置笔记草稿").disabled).toBe(false);
+  expect(button("确认原笔记提交")).toBeUndefined();
+});

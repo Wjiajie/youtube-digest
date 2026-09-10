@@ -10,6 +10,8 @@ type Props = { accountId: string; initial: LearningNoteWorkspace;
   reloadAction: () => Promise<ApplicationResult<LearningNoteWorkspace>> };
 const draftSchema = z.object({ schemaVersion: z.literal(1), version: z.int().nonnegative(), bindingId: z.string(), nodeId: z.string(),
   label: z.string(), videoId: z.string(), text: z.string(), position: z.string(), reviewRequired: z.boolean().optional(), attempt: recordLearningNoteSchema.optional() }).strict()
+  .refine(draft => draft.bindingId === "" ? draft.nodeId === "" && draft.videoId === "" && !draft.attempt
+    : z.uuid().safeParse(draft.bindingId).success && z.uuid().safeParse(draft.nodeId).success && /^[A-Za-z0-9_-]{11}$/.test(draft.videoId))
   .refine(draft => !draft.attempt || (draft.attempt.nodeId === draft.nodeId && draft.attempt.resourceBindingId === draft.bindingId
     && draft.attempt.expectedVersion === draft.version && draft.attempt.text === draft.text
     && draft.attempt.positionSeconds === (draft.position === "" ? null : Number(draft.position))));
