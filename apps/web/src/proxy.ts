@@ -30,6 +30,8 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // This route validates/refreshes Cookie Auth itself. Next's proxy body
+    // finalization waits for EOF, hiding a stalled upload from its read deadline.
+    "/((?!api/resources/runs/?$|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

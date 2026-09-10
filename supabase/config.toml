@@ -47,3 +47,8 @@ verify_jwt = false
 # Shared handler policy verifies JWT signature/current Auth identity AND the
 # distinct clarification credential; the gateway's legacy JWT check is not used.
 verify_jwt = false
+
+[functions.resource-worker]
+# This handler independently validates the signed user JWT, current Auth identity,
+# and a distinct resource worker credential before any privileged persistence.
+verify_jwt = false

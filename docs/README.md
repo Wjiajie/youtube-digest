@@ -37,7 +37,8 @@
 31. [目标澄清工作台](agent-clarification-workbench.md)：显式开启、对话／摘要／准备度、直接编辑、明确保存及原请求恢复；本地增量，托管与真实模型质量未验收。
 32. [按节点的视频候选检索](resource-discovery.md)：真实供应商适配、可用性筛选与少量原生字幕；本地服务端切片，采用界面尚未接入。
 33. [受控资源匹配](agent-resource-matching.md)：版本化 Skill、有限候选选择、字幕引文与完整本地 HTTP 链路；内部建议层，真实推荐质量尚未验收。
-34. [资源运行记录](agent-resource-runs.md)：账号绑定、分项次数、不可替换的任务来源、显式字幕继续、匹配及无重复消费恢复；本地数据库与 SDK 联调，生产 worker／页面待完成。
+34. [资源运行记录](agent-resource-runs.md)：账号绑定、分项次数、不可替换的任务来源、显式字幕继续、匹配及无重复消费恢复。
+35. [资源执行入口](agent-resource-entry.md)：独立开关、生产 Node 接口、真实身份核验的 Edge worker 与三步本地 HTTP 链路；默认关闭，推荐页面与真实服务尚待验收。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 
