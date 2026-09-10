@@ -8,10 +8,11 @@ import { loadPlanningSkill } from "./planning-skill";
 import { parsePlanningRun, startPlanningRunSchema } from "./planning-run";
 import { planningResultSchema } from "./planning-result";
 import { createPlanningRunAccess, planningFailure as failure, type RunResponse } from "./planning-access";
+import type { PlanningWorker, WorkerFinish } from "./planning-worker";
 
 /** Server-only orchestration. Caller resolves identity; DB checks the user client's actual JWT. */
 export function createCloudPathPlanner(dependencies: {
-  client: SupabaseClient; workerClient: SupabaseClient; actor: Actor; model: Exclude<LanguageModel, string>;
+  client: SupabaseClient; worker: PlanningWorker; actor: Actor; model: Exclude<LanguageModel, string>;
 }) {
   const actor = { ...dependencies.actor };
   const allowed = actor.client === "web" && z.uuid().safeParse(actor.userId).success;
@@ -23,6 +24,12 @@ export function createCloudPathPlanner(dependencies: {
     } catch { return { ok: false, code: "unavailable" }; }
   }
   const { read, cancel } = createPlanningRunAccess(dependencies.client, actor);
+  async function finish(input: WorkerFinish): Promise<RunResponse> {
+    try {
+      const { data, error } = await dependencies.worker.finish(input);
+      return error ? failure(error) : { ok: true, run: parsePlanningRun(data, actor.userId, input.runId) };
+    } catch { return { ok: false, code: "unavailable" }; }
+  }
   return {
     read,
     cancel,
@@ -43,13 +50,17 @@ export function createCloudPathPlanner(dependencies: {
           || run.blueprintVersion !== command.expectedBlueprintVersion || run.startDate !== command.startDate) return { ok: false, code: "unavailable" };
         if (run.status !== "queued") return started;
         if (signal.aborted) return cancel(run.id);
+        // Reserve at least 7 MiB of the 8 MiB worker envelope for the bounded
+        // new candidate, escaped JSON, Skill and metadata. Reject before claim/model.
+        if (Buffer.byteLength(JSON.stringify(run.blueprint), "utf8") > 1024 * 1024) {
+          const cancelled = await cancel(run.id);
+          return cancelled.ok && cancelled.run.status === "cancelled" ? { ok: false, code: "input_too_large" } : cancelled;
+        }
         const loaded = await loadPlanningSkill();
         if (signal.aborted) return cancel(run.id);
         const skill = { ...loaded.identity, instructions: loaded.instructions };
         const leaseId = randomUUID();
-        const claimed = await dependencies.workerClient.rpc("claim_path_planning", {
-          p_owner_id: actor.userId, p_run_id: run.id, p_lease_id: leaseId, p_skill: skill,
-        });
+        const claimed = await dependencies.worker.claim({ runId: run.id, leaseId, skill });
         if (claimed.error) return failure(claimed.error);
         const receipt = z.strictObject({ acquired: z.boolean(), run: z.unknown() }).parse(claimed.data);
         const current = parsePlanningRun(receipt.run, actor.userId, run.id);
@@ -59,11 +70,11 @@ export function createCloudPathPlanner(dependencies: {
           runId: current.id, startDate: current.startDate, brief: current.brief, blueprint: current.blueprint, signal,
           expectedSkillSha256: skill.sha256,
         }));
-        const finishArgs = { p_owner_id: actor.userId, p_run_id: run.id, p_lease_id: leaseId, p_result: result };
-        const finished = await call(dependencies.workerClient, "finish_path_planning", finishArgs, run.id);
+        const finishArgs = { runId: run.id, leaseId, result };
+        const finished = await finish(finishArgs);
         // Retrying this exact storage receipt is safe; never retry the model or re-acquire execution.
         return !finished.ok && finished.code === "unavailable"
-          ? call(dependencies.workerClient, "finish_path_planning", finishArgs, run.id) : finished;
+          ? finish(finishArgs) : finished;
       } catch { return { ok: false, code: "unavailable" }; }
     },
   };

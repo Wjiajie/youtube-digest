@@ -7,11 +7,24 @@ import { localSupabaseTestConfig } from "../../../scripts/local-supabase-test-co
 import { createCloudPathPlanner } from "../src/lib/agent/cloud-path-planner";
 import { createPlanningRunAccess } from "../src/lib/agent/planning-access";
 import { createPlanningApprovalAccess } from "../src/lib/agent/planning-approval";
+import type { PlanningWorker } from "../src/lib/agent/planning-worker";
+import { createBlueprintApplication } from "@blueprint/domain";
+import { createSupabaseBlueprintStore } from "../src/lib/supabase/store";
 
 const local = localSupabaseTestConfig();
 const authOptions = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
 const admin = createClient(local.API_URL, local.SERVICE_ROLE_KEY, { auth: authOptions });
 const accounts: Array<{ id: string; client: SupabaseClient }> = [];
+
+// Database/SDK fixture adapter only; production uses the independently authenticated Edge worker.
+function databaseWorker(client: SupabaseClient, ownerId: string): PlanningWorker {
+  return {
+    claim: async input => await client.rpc("claim_path_planning", { p_owner_id: ownerId, p_run_id: input.runId,
+      p_lease_id: input.leaseId, p_skill: input.skill }),
+    finish: async input => await client.rpc("finish_path_planning", { p_owner_id: ownerId, p_run_id: input.runId,
+      p_lease_id: input.leaseId, p_result: input.result }),
+  };
+}
 
 afterEach(async () => {
   for (const { id, client } of accounts.splice(0)) {
@@ -59,10 +72,34 @@ function providerReply(): Awaited<ReturnType<MockLanguageModelV4["doGenerate"]>>
       outputTokens: { total: 40, text: 40, reasoning: undefined } }, warnings: [] };
 }
 
+it("rejects an oversized captured Blueprint before claiming or calling a provider and returns its reservation", async () => {
+  const owner = await fixture(1), actor = { userId: owner.id, client: "web" as const };
+  const store = createSupabaseBlueprintStore(owner.client);
+  const current = await store.getMainBlueprint(owner.id);
+  if (!current) throw new Error("Missing fixture Blueprint");
+  const draft = { ...current, goals: [{ id: randomUUID(), title: "已有练习", position: 0, stages: [{ id: randomUUID(), title: "作品", position: 0,
+    nodes: Array.from({ length: 90 }, (_, position) => ({ id: randomUUID(), title: `练习${position}`, type: "practice" as const, position,
+      estimatedMinutes: 10, completionCriteria: "练".repeat(4000), dependencyIds: [], resources: [] })) }] }] };
+  expect(Buffer.byteLength(JSON.stringify(draft))).toBeGreaterThan(1024 * 1024);
+  const application = createBlueprintApplication({ store, newId: randomUUID, now: () => new Date() });
+  const proposal = await application.createProposal(actor, { draft, baseVersion: 0, clientMutationId: randomUUID() });
+  if (!proposal.ok) throw new Error("Could not save large valid fixture");
+  expect((await application.applyProposal(actor, { proposalId: proposal.value.id, expectedVersion: 0, clientMutationId: randomUUID() })).ok).toBe(true);
+  const model = new MockLanguageModelV4({ doGenerate: providerReply() });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor, model });
+  const result = await planner.run({ ...owner.command, expectedBlueprintVersion: 1 }, new AbortController().signal);
+  expect(result.ok).toBe(false);
+  if (!result.ok) expect(result.code).toBe("input_too_large");
+  expect(model.doGenerateCalls).toHaveLength(0);
+  expect(await planner.read(owner.command.runId)).toMatchObject({ ok: true, run: { status: "cancelled", result: { providerMayHaveRun: false } } });
+  expect(localSql(`select available_attempts from private.path_planning_quotas where owner_id='${owner.id}'`)).toBe("1");
+  expect((await store.getMainBlueprint(owner.id))?.goals).toEqual(draft.goals);
+});
+
 it("persists a real account's complete reviewable planning result and replays without regeneration", async () => {
   const owner = await fixture();
   const model = new MockLanguageModelV4({ doGenerate: providerReply() });
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   const result = await planner.run(owner.command, new AbortController().signal);
   expect(result).toMatchObject({ ok: true, run: { id: owner.command.runId, ownerId: owner.id, status: "ready" } });
   expect(await planner.read(owner.command.runId)).toEqual(result);
@@ -80,7 +117,7 @@ it("persists a real account's complete reviewable planning result and replays wi
 it("does not run a provider without account credits", async () => {
   const owner = await fixture(0);
   const model = new MockLanguageModelV4();
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   expect(await planner.run(owner.command, new AbortController().signal)).toEqual({ ok: false, code: "quota_exhausted" });
   expect(model.doGenerateCalls).toHaveLength(0);
   expect(await planner.read(owner.command.runId)).toEqual({ ok: false, code: "not_found" });
@@ -88,7 +125,7 @@ it("does not run a provider without account credits", async () => {
 
 it("prepares once, explicitly applies, and recovers the exact planning approval after source changes", async () => {
   const owner = await fixture(); const model = new MockLanguageModelV4({ doGenerate: providerReply() });
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   expect(await planner.run(owner.command, new AbortController().signal)).toMatchObject({ ok: true, run: { status: "ready" } });
   const approval = createPlanningApprovalAccess(owner.client, { userId: owner.id, client: "web" });
   expect(await approval.read(owner.command.runId)).toMatchObject({ ok: true, value: { proposal: null, sourceCurrent: true } });
@@ -113,7 +150,7 @@ it("prepares once, explicitly applies, and recovers the exact planning approval 
 
 it("binds concurrent preparations to one immutable proposal, rejects changed sources and isolates owners", async () => {
   const owner = await fixture(), outsider = await fixture();
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" },
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" },
     model: new MockLanguageModelV4({ doGenerate: providerReply() }) });
   expect((await planner.run(owner.command, new AbortController().signal)).ok).toBe(true);
   const approval = createPlanningApprovalAccess(owner.client, { userId: owner.id, client: "web" });
@@ -161,9 +198,9 @@ it("lets an owner discover and recover runs without a model or worker credential
 it("enforces the real JWT owner even when a server caller supplies another actor ID", async () => {
   const owner = await fixture(), outsider = await fixture();
   const model = new MockLanguageModelV4({ doGenerate: providerReply() });
-  const own = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const own = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   expect((await own.run(owner.command, new AbortController().signal)).ok).toBe(true);
-  const forged = createCloudPathPlanner({ client: outsider.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const forged = createCloudPathPlanner({ client: outsider.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   expect(await forged.read(owner.command.runId)).toEqual({ ok: false, code: "not_found" });
   expect(await forged.cancel(owner.command.runId)).toEqual({ ok: false, code: "not_found" });
   expect(await forged.run({ ...owner.command, runId: randomUUID() }, new AbortController().signal)).toEqual({ ok: false, code: "not_found" });
@@ -175,7 +212,7 @@ it("does not regenerate while the same run is active and rejects a second concur
   const started = Promise.withResolvers<void>();
   const response = Promise.withResolvers<ReturnType<typeof providerReply>>();
   const model = new MockLanguageModelV4({ doGenerate: async () => { started.resolve(); return response.promise; } });
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   const running = planner.run(owner.command, new AbortController().signal);
   try {
     await started.promise;
@@ -192,7 +229,7 @@ it("discards a successful late draft after the user cancels but preserves known 
     const cancelled = await owner.client.rpc("cancel_path_planning", { p_run_id: owner.command.runId });
     expect(cancelled.error).toBeNull(); return providerReply();
   } });
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   const result = await planner.run(owner.command, new AbortController().signal);
   expect(result).toMatchObject({ ok: true, run: { status: "cancelled", result: { status: "cancelled", usage: { totalTokens: 60 } } } });
   if (!result.ok) throw new Error("Expected cancelled run");
@@ -211,7 +248,7 @@ it("marks the retained result stale if the actual Goal Brief changes during gene
       p_content: { ...brief.data!.content, outcome: "准备另一个作品集" }, p_client_mutation_id: randomUUID() });
     expect(changed.error).toBeNull(); return providerReply();
   } });
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   const result = await planner.run(owner.command, new AbortController().signal);
   expect(result).toMatchObject({ ok: true, run: { status: "stale", result: { status: "ready", source: { briefRevision: 1 } } } });
   expect(await planner.read(owner.command.runId)).toEqual(result);
@@ -228,7 +265,7 @@ it("retries only the exact storage completion after a real commit whose response
     return response;
   } } });
   const model = new MockLanguageModelV4({ doGenerate: providerReply() });
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: worker, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(worker, owner.id), actor: { userId: owner.id, client: "web" }, model });
   const result = await planner.run(owner.command, new AbortController().signal);
   expect(result).toMatchObject({ ok: true, run: { status: "ready" } });
   expect(finishes).toBe(2); expect(model.doGenerateCalls).toHaveLength(1);
@@ -238,7 +275,7 @@ it("retries only the exact storage completion after a real commit whose response
 it("allows only one provider call when two identical starts actually race", async () => {
   const owner = await fixture();
   const model = new MockLanguageModelV4({ doGenerate: providerReply() });
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   const responses = await Promise.all([planner.run(owner.command, new AbortController().signal), planner.run(owner.command, new AbortController().signal)]);
   for (const response of responses) {
     expect(response.ok).toBe(true);
@@ -252,7 +289,7 @@ it("allows only one provider call when two identical starts actually race", asyn
 it("cannot claim work with user credentials and safely cancels that unclaimed reservation", async () => {
   const owner = await fixture();
   const model = new MockLanguageModelV4();
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: owner.client, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(owner.client, owner.id), actor: { userId: owner.id, client: "web" }, model });
   expect(await planner.run(owner.command, new AbortController().signal)).toEqual({ ok: false, code: "forbidden" });
   expect(await planner.cancel(owner.command.runId)).toMatchObject({ ok: true, run: { status: "cancelled", result: { providerMayHaveRun: false } } });
   expect(await planner.cancel(owner.command.runId)).toMatchObject({ ok: true, run: { status: "cancelled" } });
@@ -270,7 +307,7 @@ it("never calls a provider after an uncertain execution claim and recovers the e
     return response;
   } } });
   const model = new MockLanguageModelV4();
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: worker, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(worker, owner.id), actor: { userId: owner.id, client: "web" }, model });
   expect(await planner.run(owner.command, new AbortController().signal)).toEqual({ ok: false, code: "unavailable" });
   expect(await planner.run(owner.command, new AbortController().signal)).toMatchObject({ ok: true, run: { status: "running" } });
   // Move only this fixture's deadline; do not wait two minutes or alter the DB clock.
@@ -283,7 +320,7 @@ it("never calls a provider after an uncertain execution claim and recovers the e
 it("marks a previously ready run stale when read after a later source edit", async () => {
   const owner = await fixture();
   const model = new MockLanguageModelV4({ doGenerate: providerReply() });
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   const original = await planner.run(owner.command, new AbortController().signal);
   expect(original).toMatchObject({ ok: true, run: { status: "ready" } });
   const brief = await owner.client.from("goal_briefs").select("content").eq("id", owner.briefId).single();
@@ -308,7 +345,7 @@ it("returns an unclaimed reservation if its confirmed source was edited before e
     p_content: brief.data!.content, p_client_mutation_id: randomUUID() });
   expect(changed.error).toBeNull();
   const model = new MockLanguageModelV4();
-  const planner = createCloudPathPlanner({ client: owner.client, workerClient: admin, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client: owner.client, worker: databaseWorker(admin, owner.id), actor: { userId: owner.id, client: "web" }, model });
   expect(await planner.run(command, new AbortController().signal)).toMatchObject({ ok: true, run: { status: "failed",
     result: { status: "invalid_input", providerMayHaveRun: false, usage: null } } });
   expect(model.doGenerateCalls).toHaveLength(0);
@@ -337,7 +374,7 @@ it("returns the reservation when the caller cancels while preparing the unclaime
     return fetch(request, init);
   } } });
   const model = new MockLanguageModelV4();
-  const planner = createCloudPathPlanner({ client, workerClient: worker, actor: { userId: owner.id, client: "web" }, model });
+  const planner = createCloudPathPlanner({ client, worker: databaseWorker(worker, owner.id), actor: { userId: owner.id, client: "web" }, model });
   const result = await planner.run(owner.command, controller.signal);
   expect(result).toMatchObject({ ok: true, run: { status: "cancelled", result: { providerMayHaveRun: false } } });
   expect(claims).toBe(0); expect(model.doGenerateCalls).toHaveLength(0);

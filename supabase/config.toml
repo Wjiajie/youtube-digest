@@ -37,3 +37,8 @@ enable_confirmations = true
 enabled = true
 authorization_url_path = "/oauth/consent"
 allow_dynamic_registration = false
+
+[functions.planning-worker]
+# The handler independently verifies JWT signature/expiry with getClaims plus
+# getUser, AND the distinct server credential. Avoid the legacy ES256 gateway check.
+verify_jwt = false

@@ -10,6 +10,13 @@ globalThis.fetch = async (input, init) => {
     throw new Error("Unrecognized planning provider request");
   const request = JSON.parse(init.body);
   if (request.model !== "deepseek-v4-flash" || request.stream) throw new Error("Unexpected planning model request");
+  await new Promise((resolve, reject) => {
+    const signal = init?.signal;
+    if (signal?.aborted) { reject(signal.reason); return; }
+    const timer = setTimeout(() => { signal?.removeEventListener("abort", abort); resolve(); }, 3000);
+    function abort() { clearTimeout(timer); reject(signal.reason); }
+    signal?.addEventListener("abort", abort, { once: true });
+  });
   return Response.json({ id: "planning-offline-fixture", object: "chat.completion", created: 1, model: "deepseek-v4-flash",
     choices: [{ index: 0, message: { role: "assistant", content: JSON.stringify({ title: "我的摄影练习路径", description: "拍摄与评估",
       assumptions: ["能在周末练习"], stages: [{ title: "拍摄作品", nodes: [{ key: "shoot", type: "practice", title: "完成六张照片",

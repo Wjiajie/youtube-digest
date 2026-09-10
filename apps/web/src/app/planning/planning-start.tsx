@@ -20,6 +20,7 @@ const statusMessages = {
   unknown: "状态尚未确认，记录可能尚未创建。请先核对本次记录或规划历史，不要重复生成。",
 };
 const errorMessages = {
+  input_too_large: "已有蓝图超出单次规划容量，未调用模型，预留次数已退回；已有内容没有修改。",
   quota_exhausted: "规划次数不足，请先核对账号可用次数。",
   busy: "已有正在处理的规划，请到规划历史核对，不要重复生成。",
   disabled: "生成服务暂未开放，本页不会自动重试。",
@@ -76,14 +77,15 @@ function PlanningStartSession(props: Props) {
   return <Panel className="brief-card">
     <h2>生成路径建议</h2>
     <p>开始时预留 1 次规划机会。建议不会自动写入正式蓝图，仍需你审阅并明确确认。</p>
-    <p>调用可能已经产生用量；用量未知不代表免费。</p>
+    <p>发起后可能产生用量；用量未知不代表免费。</p>
     {!props.enabled ? <Status tone="warning">生成服务暂未开放，不会发起模型调用。</Status> : !props.confirmed && <Status tone="warning">请先确认目标定义，再开始生成建议。</Status>}
     <form onSubmit={event => { event.preventDefault(); void begin(); }}>
       <label>计划开始日期（默认 UTC 今天）<input type="date" required disabled={attempt !== null} value={startDate} onChange={event => setStartDate(event.target.value)} /></label>
       <div className="brief-actions"><Button type="submit" disabled={attempt !== null || !props.enabled || !props.confirmed || !startDate}>生成路径建议</Button></div>
     </form>
     {attempt && <><Status tone={attempt.status === "ready" ? "success" : ["pending", "queued", "running"].includes(attempt.status) ? "progress" : "warning"}>{attempt.error ? errorMessages[attempt.error] : statusMessages[attempt.status]}</Status>
-      <a className="bp-button" href={`/planning/${attempt.runId}`}>查看本次规划</a></>}
+      <a className="bp-button" href={`/planning/${attempt.runId}`} target="_blank" rel="noopener" aria-describedby="planning-new-tab">查看本次规划</a>
+      <span id="planning-new-tab">在新标签页打开，保留当前生成请求。</span></>}
     {attempt?.error && <a className="bp-button" href={`/goals/${props.briefId}`}>返回目标定义</a>}
     <div className="brief-actions"><a href={`/goals/${props.briefId}/planning`}>查看规划历史</a></div>
   </Panel>;

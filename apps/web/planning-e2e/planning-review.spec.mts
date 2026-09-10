@@ -52,6 +52,11 @@ test(`real local account recovers, reads and cancels planning across both themes
         source: { runId: command.runId, briefId, briefRevision: 1, blueprintId: draft.id, blueprintVersion: 0, startDate: command.startDate } } });
     expect(finished.error).toBeNull(); expect(finished.data.status).toBe("ready");
     await context.addCookies(cookies.map(({ name, value }) => ({ name, value, url: "http://127.0.0.1:3100", sameSite: "Lax" as const })));
+    const disabledGeneration = await context.request.post("http://127.0.0.1:3100/api/planning/runs", {
+      headers: { origin: "http://127.0.0.1:3100" }, data: { accountId: id, ...command },
+    });
+    expect(disabledGeneration.status()).toBe(503);
+    expect(await disabledGeneration.json()).toEqual({ ok: false, code: "disabled" });
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
     await page.goto(`/goals/${briefId}`);
     await page.getByRole("link", { name: "查看规划记录", exact: true }).click();

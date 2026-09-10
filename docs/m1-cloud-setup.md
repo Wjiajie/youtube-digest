@@ -24,6 +24,10 @@ npm run supabase:test
 
 复制两个应用各自的 `.env.example` 为 `.env.local`，把 `supabase start` 输出的 URL 和 Publishable Key 写入本地文件。管理员密钥只存在于 Supabase 托管的 Edge Function 环境，不进入 Web 或扩展环境文件。
 
+规划入口默认关闭。未来受控开启时，`DEEPSEEK_API_KEY` 仅配置在 Web 服务端；另生成至少 32 字符的随机 `BLUEPRINT_PLANNING_WORKER_SECRET`，仅在 Web 服务端与 `planning-worker` Edge 环境共享，不能使用 Supabase API 管理员密钥代替。Edge 的管理员密钥由 Supabase 环境提供，只允许领取／保存当前用户运行，不开放通用数据库写接口。该函数在处理器内自行验证用户 JWT 与独立凭据，`verify_jwt=false` 不表示公开访问。部署函数与启用真实费用仍是后续验收动作，本地测试不会替你开启。
+
+`npm run test:planning-generation` 自动启动本地 Edge 运行时及生产 Web 构建，用真实本地 Auth／数据库与仅测试进程的外部模型响应验证；`scripts/planning-worker.fixture.env` 是公开的本地夹具，绝不能部署到托管环境。测试结束只关闭该次启动的进程，删除该次生成的测试账号，不重置数据库。
+
 已有本地数据时不要重复执行 `supabase:reset`，该命令仅用于可丢弃的新开发数据库。配置变更需重新启动时使用 CLI 默认备份的 `supabase stop` 再 `supabase start`，不要使用 `--no-backup`。增量迁移按迁移文件应用并验证。
 
 本地邀请登录还需在单独终端提供 Edge Function：

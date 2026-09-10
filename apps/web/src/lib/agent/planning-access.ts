@@ -3,7 +3,7 @@ import type { Actor } from "@blueprint/domain";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parsePlanningRun, type PlanningRun } from "./planning-run";
 
-type FailureCode = "forbidden" | "invalid" | "not_found" | "version_conflict" | "quota_exhausted" | "busy" | "unavailable" | "cancelled";
+type FailureCode = "forbidden" | "invalid" | "not_found" | "version_conflict" | "quota_exhausted" | "busy" | "unavailable" | "cancelled" | "input_too_large";
 export type RunResponse = { ok: true; run: PlanningRun } | { ok: false; code: FailureCode };
 export function planningFailure(error: { code?: string; message?: string }): { ok: false; code: FailureCode } {
   if (error.code === "42501") return { ok: false, code: "forbidden" };

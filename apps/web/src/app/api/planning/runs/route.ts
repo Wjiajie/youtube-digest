@@ -42,11 +42,14 @@ export async function POST(request: Request) {
     if (accountId !== identity.value.actor.userId || identity.value.actor.client !== "web") return reply({ ok: false, code: "forbidden" }, 403);
     const configuration = planningConfiguration();
     if (!configuration) return reply({ ok: false, code: "disabled" }, 503);
-    const result = await createCloudPathPlanner({ ...identity.value, workerClient: createPlanningWorker(configuration),
+    const session = await identity.value.client.auth.getSession();
+    if (session.error || !session.data.session) return reply({ ok: false, code: "unauthenticated" }, 401);
+    // The token is only forwarded; the Edge worker independently verifies its identity.
+    const result = await createCloudPathPlanner({ ...identity.value, worker: createPlanningWorker(configuration, session.data.session.access_token),
       model: createPlanningModel(configuration.apiKey) }).run(command, request.signal);
     if (result.ok) return reply({ ok: true, runId: result.run.id, status: result.run.status }, 200);
     const statuses = { forbidden: 403, invalid: 422, not_found: 404, version_conflict: 409, quota_exhausted: 429,
-      busy: 409, unavailable: 503, cancelled: 409 };
+      busy: 409, unavailable: 503, cancelled: 409, input_too_large: 413 };
     return reply(result, statuses[result.code]);
   } catch { return reply({ ok: false, code: "unavailable" }, 503); }
 }

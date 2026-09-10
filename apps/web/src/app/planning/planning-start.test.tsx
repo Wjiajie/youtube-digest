@@ -24,6 +24,8 @@ it("locks duplicate gestures while waiting and provides recovery for a queued re
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(generate().disabled).toBe(true);
   expect(host.querySelector(`a[href="/planning/${runId}"]`)?.textContent).toBe("查看本次规划");
+  expect(host.querySelector(`a[href="/planning/${runId}"]`)?.getAttribute("target")).toBe("_blank");
+  expect(host.querySelector(`a[href="/planning/${runId}"]`)?.getAttribute("rel")).toContain("noopener");
   expect(host.textContent).toContain("记录可能尚未创建");
   await act(async () => respond(Response.json({ ok: true, runId, status: "queued" })));
   expect(host.textContent).toContain("等待执行");
@@ -59,6 +61,7 @@ it("uses an explicitly edited date without generating until submission", async (
 });
 
 it.each([
+  ["input_too_large", "未调用模型，预留次数已退回"],
   ["quota_exhausted", "规划次数不足"], ["busy", "已有正在处理的规划"],
   ["disabled", "生成服务暂未开放"], ["version_conflict", "目标定义或蓝图已变化"],
   ["invalid", "请核对目标定义与开始日期"], ["not_found", "没有找到可访问的目标定义"],
