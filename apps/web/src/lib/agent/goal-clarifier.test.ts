@@ -27,6 +27,19 @@ function reply(value: unknown): Awaited<ReturnType<MockLanguageModelV4["doGenera
 }
 
 describe("controlled goal clarification", () => {
+  it("continues from a separate working suggestion without misrepresenting it as the saved source brief", async () => {
+    const request = input(); const source = structuredClone(request.brief);
+    const workingContent = { ...source.content, startingPoint: "上一轮整理的起点", weeklyMinutes: 120 };
+    const model = new MockLanguageModelV4({ doGenerate: reply(answer()) });
+    const result = await createGoalClarifier({ model }).run({ ...request, workingContent });
+    expect(result.status).toBe("needs_input");
+    if (result.status !== "needs_input") throw new Error("Expected working suggestion");
+    expect(result.content.startingPoint).toBe("上一轮整理的起点");
+    expect(result.content.weeklyMinutes).toBe(120);
+    expect(result.source.briefRevision).toBe(1);
+    expect(request.brief).toEqual(source);
+    expect(JSON.stringify(model.doGenerateCalls[0].prompt)).toContain("上一轮整理的起点");
+  });
   it("uses the existing official DeepSeek adapter with an external HTTP fixture", async () => {
     const requests: Array<{ url: string; body: string }> = [];
     const model = createPlanningModel("clarification-local-fixture", async (url, options) => {

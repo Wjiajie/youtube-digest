@@ -42,3 +42,8 @@ allow_dynamic_registration = false
 # The handler independently verifies JWT signature/expiry with getClaims plus
 # getUser, AND the distinct server credential. Avoid the legacy ES256 gateway check.
 verify_jwt = false
+
+[functions.clarification-worker]
+# Shared handler policy verifies JWT signature/current Auth identity AND the
+# distinct clarification credential; the gateway's legacy JWT check is not used.
+verify_jwt = false

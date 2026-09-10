@@ -61,10 +61,12 @@ try {
     if (file === "202608260001_m1_cloud_slice.sql") continue;
     const legacy = file.endsWith("_node_planning_metadata.sql") ? await seedLegacyPlanningUpgrade() : null;
     const statusUpgrade = file.endsWith("_node_status_confirmations.sql") ? await seedStatusUpgrade() : null;
+    const clarificationUpgrade = file.endsWith("_goal_clarification_sessions.sql") ? await seedClarificationUpgrade() : null;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
     if (legacy) await verifyLegacyPlanningUpgrade(legacy);
     if (statusUpgrade) await verifyStatusUpgrade(statusUpgrade);
+    if (clarificationUpgrade) await verifyClarificationUpgrade(clarificationUpgrade);
   }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
@@ -390,4 +392,52 @@ async function verifyStatusUpgrade(before) {
     has_function_privilege('anon','public.read_node_status_workspace(uuid)','EXECUTE') as anon_workspace`)).rows[0];
   assert.deepEqual(acl, { anon_read: false, ledger_read: false, anon_write: false, anon_workspace: false }, "status migration retains explicit narrow ACLs");
   assert.deepEqual(await captureStatusUpgrade(), before, "status confirmation leaves all prior business rows and histories unchanged");
+}
+
+async function seedClarificationUpgrade() {
+  const owner = "d9000000-0000-4000-8000-000000000101";
+  const brief = "d9000000-0000-4000-8000-000000000180";
+  const run = "d9000000-0000-4000-8000-000000000181";
+  await becomeUser(owner);
+  await db.query("select public.save_goal_brief($1,0,$2,true,gen_random_uuid())", [brief, {
+    schemaVersion: 1, outcome: "Preserve planning source", startingPoint: "Existing experience", weeklyMinutes: 180,
+    targetDate: null, constraints: "", successCriteria: "Explain one completed result",
+  }]);
+  await db.exec("reset role");
+  await db.query("insert into private.path_planning_quotas(owner_id,available_attempts) values($1,1)", [owner]);
+  await becomeUser(owner);
+  await db.query("select public.begin_path_planning($1,$2,1,2,current_date)", [run, brief]);
+  await db.exec("set role service_role");
+  await db.query(`select public.claim_path_planning($1,$2,$2,jsonb_build_object(
+    'name','blueprint-plan-path','version','1.0.0','instructions','Preserved fixed Skill',
+    'sha256',encode(sha256(convert_to('Preserved fixed Skill','UTF8')),'hex')))`, [owner, run]);
+  await db.exec("reset role");
+  const tables = (await db.query(`select table_schema,table_name from information_schema.tables
+    where table_schema in ('public','private') and table_type='BASE TABLE' order by table_schema,table_name`)).rows;
+  const before = {};
+  for (const { table_schema: schema, table_name: table } of tables) {
+    before[`${schema}.${table}`] = (await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb) as rows from "${schema}"."${table}" t`)).rows[0].rows;
+  }
+  return before;
+}
+
+async function verifyClarificationUpgrade(before) {
+  await db.exec("reset role");
+  for (const [table, rows] of Object.entries(before)) {
+    const [schema, name] = table.split(".");
+    assert.deepEqual((await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb) as rows from "${schema}"."${name}" t`)).rows[0].rows,
+      rows, `clarification migration preserves exact existing ${table} rows`);
+  }
+  for (const table of ["public.goal_clarification_sessions", "public.goal_clarification_turns", "private.goal_clarification_quotas"]) {
+    assert.equal((await db.query(`select count(*)::int as count from ${table}`)).rows[0].count, 0,
+      "clarification upgrade fabricates neither model history nor free allowance");
+  }
+  const acl = (await db.query(`select
+    has_function_privilege('anon','public.create_goal_clarification(uuid,uuid,integer)','EXECUTE') as anon_create,
+    has_function_privilege('authenticated','public.claim_goal_clarification(uuid,uuid,uuid,jsonb)','EXECUTE') as user_claim,
+    has_table_privilege('service_role','public.goal_clarification_turns','UPDATE') as admin_direct_write,
+    has_table_privilege('authenticated','private.goal_clarification_leases','SELECT') as user_lease,
+    has_table_privilege('service_role','private.goal_clarification_quotas','DELETE') as quota_delete`)).rows[0];
+  assert.deepEqual(acl, { anon_create: false, user_claim: false, admin_direct_write: false, user_lease: false, quota_delete: false },
+    "clarification migration retains narrow explicit execution and quota privileges");
 }
