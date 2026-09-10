@@ -2,7 +2,40 @@ import { afterEach, expect, it, vi } from "vitest";
 import { POST } from "./route";
 const cookieFixture = vi.hoisted(() => ({ values: [] as { name: string; value: string }[] }));
 vi.mock("next/headers", () => ({ cookies: async () => ({ getAll: () => cookieFixture.values, set: () => {} }) }));
-afterEach(() => { cookieFixture.values = []; vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+afterEach(() => { cookieFixture.values = []; vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+it("rejects a stalled authenticated upload at five seconds without waiting for stream cancellation", async () => {
+  vi.useFakeTimers();
+  const user = { id: "10000000-0000-4000-8000-000000000001", role: "authenticated", is_anonymous: false };
+  cookieFixture.values = [{ name: "sb-planning-auth-token", value: `base64-${Buffer.from(JSON.stringify({
+    access_token: "fixture-token", refresh_token: "fixture-refresh", expires_at: Date.now() / 1000 + 600, user,
+  })).toString("base64url")}` }];
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://planning.example.test");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "public-fixture");
+  vi.stubEnv("BLUEPRINT_PLANNING_ENABLED", "false");
+  const paths: string[] = [];
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
+    const path = new URL(String(input)).pathname; paths.push(path);
+    if (path === "/auth/v1/user") return Response.json(user);
+    throw new Error("Unexpected external request");
+  });
+  let stream!: ReadableStreamDefaultController<Uint8Array>;
+  const body = new ReadableStream<Uint8Array>({ start(controller) { stream = controller; }, cancel: () => new Promise(() => {}) });
+  const init: RequestInit & { duplex: "half" } = { method: "POST", body, duplex: "half",
+    headers: { Host: "blueprint.example", Origin: "https://blueprint.example", "Content-Type": "application/json" } };
+  let response: Response | undefined;
+  const pending = POST(new Request("https://blueprint.example/api/planning/runs", init)).then(value => { response = value; });
+  await vi.advanceTimersByTimeAsync(5001);
+  try {
+    expect(response?.status).toBe(408);
+    expect(await response?.json()).toEqual({ ok: false, code: "invalid" });
+    expect(response?.headers.get("cache-control")).toBe("private, no-store");
+    expect(paths).toEqual(["/auth/v1/user"]);
+  } finally {
+    if (!response) stream.close(); // Finish the old unbounded implementation when the regression is red.
+    await pending;
+  }
+});
 
 it.each([[429, 503, "unavailable"], [503, 503, "unavailable"], [400, 401, "unauthenticated"]] as const)("classifies an actual SDK refresh failure %s after initial identity verification", async (status, expectedStatus, code) => {
   const accountId = "10000000-0000-4000-8000-000000000001";

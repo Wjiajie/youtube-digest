@@ -1,8 +1,17 @@
 import { NextRequest } from "next/server";
 import { afterEach, expect, it, vi } from "vitest";
-import { proxy } from "./proxy";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
+import { config, proxy } from "./proxy";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+
+it.each(["/api/planning/runs", "/api/clarification/turns", "/api/resources/runs"])("lets the independently authenticated %s handler own its upload deadline", path => {
+  for (const suffix of ["", "/", "?probe=1"]) expect(unstable_doesMiddlewareMatch({ config, url: `https://blueprint.example${path}${suffix}` })).toBe(false);
+});
+it.each(["/api/planning/runs/history", "/api/planning/runs-extra", "/api/clarification/turns/history", "/api/clarification/turns-extra",
+  "/api/resources/runs/history", "/api/resources/runs-extra"])("keeps the upload exception from widening to %s", path => {
+  expect(unstable_doesMiddlewareMatch({ config, url: `https://blueprint.example${path}` })).toBe(true);
+});
 
 it.each(["/", "/paths", "/blueprint/edit", "/api/v1/blueprint", "/preview/private"])("does not expand the public exception to %s", async path => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://proxy.example.com");

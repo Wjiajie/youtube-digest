@@ -9,6 +9,7 @@ import { resourceAdoptionCommandSchema } from "@/lib/agent/resource-adoption";
 import { resourceAdoptionConfiguration, createResourceAdoptionWorker } from "@/lib/agent/resource-adoption-runtime";
 import { createCloudResourceAdoption } from "@/lib/agent/cloud-resource-adoption";
 import { createVideoVerification } from "@/lib/resources/verification";
+import { readBoundedJson } from "@/lib/http/read-bounded-json";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -24,26 +25,9 @@ export async function POST(request: Request) {
     const identity = await resolveRequestActor();
     if (!identity.ok) return reply(identity, identity.code === "unauthenticated" ? 401 : 503);
     if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return reply({ ok: false, code: "invalid" }, 422);
-    const reader = request.body?.getReader();
-    if (!reader) return reply({ ok: false, code: "invalid" }, 422);
-    let size = 0, text = "", timer: ReturnType<typeof setTimeout> | undefined;
-    const decoder = new TextDecoder("utf-8", { fatal: true });
-    const deadline = new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new DOMException("Read deadline", "TimeoutError")), 5000); });
-    try {
-      while (true) {
-        const chunk = await Promise.race([reader.read(), deadline]); if (chunk.done) break;
-        size += chunk.value.byteLength;
-        if (size > 32 * 1024) { void reader.cancel().catch(() => {}); return reply({ ok: false, code: "invalid" }, 413); }
-        text += decoder.decode(chunk.value, { stream: true });
-      }
-      text += decoder.decode();
-    } catch (error) {
-      void reader.cancel().catch(() => {});
-      return reply({ ok: false, code: "invalid" }, error instanceof DOMException && error.name === "TimeoutError" ? 408 : 422);
-    } finally { clearTimeout(timer); reader.releaseLock(); }
-    let input: unknown;
-    try { input = JSON.parse(text); } catch { return reply({ ok: false, code: "invalid" }, 422); }
-    const parsed = inputSchema.safeParse(input);
+    const body = await readBoundedJson(request, 32 * 1024);
+    if (!body.ok) return reply({ ok: false, code: "invalid" }, body.status);
+    const parsed = inputSchema.safeParse(body.value);
     if (!parsed.success) return reply({ ok: false, code: "invalid" }, 422);
     const { accountId, ...command } = parsed.data;
     if (identity.value.actor.userId !== accountId || identity.value.actor.client !== "web") return reply({ ok: false, code: "forbidden" }, 403);

@@ -147,12 +147,12 @@ test(disabled ? "disabled resource entry keeps a real signed-in account from res
   expect((await request(match)).status()).toBe(401);
 });
 
-test("a stalled authenticated upload reaches its deadline without reserving an operation", async ({ context }) => {
+for (const route of ["resources/runs", "planning/runs", "clarification/turns"]) test(`a stalled authenticated ${route} upload reaches its deadline without reserving an operation`, async ({ context }) => {
   const owner = await account(context);
   const cookie = (await context.cookies(origin)).map(item => `${item.name}=${item.value}`).join("; ");
   await context.request.post("http://127.0.0.1:3166/fixture/reset");
   const response = await new Promise<{ status: number | undefined; body: string }>((resolve, reject) => {
-    const request = httpRequest(`${origin}/api/resources/runs`, { method: "POST", headers: { origin, cookie, "content-type": "application/json" } }, response => {
+    const request = httpRequest(`${origin}/api/${route}`, { method: "POST", headers: { origin, cookie, "content-type": "application/json" } }, response => {
       let body = ""; response.setEncoding("utf8"); response.on("data", chunk => { body += chunk; });
       response.on("end", () => { request.destroy(); resolve({ status: response.statusCode, body }); });
       response.on("error", reject);
@@ -163,7 +163,10 @@ test("a stalled authenticated upload reaches its deadline without reserving an o
   });
   expect(response.status).toBe(408);
   expect(JSON.parse(response.body)).toEqual({ ok: false, code: "invalid" });
-  expect((await owner.client.from("resource_runs").select("id")).data).toEqual([]);
+  for (const table of ["resource_runs", "path_planning_runs", "goal_clarification_turns"]) {
+    const records = await owner.client.from(table).select("id");
+    expect(records.error).toBeNull(); expect(records.data).toEqual([]);
+  }
   expect(await (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json()).toEqual([]);
 });
 

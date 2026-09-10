@@ -3,6 +3,7 @@ import { authFailure, resolveRequestActor } from "@/lib/supabase/request";
 import { startPlanningRunSchema } from "@/lib/agent/planning-run";
 import { createCloudPathPlanner } from "@/lib/agent/cloud-path-planner";
 import { planningConfiguration, createPlanningModel, createPlanningWorker } from "@/lib/agent/planning-runtime";
+import { readBoundedJson } from "@/lib/http/read-bounded-json";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -22,21 +23,9 @@ export async function POST(request: Request) {
     const identity = await resolveRequestActor();
     if (!identity.ok) return reply(identity, identity.code === "unauthenticated" ? 401 : 503);
     if (request.headers.get("content-type")?.split(";")[0].trim() !== "application/json") return reply({ ok: false, code: "invalid" }, 422);
-    const reader = request.body?.getReader();
-    if (!reader) return reply({ ok: false, code: "invalid" }, 422);
-    let size = 0, text = ""; const decoder = new TextDecoder();
-    try {
-      while (true) {
-        const chunk = await reader.read(); if (chunk.done) break;
-        size += chunk.value.byteLength;
-        if (size > 2048) { await reader.cancel(); return reply({ ok: false, code: "invalid" }, 413); }
-        text += decoder.decode(chunk.value, { stream: true });
-      }
-      text += decoder.decode();
-    } finally { reader.releaseLock(); }
-    let body: unknown;
-    try { body = JSON.parse(text); } catch { return reply({ ok: false, code: "invalid" }, 422); }
-    const parsed = inputSchema.safeParse(body);
+    const body = await readBoundedJson(request, 2048);
+    if (!body.ok) return reply({ ok: false, code: "invalid" }, body.status);
+    const parsed = inputSchema.safeParse(body.value);
     if (!parsed.success) return reply({ ok: false, code: "invalid" }, 422);
     const { accountId, ...command } = parsed.data;
     if (accountId !== identity.value.actor.userId || identity.value.actor.client !== "web") return reply({ ok: false, code: "forbidden" }, 403);
