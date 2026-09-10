@@ -15,7 +15,7 @@ import type { ResourceFinish, ResourceWorker } from "./resource-worker";
 function commandMatches(run: ResourceRun, command: ResourceCommand) {
   return run.kind === command.kind && (command.kind === "discover"
     ? run.nodeId === command.nodeId && run.blueprintVersion === command.expectedBlueprintVersion &&
-      JSON.stringify(run.preferences) === JSON.stringify(command.preferences) && JSON.stringify(run.learnerContext) === JSON.stringify(command.learnerContext)
+      (run.status === "cleared" || (JSON.stringify(run.preferences) === JSON.stringify(command.preferences) && JSON.stringify(run.learnerContext) === JSON.stringify(command.learnerContext)))
     : run.sourceRunId === command.sourceRunId);
 }
 /** Server orchestration; source and quotas come from the authenticated database, never caller evidence. */
@@ -29,7 +29,7 @@ export function createCloudResourceRunner(dependencies: { client: SupabaseClient
       return error ? failure(error) : { ok: true, run: parseResourceRun(data, actor.userId, input.runId) };
     } catch { return { ok: false, code: "unavailable" }; }
   }
-  async function execute(run: ResourceRun, signal: AbortSignal) {
+  async function execute(run: Exclude<ResourceRun, { status: "cleared" }>, signal: AbortSignal) {
     try {
       const input = { blueprint: run.blueprint, nodeId: run.nodeId, preferences: run.preferences, signal };
       const raw = run.kind === "discover" ? await createResourceDiscovery({ provider: dependencies.provider }).run(input)

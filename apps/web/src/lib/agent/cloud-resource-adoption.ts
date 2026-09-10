@@ -8,7 +8,8 @@ import { parseResourceAdoption, resourceAdoptionCommandSchema, type ResourceAdop
 import { videoVerificationSchema, type createVideoVerification } from "../resources/verification";
 
 function matches(record: ResourceAdoption, command: ResourceAdoptionCommand) {
-  return record.id === command.adoptionId && record.sourceRunId === command.sourceRunId && record.videoId === command.videoId && record.replaceBindingId === command.replaceBindingId;
+  return record.id === command.adoptionId && record.sourceRunId === command.sourceRunId &&
+    (record.status === "cleared" || record.videoId === command.videoId) && record.replaceBindingId === command.replaceBindingId;
 }
 /** One provider lookup after one lease claim; verification only prepares a proposal, never applies it. */
 export function createCloudResourceAdoption(dependencies: { client: SupabaseClient; actor: Actor; worker: ResourceAdoptionWorker; verification: ReturnType<typeof createVideoVerification> }) {

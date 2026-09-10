@@ -4,9 +4,10 @@ import { Button, Panel, Status } from "@blueprint/ui";
 import type { AdoptionReviewProps, AdoptionView, ResourceBindingView } from "./adoption-view";
 import type { ResourceUiResult } from "./resource-view";
 import "./resource-workbench.css";
+import { ClearedEvidence } from "./cleared-evidence";
 
 const labels = { queued: "等待核验", running: "正在重新核验视频", ready: "请确认资源变更", failed: "本次核验未通过", cancelled: "已取消核验",
-  interrupted: "核验已中断", stale: "这份核验已过期", applied: "已绑定到正式路径", rejected: "已拒绝这份变更" };
+  interrupted: "核验已中断", stale: "这份核验已过期", applied: "已绑定到正式路径", rejected: "已拒绝这份变更", cleared: "资源证据已清除" };
 const outcomes: Record<string, string> = { changed: "视频元信息与匹配时不同，请重新检索与匹配后再决定。", not_available: "视频已不满足本次地区或筛选条件。",
   not_found: "提供方没有返回这个视频。", unavailable: "暂时无法核验视频。", rate_limited: "提供方暂时限流。", timed_out: "核验没有在期限内完成。", invalid_input: "来源或输入已不适用于本次核验。" };
 const verificationTime = new Intl.DateTimeFormat("zh-CN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Shanghai" });
@@ -79,6 +80,7 @@ function Review({ initial, readAction, cancelAction, rejectAction, applyAction }
     finally { lock.current = false; if (mounted.current) setBusy(false); }
   }
   if (hidden) return <IdentityLost />;
+  if (view.status === "cleared") return <ClearedEvidence receipt={view} />;
   return <div className="resource-workbench"><header className="resource-heading"><div><p className="resource-eyebrow">RESOURCE / YOUR DECISION</p><p>{view.goalTitle} · 蓝图 v{view.blueprintVersion}</p><h1>{view.nodeTitle}</h1><p>先核对变更，再决定是否放进路径。</p></div><span className="resource-seal" aria-hidden="true">择学</span></header>
     <nav className="resource-toolbar" aria-label="采用导航"><a href={`/resources/${view.sourceRunId}`}>返回匹配依据</a><a href={`/paths/${view.goalId}?node=${view.nodeId}`}>返回对应目标路径</a></nav>
     <Panel className="resource-card"><p className="resource-eyebrow">VERIFICATION / CONFIRMATION</p><h2>{labels[view.status]}</h2>

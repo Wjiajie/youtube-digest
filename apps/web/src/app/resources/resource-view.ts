@@ -10,7 +10,9 @@ export type ResourceCandidateView = { videoId: string; url: string; title: strin
   transcriptStatus: string; language: string | null; languageFallback: boolean | null; eligible: boolean;
   assessment: null | { role: "recommended" | "alternative" | "rejected"; relevance: string; levelFit: string; languageFit: string; timeFit: string; freshness: string;
     limitations: string[]; evidence: { quote: string; offsetMs: number }[]; totalSegments: number; sampledSegments: number; textTruncated: boolean } };
-export type ResourceRunView = { id: string; nodeId: string; nodeTitle: string; goalId: string; goalTitle: string; blueprintVersion: number;
+export type ClearedEvidenceView = { id: string; nodeId: string; blueprintVersion: number; sourceRunId: string | null;
+  status: "cleared"; clearedAt: string; result: null; childId?: string | null; adoptions?: { id: string; createdAt: string }[] };
+export type ResourceRunView = ClearedEvidenceView | { id: string; nodeId: string; nodeTitle: string; goalId: string; goalTitle: string; blueprintVersion: number;
   bindings?: { id: string; videoId: string; url: string }[]; adoptions?: { id: string; videoId: string; createdAt: string }[];
   kind: "discover" | "captions" | "match"; sourceRunId: string | null; childId: string | null; nextKind: "captions" | "match" | null;
   status: "queued" | "running" | "ready" | "failed" | "cancelled" | "interrupted" | "stale"; createdAt: string; expiresAt: string;
@@ -20,5 +22,6 @@ export type ResourceNodeView = { nodeId: string; nodeTitle: string; goalId: stri
   description: string | null; completionCriteria: string | null; estimatedMinutes: number | null;
   records: { id: string; kind: "discover" | "captions" | "match"; createdAt: string }[]; offset: number; hasMore: boolean };
 export type ResourceRunReviewProps = { accountId: string; initial: ResourceRunView; enabled: boolean; adoptionEnabled?: boolean;
+  clearAction?: () => Promise<ResourceUiResult<ResourceRunView>>;
   readAction: () => Promise<ResourceUiResult<ResourceRunView>>;
   cancelAction: () => Promise<ResourceUiResult<ResourceRunView>> };

@@ -3,7 +3,7 @@ import { resolveRequestActor } from "@/lib/supabase/request";
 import { createResourceWorkspace } from "@/lib/agent/resource-workspace";
 import type { ResourceRunView, ResourceUiResult } from "./resources/resource-view";
 
-async function access(accountId: string, id: string, operation: "read" | "cancel"): Promise<ResourceUiResult<ResourceRunView>> {
+async function access(accountId: string, id: string, operation: "read" | "cancel" | "clear"): Promise<ResourceUiResult<ResourceRunView>> {
   try {
     const identity = await resolveRequestActor();
     if (!identity.ok) return identity;
@@ -13,3 +13,4 @@ async function access(accountId: string, id: string, operation: "read" | "cancel
 }
 export async function readResourceRunAction(accountId: string, id: string) { return access(accountId, id, "read"); }
 export async function cancelResourceRunAction(accountId: string, id: string) { return access(accountId, id, "cancel"); }
+export async function clearResourceEvidenceAction(accountId: string, id: string) { return access(accountId, id, "clear"); }

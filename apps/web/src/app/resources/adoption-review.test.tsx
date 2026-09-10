@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { AdoptionReview, AdoptionStart } from "./adoption-review";
 import type { AdoptionView, AdoptionReviewProps } from "./adoption-view";
 const account = "10000000-0000-4000-8000-000000000001", id = "10000000-0000-4000-8000-000000000002", proposalId = "10000000-0000-4000-8000-000000000003";
-const initial: AdoptionView = { id, sourceRunId: id, nodeId: id, nodeTitle: "PRIVATE_NODE", goalId: id, goalTitle: "PRIVATE_GOAL", blueprintVersion: 3,
+const initial: Exclude<AdoptionView, { status: "cleared" }> = { id, sourceRunId: id, nodeId: id, nodeTitle: "PRIVATE_NODE", goalId: id, goalTitle: "PRIVATE_GOAL", blueprintVersion: 3,
   status: "ready", selected: { videoId: "abcdefghijk", title: "PRIVATE_VIDEO", channel: "Camera" }, replaceBindingId: null, outcome: "verified",
   verifiedAt: "2026-09-10T00:00:00Z", validUntil: "2026-09-10T00:10:00Z", before: [], after: [{ id: proposalId, videoId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk" }],
   proposal: { id: proposalId, status: "pending", appliedVersion: null } };
@@ -18,6 +18,13 @@ let host: HTMLDivElement, root: Root;
 beforeEach(() => { vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); });
 const button = (text: string) => [...host.querySelectorAll("button")].find(el => el.textContent === text)!;
+test("a cleared adoption receipt removes selected content and all confirmation controls", async () => {
+  const cleared: AdoptionView = { id, sourceRunId: id, nodeId: id, blueprintVersion: 3, status: "cleared", clearedAt: "2026-09-11T01:00:00Z", result: null };
+  await act(async () => root.render(<AdoptionReview {...props({ readAction: async () => ({ ok: true, value: cleared }) })} />));
+  await act(async () => button("读取采用记录").click());
+  expect(host.textContent).toContain("资源证据已清除"); expect(host.textContent).not.toContain("PRIVATE_VIDEO");
+  expect(button("确认并绑定资源")).toBeUndefined(); expect(button("拒绝这份资源变更")).toBeUndefined();
+});
 test("reviewing a prepared proposal does not apply it; explicit confirmation updates the receipt and path link", async () => {
   const apply = vi.fn(props().applyAction);
   await act(async () => root.render(<AdoptionReview {...props({ applyAction: apply })} />));

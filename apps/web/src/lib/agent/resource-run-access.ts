@@ -18,7 +18,7 @@ export function resourceRunFailure(error: { code?: string; message?: string }): 
 export function createResourceRunAccess(client: SupabaseClient, identity: Actor) {
   const actor = { ...identity };
   const allowed = actor.client === "web" && z.uuid().safeParse(actor.userId).success;
-  async function command(name: "read_resource_run" | "cancel_resource_run", runId: string): Promise<ResourceRunResponse> {
+  async function command(name: "read_resource_run" | "cancel_resource_run" | "clear_resource_evidence", runId: string): Promise<ResourceRunResponse> {
     if (!allowed) return { ok: false, code: "forbidden" };
     if (!z.uuid().safeParse(runId).success) return { ok: false, code: "invalid" };
     try {
@@ -26,5 +26,5 @@ export function createResourceRunAccess(client: SupabaseClient, identity: Actor)
       return error ? resourceRunFailure(error) : { ok: true, run: parseResourceRun(data, actor.userId, runId) };
     } catch { return { ok: false, code: "unavailable" }; }
   }
-  return { read: (id: string) => command("read_resource_run", id), cancel: (id: string) => command("cancel_resource_run", id) };
+  return { read: (id: string) => command("read_resource_run", id), cancel: (id: string) => command("cancel_resource_run", id), clear: (id: string) => command("clear_resource_evidence", id) };
 }

@@ -8,8 +8,8 @@ import type { ResourceRun } from "./resource-run";
 
 const historyRow = z.strictObject({ id: z.uuid(), owner_id: z.uuid(), node_id: z.uuid(), kind: z.enum(["discover", "captions", "match"]), created_at: z.iso.datetime({ offset: true }) });
 const childRow = z.strictObject({ id: z.uuid(), owner_id: z.uuid(), source_run_id: z.uuid() });
-const adoptionRow = z.strictObject({ id: z.uuid(), owner_id: z.uuid(), source_run_id: z.uuid(), video_id: z.string().regex(/^[A-Za-z0-9_-]{11}$/), created_at: z.iso.datetime({ offset: true }) });
-function project(run: ResourceRun, childId: string | null): ResourceRunView {
+const adoptionRow = z.strictObject({ id: z.uuid(), owner_id: z.uuid(), source_run_id: z.uuid(), video_id: z.string().regex(/^[A-Za-z0-9_-]{11}$/).nullable(), created_at: z.iso.datetime({ offset: true }) });
+function project(run: Exclude<ResourceRun, { status: "cleared" }>, childId: string | null): Exclude<ResourceRunView, { status: "cleared" }> {
   const goal = run.blueprint.goals.find(goal => goal.stages.some(stage => stage.nodes.some(node => node.id === run.nodeId)))!;
   const node = goal.stages.flatMap(stage => stage.nodes).find(node => node.id === run.nodeId)!;
   const result = run.result;
@@ -43,7 +43,7 @@ function project(run: ResourceRun, childId: string | null): ResourceRunView {
 export function createResourceWorkspace(client: SupabaseClient, identity: Actor) {
   const actor = { ...identity }, access = createResourceRunAccess(client, actor);
   const allowed = actor.client === "web" && z.uuid().safeParse(actor.userId).success;
-  async function record(id: string, operation: "read" | "cancel"): Promise<ResourceUiResult<ResourceRunView>> {
+  async function record(id: string, operation: "read" | "cancel" | "clear"): Promise<ResourceUiResult<ResourceRunView>> {
     if (!allowed) return { ok: false, code: "forbidden" };
     try {
       const current = await access[operation](id);
@@ -57,10 +57,16 @@ export function createResourceWorkspace(client: SupabaseClient, identity: Actor)
       if (attempts.error) return resourceRunFailure(attempts.error);
       const rows = z.array(adoptionRow).max(20).parse(attempts.data);
       if (rows.some(row => row.owner_id !== actor.userId || row.source_run_id !== id)) throw new Error("Invalid adoption history");
-      return { ok: true, value: { ...project(current.run, children[0]?.id ?? null), adoptions: rows.map(row => ({ id: row.id, videoId: row.video_id, createdAt: row.created_at })) } };
+      if (current.run.status === "cleared") return { ok: true, value: { id: current.run.id, nodeId: current.run.nodeId,
+        blueprintVersion: current.run.blueprintVersion, sourceRunId: current.run.sourceRunId, status: "cleared", clearedAt: current.run.clearedAt, result: null,
+        childId: children[0]?.id ?? null, adoptions: rows.map(row => ({ id: row.id, createdAt: row.created_at })) } };
+      return { ok: true, value: { ...project(current.run, children[0]?.id ?? null), adoptions: rows.map(row => {
+        if (row.video_id === null) throw new Error("Source cleared during display read");
+        return { id: row.id, videoId: row.video_id, createdAt: row.created_at };
+      }) } };
     } catch { return { ok: false, code: "unavailable" }; }
   }
-  return { read: (id: string) => record(id, "read"), cancel: (id: string) => record(id, "cancel"),
+  return { read: (id: string) => record(id, "read"), cancel: (id: string) => record(id, "cancel"), clear: (id: string) => record(id, "clear"),
     async node(nodeId: string, offset = 0): Promise<ResourceUiResult<ResourceNodeView>> {
       if (!allowed) return { ok: false, code: "forbidden" };
       if (!z.uuid().safeParse(nodeId).success || !Number.isSafeInteger(offset) || offset < 0 || offset > 1_000_000) return { ok: false, code: "invalid" };

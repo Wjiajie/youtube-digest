@@ -5,10 +5,11 @@ import { Button, Panel, Status } from "@blueprint/ui";
 import type { ResourceCandidateView, ResourceNodeView, ResourceRunReviewProps, ResourceUiCommand, ResourceUiResult, ResourceRunView } from "./resource-view";
 import "./resource-workbench.css";
 import { AdoptionStart } from "./adoption-review";
+import { ClearedEvidence } from "./cleared-evidence";
 
 const kindLabels = { discover: "视频检索", captions: "字幕核对", match: "匹配建议" };
 const dateLabel = (value: string) => `${value.slice(0, 10)} ${value.slice(11, 16)} UTC`;
-const statusLabels = { queued: "等待执行", running: "正在处理", ready: "结果已保存", stale: "来源已变化", cancelled: "已取消", interrupted: "执行已中断", failed: "本次未完成" };
+const statusLabels = { queued: "等待执行", running: "正在处理", ready: "结果已保存", stale: "来源已变化", cancelled: "已取消", interrupted: "执行已中断", failed: "本次未完成", cleared: "资源证据已清除" };
 const errorLabels: Record<string, string> = { disabled: "资源服务暂未启用。", quota_exhausted: "本类操作次数不足。", busy: "已有资源操作正在处理，请核对运行记录。",
   version_conflict: "蓝图版本已变化，请返回路径核对。", invalid: "检索条件未通过检查，请核对输入。", not_found: "没有找到可访问的来源，请核对账号与路径。",
   input_too_large: "本次材料超出处理容量。", cancelled: "请求已取消，请核对记录。", unavailable: "服务暂时不可用。" };
@@ -103,32 +104,39 @@ export function ResourceRunReview(props: ResourceRunReviewProps) {
   if (owner.current !== props.accountId) return <IdentityLost />;
   return <RunReview key={`${props.accountId}:${props.initial.id}`} {...props} />;
 }
-function RunReview({ accountId, initial, enabled, adoptionEnabled = false, readAction, cancelAction }: ResourceRunReviewProps) {
+function RunReview({ accountId, initial, enabled, adoptionEnabled = false, readAction, cancelAction, clearAction }: ResourceRunReviewProps) {
   const [run, setRun] = useState(initial), [hidden, setHidden] = useState(false), [message, setMessage] = useState("");
   const [reading, setReading] = useState(false), [cancelling, setCancelling] = useState(false), [needsRead, setNeedsRead] = useState(false);
-  const revision = useRef(0), mounted = useRef(true), locks = useRef({ read: false, cancel: false });
+  const [confirmClear, setConfirmClear] = useState(false), [clearing, setClearing] = useState(false), [concealed, setConcealed] = useState(false);
+  const revision = useRef(0), mounted = useRef(true), locks = useRef({ read: false, cancel: false, clear: false });
   const { attempt, submit } = useResourceAttempt(accountId, () => setHidden(true));
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; revision.current++; }; }, []);
-  async function perform(kind: "read" | "cancel", action: () => Promise<ResourceUiResult<ResourceRunView>>) {
-    if (hidden || locks.current[kind] || (kind === "read" && locks.current.cancel)) return;
+  async function perform(kind: "read" | "cancel" | "clear", action: () => Promise<ResourceUiResult<ResourceRunView>>) {
+    if (hidden || locks.current[kind] || locks.current.clear || (kind === "read" && locks.current.cancel)) return;
     locks.current[kind] = true; const current = ++revision.current;
-    if (kind === "read") setReading(true); else setCancelling(true);
+    if (kind === "read") setReading(true); else if (kind === "cancel") setCancelling(true);
+    else { setClearing(true); setConcealed(true); setConfirmClear(false); }
     setMessage(""); setNeedsRead(true);
     try {
       const result = await action();
       if (!mounted.current) return;
       if (!result.ok && ["unauthenticated", "forbidden", "not_found"].includes(result.code)) { setHidden(true); return; }
       if (current !== revision.current) return;
-      if (!result.ok) { setMessage("暂时无法核对。下方是上次保存的内容，请重新读取；不会自动执行。 "); return; }
+      if (!result.ok) { setMessage(kind === "clear" || concealed ? "清除结果尚未确认，旧材料已隐藏。请读取最新状态；不会自动重试清除。" : "暂时无法核对。下方是上次保存的内容，请重新读取；不会自动执行。 "); return; }
       if (result.value.id !== initial.id || result.value.nodeId !== initial.nodeId) { setHidden(true); return; }
-      setRun(result.value); setNeedsRead(false); setMessage(`已核对：${statusLabels[result.value.status]}。读取状态没有发起检索或模型调用。`);
-    } catch { if (mounted.current && current === revision.current) setMessage("结果尚未确认。网络可能已中断，请重新读取；下方内容不是最新状态。"); }
+      if (kind === "clear" && result.value.status !== "cleared") { setMessage("清除结果尚未确认，旧材料已隐藏。请读取最新状态。"); return; }
+      setRun(result.value); setNeedsRead(false); setConcealed(false); setMessage(`已核对：${statusLabels[result.value.status]}。没有发起检索或模型调用。`);
+    } catch { if (mounted.current && current === revision.current) setMessage("结果尚未确认。网络可能已中断，请读取最新状态；不会自动重试。"); }
     finally {
       locks.current[kind] = false;
-      if (mounted.current) { if (kind === "read") setReading(false); else setCancelling(false); }
+      if (mounted.current) { if (kind === "read") setReading(false); else if (kind === "cancel") setCancelling(false); else setClearing(false); }
     }
   }
   if (hidden) return <IdentityLost />;
+  if (concealed) return <div className="resource-workbench resource-evidence-notice"><Panel className="resource-card"><h1>正在核对证据清除状态</h1>
+    <Status tone={clearing || reading ? "progress" : "warning"}>{message || "已隐藏旧材料，正在清除这条检索链的证据…"}</Status>
+    <div className="resource-actions"><Button disabled={clearing || reading} onClick={() => void perform("read", readAction)}>读取最新状态</Button><a className="bp-button" href="/paths">返回路径</a></div></Panel></div>;
+  if (run.status === "cleared") return <ClearedEvidence receipt={run} />;
   const active = run.status === "queued" || run.status === "running";
   const canContinue = run.status === "ready" && run.nextKind !== null && run.childId === null;
   const result = run.result;
@@ -147,6 +155,12 @@ function RunReview({ accountId, initial, enabled, adoptionEnabled = false, readA
       {run.status === "cancelled" && <p>本次运行已取消，迟到结果不会恢复执行。不能据此判断没有产生用量。</p>}
       {run.status === "failed" && <Status tone="warning">{errorLabels[result?.status ?? ""] ?? "本次没有完成有效结果。"} 原路径没有改变，不会自动重试。</Status>}
     </Panel>
+    {clearAction && <Panel className="resource-card resource-clearing"><h2>管理这条检索链的证据</h2><p>只清理检索与核验材料，不删除你的正式路径或学习记录。</p>
+      {confirmClear ? <section aria-label="清除证据确认"><h3>确认清除整条检索链？</h3><p>这将清除同一次检索及后续字幕、匹配、采用核验的正文、检索条件与起点说明。清除不可恢复；正在执行的结果不会再保存，未确认的资源变更会被拒绝。</p>
+        <p>正式路径、已确认的变更、绑定、笔记与学习历史保持不变。已发出的提供方请求不保证停止计费；其他已打开页面需重新读取。这不是账号、处理商或备份删除。</p>
+        <div className="resource-actions"><Button disabled={cancelling} onClick={() => void perform("clear", clearAction)}>确认清除证据</Button><Button onClick={() => setConfirmClear(false)}>保留证据</Button></div>
+      </section> : <Button disabled={cancelling || attempt !== null} onClick={() => setConfirmClear(true)}>清除这条检索链的证据</Button>}
+    </Panel>}
     <div className="resource-layout"><section className="resource-main" aria-label="资源审阅结果">
       {result ? <><Panel className="resource-card resource-result-heading"><p className="resource-eyebrow">EVIDENCE / NOT A PROMISE</p><h2>{result.status === "matched" ? "有依据的匹配建议" : result.status === "no_match" ? "本次没有推荐" : "候选材料"}</h2>
         {result.summary && <p className="resource-summary">{result.summary}</p>}

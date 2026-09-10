@@ -16,15 +16,20 @@ export function createResourceAdoptionWorkspace(client: SupabaseClient, actor: A
     if (!response.ok) return response;
     const record = response.adoption;
     try {
+      const cleared = (clearedAt: string): ResourceUiResult<AdoptionView> => ({ ok: true, value: { id: record.id, sourceRunId: record.sourceRunId,
+        nodeId: record.nodeId, blueprintVersion: record.blueprintVersion, status: "cleared", clearedAt, result: null } });
+      if (record.status === "cleared" && record.clearedAt) return cleared(record.clearedAt);
       const source = await createResourceRunAccess(client, actor).read(record.sourceRunId);
       if (!source.ok) return source;
       const run = source.run;
       if (run.blueprintId !== record.blueprintId || run.blueprintVersion !== record.blueprintVersion || run.nodeId !== record.nodeId) throw new Error("Source mismatch");
+      if (run.status === "cleared") return cleared(run.clearedAt);
+      if (record.status === "cleared" || record.videoId === null) throw new Error("Invalid adoption content");
       const goal = run.blueprint.goals.find(goal => goal.stages.some(stage => stage.nodes.some(node => node.id === record.nodeId)))!;
       const node = goal.stages.flatMap(stage => stage.nodes).find(node => node.id === record.nodeId)!;
       const candidate = run.discovery?.candidates.find(candidate => candidate.video.videoId === record.videoId);
       if (!candidate) throw new Error("Missing selected video");
-      let proposal: AdoptionView["proposal"] = null, after: ResourceBindingView[] | null = null;
+      let proposal: Exclude<AdoptionView, { status: "cleared" }>["proposal"] = null, after: ResourceBindingView[] | null = null;
       if (record.proposalId) {
         const selected = await client.from("blueprint_proposals").select("id,owner_id,blueprint_id,base_version,status,proposed_snapshot")
           .eq("id", record.proposalId).eq("owner_id", actor.userId).single();

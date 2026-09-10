@@ -9,7 +9,7 @@ const accountId = "10000000-0000-4000-8000-000000000001", nodeId = "10000000-000
 const node: ResourceNodeView = { nodeId, nodeTitle: "PRIVATE_NODE", goalId: accountId, goalTitle: "PRIVATE_GOAL", blueprintVersion: 3,
   description: "理解基本概念", completionCriteria: "独立解释一个实例", estimatedMinutes: 45,
   records: [{ id: runId, kind: "discover", createdAt: "2026-09-10T03:00:00Z" }], offset: 0, hasMore: false };
-const run: ResourceRunView = { id: runId, nodeId, nodeTitle: node.nodeTitle, goalId: node.goalId, goalTitle: node.goalTitle,
+const run: Exclude<ResourceRunView, { status: "cleared" }> = { id: runId, nodeId, nodeTitle: node.nodeTitle, goalId: node.goalId, goalTitle: node.goalTitle,
   blueprintVersion: 3, kind: "discover", sourceRunId: null, childId: null, nextKind: null, status: "running",
   createdAt: "2026-09-10T03:00:00Z", expiresAt: "2026-09-10T03:02:00Z", preferences: { regionCode: "US", language: "zh", allowLanguageFallback: false,
     maxDurationSeconds: 1800, publishedAfter: null }, learnerContext: { startingPoint: null, constraints: null }, skillVersion: null, result: null };
@@ -72,6 +72,61 @@ const candidate: NonNullable<ResourceRunView["result"]>["candidates"][number] = 
   title: "<img src=x onerror=alert(1)>PRIVATE_VIDEO", channel: "[channel](https://untrusted.example)", publishedAt: "2025-01-02T00:00:00Z", durationSeconds: 300,
   transcriptStatus: "ready", language: "zh", languageFallback: false, eligible: true, assessment: null };
 const discovered: ResourceRunView = { ...run, status: "ready", nextKind: "match", result: { status: "discovered", summary: null, candidates: [candidate], rejected: [], uninspectedCount: 2 } };
+it("requires confirmation before clearing and hides old evidence during an unknown clear outcome", async () => {
+  const pending = deferred<Awaited<ReturnType<ResourceRunReviewProps["readAction"]>>>();
+  const clearAction = vi.fn(() => pending.promise);
+  await act(async () => root.render(<ResourceRunReview {...props({ initial: discovered, enabled: false, clearAction })} />));
+  expect(clearAction).not.toHaveBeenCalled();
+  expect(button("清除这条检索链的证据")).toBeDefined();
+  await act(async () => button("清除这条检索链的证据").click());
+  expect(host.textContent).toContain("不可恢复");
+  expect(clearAction).not.toHaveBeenCalled();
+  await act(async () => button("确认清除证据").click());
+  expect(host.textContent).not.toContain("PRIVATE_VIDEO");
+  expect(host.textContent).not.toContain("PRIVATE_NODE");
+  await act(async () => pending.resolve({ ok: false, code: "unavailable" }));
+  expect(host.textContent).not.toContain("PRIVATE_VIDEO");
+  expect(host.textContent).toContain("结果尚未确认");
+  expect(button("确认清除证据")).toBeUndefined();
+  expect(clearAction).toHaveBeenCalledTimes(1);
+});
+const cleared: ResourceRunView = { id: runId, nodeId, blueprintVersion: 3, sourceRunId: null, status: "cleared", clearedAt: "2026-09-11T01:00:00Z", result: null };
+it("recovers an uncertain clear by reading without restoring old evidence or making another clear request", async () => {
+  const clearAction = vi.fn(async () => { throw new Error("lost response"); });
+  const readAction = vi.fn(async () => ({ ok: true as const, value: cleared }));
+  await act(async () => root.render(<ResourceRunReview {...props({ initial: discovered, clearAction, readAction })} />));
+  await act(async () => button("清除这条检索链的证据").click());
+  await act(async () => button("确认清除证据").click());
+  expect(host.textContent).not.toContain("PRIVATE_VIDEO");
+  await act(async () => button("读取最新状态").click());
+  expect(host.textContent).toContain("资源证据已清除");
+  expect(host.textContent).not.toContain("PRIVATE_NODE");
+  expect(button("生成匹配建议")).toBeUndefined();
+  expect(clearAction).toHaveBeenCalledTimes(1); expect(readAction).toHaveBeenCalledTimes(1);
+});
+it("an earlier read cannot restore evidence after an explicit clear", async () => {
+  const pending = deferred<Awaited<ReturnType<ResourceRunReviewProps["readAction"]>>>();
+  await act(async () => root.render(<ResourceRunReview {...props({ initial: discovered, readAction: () => pending.promise,
+    clearAction: async () => ({ ok: true, value: cleared }) })} />));
+  await act(async () => button("读取最新状态").click());
+  await act(async () => button("清除这条检索链的证据").click());
+  await act(async () => button("确认清除证据").click());
+  await act(async () => pending.resolve({ ok: true, value: discovered }));
+  expect(host.textContent).toContain("资源证据已清除"); expect(host.textContent).not.toContain("PRIVATE_VIDEO");
+});
+it("retaining evidence is nonmutating and a foreign account never receives a late clear result", async () => {
+  const pending = deferred<Awaited<ReturnType<ResourceRunReviewProps["readAction"]>>>();
+  const clearAction = vi.fn(() => pending.promise), initialProps = props({ initial: discovered, clearAction });
+  await act(async () => root.render(<ResourceRunReview {...initialProps} />));
+  await act(async () => button("清除这条检索链的证据").click());
+  await act(async () => button("保留证据").click());
+  expect(clearAction).not.toHaveBeenCalled(); expect(host.textContent).toContain("PRIVATE_VIDEO");
+  await act(async () => button("清除这条检索链的证据").click());
+  await act(async () => button("确认清除证据").click());
+  await act(async () => root.render(<ResourceRunReview {...initialProps} accountId="20000000-0000-4000-8000-000000000001" />));
+  await act(async () => pending.resolve({ ok: true, value: cleared }));
+  expect(host.textContent).toContain("身份已变化"); expect(host.textContent).not.toContain("资源证据已清除");
+});
 it("executes exactly one explicit next phase from saved identity with immediate recovery and no raw evidence payload", async () => {
   const fetcher = vi.fn<typeof fetch>(async (_url, init) => { const command = JSON.parse(String(init?.body)); return Response.json({ ok: true, runId: command.runId, status: "ready" }); });
   vi.stubGlobal("fetch", fetcher);

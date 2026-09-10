@@ -17,6 +17,7 @@ import { createResourceAdoptionAccess } from "../src/lib/agent/resource-adoption
 import { createVideoVerification } from "../src/lib/resources/verification";
 import type { ResourceAdoptionWorker } from "../src/lib/agent/resource-adoption";
 import { createResourceAdoptionWorkspace } from "../src/lib/agent/resource-adoption-workspace";
+import { readLearningNoteWorkspace, recordLearningNote } from "../src/lib/learning-notes";
 
 const local = localSupabaseTestConfig();
 const authOptions = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
@@ -115,6 +116,41 @@ function adoptionWorker(ownerId: string): ResourceAdoptionWorker {
     finish: async input => await admin.rpc("finish_resource_adoption", { p_owner_id: ownerId, p_adoption_id: input.adoptionId, p_lease_id: input.leaseId, p_result: input.result }) };
 }
 
+it("clearing a chain erases all resource payloads, rejects pending adoption and recovers old IDs without providers", async () => {
+  const owner = await fixture(), external = await externalFixture({ pending: true });
+  const resources = createCloudResourceRunner({ ...owner, ...external });
+  expect((await resources.run(owner.command, signal())).ok).toBe(true);
+  const captions = { kind: "captions" as const, runId: randomUUID(), sourceRunId: owner.command.runId };
+  expect((await resources.run(captions, signal())).ok).toBe(true);
+  const match = { kind: "match" as const, runId: randomUUID(), sourceRunId: captions.runId };
+  expect((await resources.run(match, signal())).ok).toBe(true);
+  localSql(`insert into private.resource_adoption_quotas(owner_id,available_attempts) values ('${owner.id}',1);`);
+  const command = { adoptionId: randomUUID(), sourceRunId: match.runId, videoId, replaceBindingId: null };
+  const adoption = createCloudResourceAdoption({ client: owner.client, actor: owner.actor, worker: adoptionWorker(owner.id),
+    verification: createVideoVerification({ youtubeApiKey: "fixture-key", fetch: external.fetch }) });
+  const prepared = await adoption.run(command, signal());
+  if (!prepared.ok || !prepared.adoption.proposalId) throw new Error("Missing prepared adoption");
+  const official = await owner.store.getMainBlueprint(owner.id), calls = external.calls.slice();
+  const workspace = createResourceWorkspace(owner.client, owner.actor);
+  const cleared = await workspace.clear(captions.runId);
+  expect(cleared).toMatchObject({ ok: true, value: { id: captions.runId, status: "cleared", result: null } });
+  for (const input of [owner.command, captions, match]) {
+    expect(await resources.run(input, signal())).toMatchObject({ ok: true, run: { status: "cleared", blueprint: null, discovery: null, result: null } });
+    expect(await workspace.read(input.runId)).toMatchObject({ ok: true, value: { status: "cleared", result: null } });
+  }
+  expect(await adoption.run(command, signal())).toMatchObject({ ok: true, adoption: { status: "cleared", result: null, videoId: null } });
+  const adoptionView = await createResourceAdoptionWorkspace(owner.client, owner.actor).read(command.adoptionId);
+  expect(adoptionView).toMatchObject({ ok: true, value: { status: "cleared", result: null } });
+  expect(await workspace.read(match.runId)).toMatchObject({ ok: true, value: { adoptions: [{ id: command.adoptionId }] } });
+  expect(JSON.stringify([cleared, adoptionView])).not.toMatch(/曝光|Compare aperture|owned-native-job|abcdefghijk|只会自动模式/);
+  expect(await workspace.clear(owner.command.runId)).toMatchObject({ ok: true, value: { status: "cleared" } });
+  expect(await workspace.read(captions.runId)).toEqual(cleared);
+  expect((await owner.client.from("blueprint_proposals").select("status").eq("id", prepared.adoption.proposalId).single()).data?.status).toBe("rejected");
+  expect((await createResourceAdoptionAccess(owner.client, owner.actor).apply(command.adoptionId, prepared.adoption.proposalId, 1)).ok).toBe(false);
+  expect(await owner.store.getMainBlueprint(owner.id)).toEqual(official);
+  expect(external.calls).toEqual(calls);
+});
+
 it("freshly verifies a matched candidate once, prepares an immutable proposal, and only explicit confirmation binds it", async () => {
   const owner = await fixture(), external = await externalFixture();
   const resources = createCloudResourceRunner({ ...owner, ...external });
@@ -145,6 +181,19 @@ it("freshly verifies a matched candidate once, prepares an immutable proposal, a
   const official = await owner.store.getMainBlueprint(owner.id);
   expect(official?.version).toBe(2);
   expect(official?.goals[0].stages[0].nodes[0].resources).toEqual([{ id: prepared.adoption.newBindingId, kind: "youtube_video", url: `https://www.youtube.com/watch?v=${videoId}`, externalId: videoId }]);
+  const learning = await owner.application.startLearningSession(owner.actor, { nodeId: owner.nodeId, resourceBindingId: prepared.adoption.newBindingId,
+    clientMutationId: randomUUID(), startedAt: new Date().toISOString() });
+  expect(learning.ok).toBe(true);
+  const noteInput = { nodeId: owner.nodeId, resourceBindingId: prepared.adoption.newBindingId, expectedVersion: 2, clientMutationId: randomUUID(),
+    text: "MY_OWN_NOTE: 练习快门的收获", positionSeconds: 25 };
+  const note = await recordLearningNote(owner.client, owner.actor, noteInput); expect(note.ok).toBe(true);
+  const sessions = await owner.application.listLearningSessions(owner.actor), notes = await readLearningNoteWorkspace(owner.client, owner.actor);
+  expect((await createResourceWorkspace(owner.client, owner.actor).clear(sourceRunId)).ok).toBe(true);
+  expect(await access.apply(command.adoptionId, prepared.adoption.proposalId, 1)).toMatchObject({ ok: true, adoption: { status: "cleared" } });
+  expect(await owner.store.getMainBlueprint(owner.id)).toEqual(official);
+  expect(await owner.application.listLearningSessions(owner.actor)).toEqual(sessions);
+  expect(await readLearningNoteWorkspace(owner.client, owner.actor)).toEqual(notes);
+  expect(await recordLearningNote(owner.client, owner.actor, noteInput)).toEqual(note);
   expect(external.calls).toHaveLength(5);
 });
 
@@ -316,6 +365,37 @@ it("zero per-stage quota rejects execution before any external request", async (
   expect(await runner.run(owner.command, signal())).toEqual({ ok: false, code: "quota_exhausted" });
   expect(await runner.read(owner.command.runId)).toEqual({ ok: false, code: "not_found" });
   expect(external.calls).toEqual([]);
+});
+
+it("clearing a queued receipt is owner-only, concurrent-idempotent and leaves independent searches intact", async () => {
+  const owner = await fixture(1), other = await fixture(), external = await externalFixture();
+  expect((await owner.client.rpc("begin_resource_run", { p_request: owner.command })).error).toBeNull();
+  const workspace = createResourceWorkspace(owner.client, owner.actor);
+  expect(await createResourceWorkspace(other.client, other.actor).clear(owner.command.runId)).toEqual({ ok: false, code: "not_found" });
+  expect(await createResourceWorkspace(owner.client, { ...owner.actor, client: "extension" }).clear(owner.command.runId)).toEqual({ ok: false, code: "forbidden" });
+  const [first, second] = await Promise.all([workspace.clear(owner.command.runId), workspace.clear(owner.command.runId)]);
+  expect(first).toMatchObject({ ok: true, value: { status: "cleared" } }); expect(second).toEqual(first);
+  expect(localSql(`select available_attempts from private.resource_quotas where owner_id='${owner.id}' and kind='discover'`)).toBe("1");
+  const runner = createCloudResourceRunner({ ...owner, ...external });
+  const next = { ...owner.command, runId: randomUUID() };
+  expect((await runner.run(next, signal())).ok).toBe(true);
+  expect(await workspace.clear(owner.command.runId)).toEqual(first);
+  expect(await workspace.read(next.runId)).toMatchObject({ ok: true, value: { status: "ready" } });
+  expect(external.calls).toHaveLength(3);
+});
+
+it("clearing immediately before a worker completes cannot restore late provider content or refund an active attempt", async () => {
+  const owner = await fixture(1), external = await externalFixture();
+  const access = createResourceRunAccess(owner.client, owner.actor);
+  const worker: ResourceWorker = { ...owner.worker, async finish(input) {
+    expect(await access.clear(input.runId)).toMatchObject({ ok: true, run: { status: "cleared" } });
+    return owner.worker.finish(input);
+  } };
+  const runner = createCloudResourceRunner({ ...owner, ...external, worker });
+  expect(await runner.run(owner.command, signal())).toMatchObject({ ok: true, run: { status: "cleared", result: null, blueprint: null } });
+  expect(await runner.run(owner.command, signal())).toMatchObject({ ok: true, run: { status: "cleared" } });
+  expect(localSql(`select available_attempts from private.resource_quotas where owner_id='${owner.id}' and kind='discover'`)).toBe("0");
+  expect(external.calls).toHaveLength(3);
 });
 
 it("other accounts and extension identities cannot read, cancel, continue or execute the owner's records", async () => {

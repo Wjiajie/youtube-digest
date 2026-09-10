@@ -66,6 +66,7 @@ try {
     const adoptionUpgrade = file.endsWith("_resource_adoption.sql") ? await seedAdoptionUpgrade() : null;
     const resourceOrderUpgrade = file.endsWith("_resource_order.sql") ? await seedResourceOrderUpgrade() : null;
     const notesUpgrade = file.endsWith("_learning_notes.sql") ? await captureResourceUpgrade() : null;
+    const clearingUpgrade = file.endsWith("_resource_evidence_clearing.sql") ? await seedResourceClearingUpgrade() : null;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
     if (legacy) await verifyLegacyPlanningUpgrade(legacy);
@@ -75,6 +76,7 @@ try {
     if (adoptionUpgrade) await verifyAdoptionUpgrade(adoptionUpgrade);
     if (resourceOrderUpgrade) await verifyResourceOrderUpgrade(resourceOrderUpgrade);
     if (notesUpgrade) await verifyLearningNotesUpgrade(notesUpgrade);
+    if (clearingUpgrade) await verifyResourceClearingUpgrade(clearingUpgrade);
   }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
@@ -459,6 +461,42 @@ async function captureResourceUpgrade() {
     before[`${schema}.${table}`] = (await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb) as rows from "${schema}"."${table}" t`)).rows[0].rows;
   }
   return before;
+}
+
+async function seedResourceClearingUpgrade() {
+  const owner = "d8000000-0000-4000-8000-000000000001";
+  await becomeUser(owner);
+  await db.query(`select public.record_learning_note('d8000000-0000-4000-8000-000000000012',
+    'd8000000-0000-4000-8000-000000000013',2,'Preserved private timestamp note',75,'d8000000-0000-4000-8000-000000000040')`);
+  await db.exec("reset role");
+  await db.query(`insert into public.resource_adoptions(id,owner_id,source_run_id,blueprint_id,blueprint_version,node_id,video_id,new_binding_id,status,result,expires_at)
+    select 'd8000000-0000-4000-8000-000000000041',owner_id,id,blueprint_id,blueprint_version,node_id,'abcdefghijk',
+      'd8000000-0000-4000-8000-000000000042','failed','{"status":"unavailable"}',expires_at from public.resource_runs where id='d8000000-0000-4000-8000-000000000020'`);
+  await db.query(`insert into private.resource_adoption_leases values('d8000000-0000-4000-8000-000000000041',
+    'd8000000-0000-4000-8000-000000000043',sha256(convert_to('{"status":"unavailable"}','UTF8')))`);
+  await db.query("insert into private.resource_adoption_quotas values($1,4)", [owner]);
+  return captureResourceUpgrade();
+}
+
+async function verifyResourceClearingUpgrade(before) {
+  const expected = structuredClone(before);
+  for (const table of ["public.resource_runs", "public.resource_adoptions"])
+    expected[table] = expected[table].map(row => ({ ...row, cleared_at: null }));
+  assert.deepEqual(await captureResourceUpgrade(), expected,
+    "clearing upgrade adds only nullable markers: all existing source payloads, leases, quotas, proposals, revisions, bindings, sessions and notes remain exact");
+  const acl = (await db.query(`select p.prosecdef,
+    has_function_privilege('authenticated',p.oid,'EXECUTE') as owner_execute,
+    has_function_privilege('anon',p.oid,'EXECUTE') as anonymous_execute,
+    has_function_privilege('service_role',p.oid,'EXECUTE') as worker_execute,
+    has_table_privilege('authenticated','public.resource_runs','UPDATE') as direct_run_write,
+    has_table_privilege('authenticated','public.resource_adoptions','UPDATE') as direct_adoption_write
+    from pg_proc p where p.oid='public.clear_resource_evidence(uuid)'::regprocedure`)).rows[0];
+  assert.deepEqual(acl, { prosecdef: false, owner_execute: true, anonymous_execute: false, worker_execute: false,
+    direct_run_write: false, direct_adoption_write: false }, "clearing exposes only an authenticated invoker entry, not direct table mutation");
+  await becomeUser("d8000000-0000-4000-8000-000000000001");
+  assert.equal(Number((await db.query("select public.apply_blueprint_proposal('d8000000-0000-4000-8000-000000000030',0,'d8000000-0000-4000-8000-000000000030') as version")).rows[0].version), 1,
+    "old applied proposal continues to recover its historical revision after clearing schema upgrade");
+  assert.deepEqual(await captureResourceUpgrade(), expected, "historical replay does not clear or rewrite any upgraded row");
 }
 
 async function verifyLearningNotesUpgrade(before) {

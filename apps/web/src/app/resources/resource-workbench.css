@@ -50,6 +50,12 @@
 .resource-aside-note { color: var(--bp-muted); font-size: 13px; padding: 12px 18px; border-inline-start: 1px solid var(--bp-line-strong); }
 .resource-run-status { margin-bottom: 24px; border-inline-start: 3px solid var(--bp-accent); }
 .resource-run-status h2 { font-size: 28px; }
+.resource-clearing { margin-bottom: 24px; border-inline-start: 3px solid var(--bp-warning); }
+.resource-evidence-notice { max-width: 840px; }
+.resource-evidence-notice h1 { font: 600 clamp(26px, 3vw, 36px)/1.4 var(--bp-heading-font); margin: 12px 0 24px; }
+.resource-evidence-notice p { margin-block: 16px; }
+.resource-evidence-notice section { margin-top: 28px; padding-top: 20px; border-top: 1px solid var(--bp-line); }
+.resource-evidence-notice li a { display: inline-flex; align-items: center; min-height: 44px; }
 .resource-recovery { margin-top: 24px; padding: 18px; background: var(--bp-field); border: 1px dashed var(--bp-warning); }
 .resource-recovery .bp-button { width: 100%; margin-block: 8px; }
 .resource-recovery p { font-size: 13px; }

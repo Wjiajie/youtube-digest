@@ -30,7 +30,7 @@ async function account(context?: BrowserContext) {
   if (context) await context.addCookies(cookies.map(({ name, value }) => ({ name, value, url: origin, sameSite: "Lax" as const })));
   const token = (await client.auth.getSession()).data.session?.access_token;
   if (!token) throw new Error("Missing fixture session");
-  return { id, client, token };
+  return { id, client, token, cookies };
 }
 test.afterEach(async ({ context }) => {
   await context.clearCookies();
@@ -76,6 +76,10 @@ test(disabled ? "disabled resource entry keeps a real signed-in account from res
     await page.getByRole("button", { name: "取消本次运行", exact: true }).click();
     await expect(page.getByRole("button", { name: "取消本次运行", exact: true })).toHaveCount(0);
     expect((await owner.client.rpc("read_resource_run", { p_run_id: queued.runId })).data.status).toBe("cancelled");
+    await page.getByRole("button", { name: "清除这条检索链的证据", exact: true }).click();
+    await page.getByRole("button", { name: "确认清除证据", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "资源证据已清除", exact: true })).toBeVisible();
+    expect((await owner.client.rpc("read_resource_run", { p_run_id: queued.runId })).data.input_blueprint).toBeNull();
     expect(await calls()).toEqual([]); return;
   }
   expect((await request(command, { origin: "https://outside.example" })).status()).toBe(403);
@@ -298,5 +302,30 @@ for (const theme of ["cyberpunk", "eastern"] as const) test(`resource workbench 
   await expect(matchPage.getByRole("heading", { name: "比较光圈与快门的组合", exact: true })).toHaveCount(0);
   await expect(matchPage.getByText("Compare aperture and shutter speed.", { exact: true })).toHaveCount(0);
   expect((await owner.client.rpc("read_resource_run", { p_run_id: queued })).data.status).toBe("cancelled");
+  // Restore only this disposable fixture owner's cookie; never use the user's browser/session.
+  await context.clearCookies();
+  await context.addCookies(owner.cookies.map(({ name, value }) => ({ name, value, url: origin, sameSite: "Lax" as const })));
+  await matchPage.reload();
+  await matchPage.getByRole("button", { name: "清除这条检索链的证据", exact: true }).click();
+  await expect(matchPage.getByRole("heading", { name: "确认清除整条检索链？", exact: true })).toBeVisible();
+  expect(await matchPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await matchPage.screenshot({ path: testInfo.outputPath(`${theme}-clear-confirm-320.png`), fullPage: true });
+  await matchPage.getByRole("button", { name: "确认清除证据", exact: true }).focus();
+  await matchPage.keyboard.press("Enter");
+  await expect(matchPage.getByRole("heading", { name: "资源证据已清除", exact: true })).toBeVisible();
+  await expect(matchPage.getByText("Compare aperture and shutter speed.", { exact: true })).toHaveCount(0);
+  await expect(matchPage.locator(`a[href="${new URL(adoptionPage.url()).pathname}"]`)).toHaveCount(1);
+  await matchPage.reload();
+  await expect(matchPage.getByRole("heading", { name: "资源证据已清除", exact: true })).toBeVisible();
+  expect(await matchPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await matchPage.screenshot({ path: testInfo.outputPath(`${theme}-cleared-320.png`), fullPage: true });
+  for (const oldPage of [discoveryPage, captionPage, adoptionPage]) {
+    await oldPage.reload();
+    await expect(oldPage.getByRole("heading", { name: "资源证据已清除", exact: true })).toBeVisible();
+    await expect(oldPage.getByRole("button", { name: "确认并绑定资源", exact: true })).toHaveCount(0);
+  }
+  expect(await store.getMainBlueprint(owner.id)).toEqual(formal);
+  if (theme === "eastern") expect(await app.listLearningSessions(actor)).toMatchObject({ ok: true, value: [{ resourceBindingId: oldBindingId }] });
+  expect(await (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json()).toHaveLength(6);
   expect(errors).toEqual([]);
 });

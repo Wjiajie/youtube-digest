@@ -17,6 +17,7 @@ export const resourceResultSchema = z.union([discoveredResourcesSchema, noCandid
     requests: resourceRequestsSchema.optional(), providerMayHaveRun: z.boolean().optional(), usage: planningUsageSchema.nullable().optional() }),
 ]);
 const rowSchema = z.strictObject({
+  cleared_at: z.null().optional(),
   id: z.uuid(), owner_id: z.uuid(), blueprint_id: z.uuid(), blueprint_version: z.int().nonnegative(), node_id: z.uuid(),
   kind: z.enum(["discover", "captions", "match"]), source_run_id: z.uuid().nullable(), preferences: resourcePreferencesSchema, learner_context: learnerContextSchema,
   input_blueprint: blueprintSnapshotSchema, input_discovery: discoveredResourcesSchema.nullable(), skill: resourceSkillSchema.nullable(), result: resourceResultSchema.nullable(),
@@ -47,11 +48,18 @@ const rowSchema = z.strictObject({
     }
   }
 });
+const clearedRowSchema = z.strictObject({ ...rowSchema.shape,
+  status: z.literal("cleared"), cleared_at: z.iso.datetime({ offset: true }),
+  preferences: z.null(), learner_context: z.null(), input_blueprint: z.null(), input_discovery: z.null(), skill: z.null(), result: z.null(),
+}).refine(row => (row.kind === "discover") === (row.source_run_id === null), "Inconsistent cleared resource source");
 export function parseResourceRun(input: unknown, ownerId: string, runId: string) {
-  const row = rowSchema.parse(input);
+  const row = z.union([rowSchema, clearedRowSchema]).parse(input);
   if (row.owner_id !== ownerId || row.id !== runId) throw new Error("Invalid resource record identity");
+  if (row.status === "cleared") return { id: row.id, ownerId: row.owner_id, blueprintId: row.blueprint_id, blueprintVersion: row.blueprint_version,
+    nodeId: row.node_id, kind: row.kind, sourceRunId: row.source_run_id, status: row.status, clearedAt: row.cleared_at,
+    createdAt: row.created_at, expiresAt: row.expires_at, preferences: null, learnerContext: null, blueprint: null, discovery: null, skill: null, result: null };
   return { id: row.id, ownerId: row.owner_id, blueprintId: row.blueprint_id, blueprintVersion: row.blueprint_version, nodeId: row.node_id,
     kind: row.kind, sourceRunId: row.source_run_id, preferences: row.preferences, learnerContext: row.learner_context, blueprint: row.input_blueprint,
-    discovery: row.input_discovery, skill: row.skill, result: row.result, status: row.status, createdAt: row.created_at, expiresAt: row.expires_at };
+    discovery: row.input_discovery, skill: row.skill, result: row.result, status: row.status, createdAt: row.created_at, expiresAt: row.expires_at, clearedAt: null };
 }
 export type ResourceRun = ReturnType<typeof parseResourceRun>;
