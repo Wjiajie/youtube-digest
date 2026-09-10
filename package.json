@@ -19,6 +19,7 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test:m1": "vitest run",
     "test:next-compression": "node --test scripts/next-compression.test.mjs scripts/patch-next-compression.test.mjs",
+    "test:resource-maintenance": "node --test scripts/resource-maintenance-health.test.mjs",
     "test:db-contract": "node scripts/test-m1-migration.mjs",
     "test:e2e": "playwright test",
     "test:agent-runs": "vitest run --config vitest.agent-runs.config.ts",
@@ -32,7 +33,7 @@
     "supabase:reset": "bash scripts/with-m1-runtime.sh npx --yes supabase@2.115.0 db reset",
     "supabase:test": "bash scripts/with-m1-runtime.sh npx --yes supabase@2.115.0 test db",
     "setup:m1-cloud": "bash scripts/with-m1-runtime.sh bash scripts/setup-m1-cloud.sh",
-    "check:m1": "node scripts/patch-next-compression.mjs && npm run test:next-compression && npm run typecheck && npm run test:m1 && npm run test:planning-worker && npm run test:db-contract && npm run check:m1-wizard && npm run build:web && npm run build:wxt && node scripts/check-m1-extension.mjs",
+    "check:m1": "node scripts/patch-next-compression.mjs && npm run test:next-compression && npm run test:resource-maintenance && npm run typecheck && npm run test:m1 && npm run test:planning-worker && npm run test:db-contract && npm run check:m1-wizard && npm run build:web && npm run build:wxt && node scripts/check-m1-extension.mjs",
     "test": "npm run test:m1",
     "check": "npm run check:m1"
   },
