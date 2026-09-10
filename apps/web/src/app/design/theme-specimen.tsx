@@ -14,7 +14,8 @@ export function ThemeSpecimen() {
       <header className="specimen-header">
         <div><p className="brand">BLUEPRINT / DESIGN LAB · 01</p><h1>让每一步，有迹可循。</h1>
           <p className="subtle">内部控件样本 · 非个人蓝图 · 不调用 Agent、不写入云端。</p>
-          <a href="/design/assets" style={{ color: "var(--bp-accent)" }}>打开真实人物试装 →</a></div>
+          <a href="/design/assets" style={{ color: "var(--bp-accent)" }}>打开真实人物试装 →</a>
+          <p><a href="/design/environment" style={{ color: "var(--bp-accent)" }}>打开双主题环境构图 →</a></p></div>
         <ThemePicker value={theme} onChange={setTheme} />
       </header>
       <div className="specimen-grid">

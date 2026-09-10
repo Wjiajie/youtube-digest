@@ -3,6 +3,8 @@
 核验日期：2026-09-10。阶段状态以 [执行路线](execution-roadmap.md) 为准。
 本台账证明已获取文件及许可证据，不证明美术、骨架运行或商用品质已验收。
 
+最新补充：四件 Kenney 环境候选已完成双主题组合与实际 WebGL 运行验证，详见[环境构图试验](environment-study.md)。文件校验值未变，未随产品分发；当前轮廓与材质表现仍不足以作为正式山水或赛博世界，B2 只保留作对照。下文“尚未进行 GPU 试装”是取得文件时的历史记录，不覆盖本条进展。
+
 ## Quaternius / Cyberpunk Game Kit / Character
 
 - 作者：Quaternius；发行页标记 July 2022，无更细的下载版本号。
