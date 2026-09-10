@@ -32,6 +32,7 @@
 26. [规划记录与草案阅读](agent-planning-review.md)：本地双主题记录列表、草案阅读、当前状态核对与取消。
 27. [规划草案的提案确认](agent-planning-approval.md)：本地两步确认、不可替换的来源绑定、原子来源检查、拒绝与精确恢复。
 28. [用户主动发起规划](agent-planning-entry.md)：本地显式生成入口、DeepSeek SDK 适配、关闭开关、账号次数与生产 Skill 打包；默认关闭，真实消费与质量未验收。
+29. [受控目标澄清](agent-goal-clarification.md)：固定 Skill、原文依据、单问／暂停／待审阅摘要与共享推理保护；仅内部运行切片，云端会话与对话页面尚未接入。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 

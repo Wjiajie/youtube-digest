@@ -1,33 +1,17 @@
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { ToolLoopAgent, Output, isStepCount, NoObjectGeneratedError, NoOutputGeneratedError, wrapLanguageModel, type LanguageModel, type LanguageModelUsage } from "ai";
+import type { LanguageModel } from "ai";
 import { blueprintSnapshotSchema, goalBriefSchema, parseCurrentBlueprintSnapshot, prepareBlueprintDraft } from "@blueprint/domain";
 import { loadPlanningSkill } from "./planning-skill";
 import { pathCandidateSchema, isFeasibleCandidate } from "./path-candidate";
 import type { PlanningResult as Result, PlanningUsage as Usage } from "./planning-result";
+import { generateStructuredSkill } from "./structured-skill-generation";
 
 const requestSchema = z.strictObject({
   runId: z.uuid(), startDate: z.iso.date().refine(value => !value.startsWith("0000-")), signal: z.instanceof(AbortSignal),
   brief: goalBriefSchema, blueprint: blueprintSnapshotSchema,
   expectedSkillSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
-
-function usageSummary(usage: LanguageModelUsage): Usage {
-  return { inputTokens: usage.inputTokens ?? null, outputTokens: usage.outputTokens ?? null, totalTokens: usage.totalTokens ?? null };
-}
-
-/** A provider can ignore abort. Stop awaiting it without accepting its eventual result. */
-function awaitWithAbort<T>(work: () => Promise<T>, signal: AbortSignal): Promise<T> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) { reject(new Error("Planning stopped")); return; }
-    const abort = () => { signal.removeEventListener("abort", abort); reject(new Error("Planning stopped")); };
-    signal.addEventListener("abort", abort, { once: true });
-    Promise.resolve().then(work).then(
-      value => { signal.removeEventListener("abort", abort); resolve(value); },
-      error => { signal.removeEventListener("abort", abort); reject(error); },
-    );
-  });
-}
 
 export function createPathPlanner(dependencies: { model: Exclude<LanguageModel, string>; newId?: () => string }) {
   const newId = dependencies.newId ?? randomUUID;
@@ -44,35 +28,20 @@ export function createPathPlanner(dependencies: { model: Exclude<LanguageModel, 
       if (signal.aborted) return { status: "cancelled", providerMayHaveRun: false, usage: null };
       let providerMayHaveRun = false;
       let usage: Usage | null = null;
-      const deadline = new AbortController();
-      let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         const skill = await loadPlanningSkill();
         if (parsed.data.expectedSkillSha256 && parsed.data.expectedSkillSha256 !== skill.identity.sha256) {
           return { status: "unavailable", providerMayHaveRun, usage };
         }
         if (signal.aborted) return { status: "cancelled", providerMayHaveRun, usage };
-        const generationSignal = AbortSignal.any([signal, deadline.signal]);
-        timer = setTimeout(() => deadline.abort(), 60_000);
-        const agent = new ToolLoopAgent({
-          model: wrapLanguageModel({ model: dependencies.model, middleware: {
-            specificationVersion: "v4",
-            // Provider warning prose is untrusted and may echo user content. No global logger mutation.
-            wrapGenerate: async ({ doGenerate }) => ({ ...await doGenerate(), warnings: [] }),
-          } }),
-          instructions: skill.instructions, tools: {},
-          telemetry: { isEnabled: false, recordInputs: false, recordOutputs: false },
-          stopWhen: isStepCount(1), maxRetries: 0, maxOutputTokens: 12000,
-          output: Output.object({ schema: pathCandidateSchema }),
+        const result = await generateStructuredSkill({
+          model: dependencies.model, instructions: skill.instructions, signal,
+          maxOutputTokens: 12000, schema: pathCandidateSchema,
+          prompt: JSON.stringify({ startDate, goalBrief: brief.content }),
         });
-        providerMayHaveRun = true;
-        const result = await awaitWithAbort(() => agent.generate({
-          prompt: JSON.stringify({ startDate, goalBrief: brief.content }), abortSignal: generationSignal,
-        }), generationSignal);
-        usage = usageSummary(result.totalUsage);
-        if (signal.aborted) return { status: "cancelled", providerMayHaveRun, usage };
-        if (deadline.signal.aborted) return { status: "timed_out", providerMayHaveRun, usage };
-        if (result.finishReason !== "stop") return { status: "invalid_output", providerMayHaveRun, usage };
+        if (result.status !== "generated") return result;
+        providerMayHaveRun = result.providerMayHaveRun;
+        usage = result.usage;
         const candidate = result.output;
         if (!isFeasibleCandidate(candidate, { weeklyMinutes: brief.content.weeklyMinutes!, startDate, targetDate: brief.content.targetDate })) {
           return { status: "invalid_output", providerMayHaveRun, usage };
@@ -95,14 +64,9 @@ export function createPathPlanner(dependencies: { model: Exclude<LanguageModel, 
           assumptions: candidate.assumptions, skill: { ...skill.identity, instructions: skill.instructions },
           source: { runId, briefId: brief.id, briefRevision: brief.revision, blueprintId: blueprint.id, blueprintVersion: blueprint.version, startDate },
         };
-      } catch (error) {
-        if (NoObjectGeneratedError.isInstance(error) && error.usage) usage = usageSummary(error.usage);
+      } catch {
         if (signal.aborted) return { status: "cancelled", providerMayHaveRun, usage };
-        if (deadline.signal.aborted) return { status: "timed_out", providerMayHaveRun, usage };
-        const status = NoObjectGeneratedError.isInstance(error) || NoOutputGeneratedError.isInstance(error) ? "invalid_output" : "unavailable";
-        return { status, providerMayHaveRun, usage };
-      } finally {
-        clearTimeout(timer);
+        return { status: "unavailable", providerMayHaveRun, usage };
       }
     },
   };
