@@ -47,7 +47,7 @@ export async function resolveRequestActor(request?: NextRequest): Promise<Reques
   };
 }
 
-function authFailure(error: { status?: number }): RequestActorResult {
+export function authFailure(error: { status?: number }): Extract<RequestActorResult, { ok: false }> {
   const invalidSession = error.status !== undefined && [400, 401, 403, 422].includes(error.status);
   return { ok: false, code: invalidSession ? "unauthenticated" : "unavailable" };
 }

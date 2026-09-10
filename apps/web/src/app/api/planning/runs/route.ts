@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { resolveRequestActor } from "@/lib/supabase/request";
+import { authFailure, resolveRequestActor } from "@/lib/supabase/request";
 import { startPlanningRunSchema } from "@/lib/agent/planning-run";
 import { createCloudPathPlanner } from "@/lib/agent/cloud-path-planner";
 import { planningConfiguration, createPlanningModel, createPlanningWorker } from "@/lib/agent/planning-runtime";
@@ -43,7 +43,11 @@ export async function POST(request: Request) {
     const configuration = planningConfiguration();
     if (!configuration) return reply({ ok: false, code: "disabled" }, 503);
     const session = await identity.value.client.auth.getSession();
-    if (session.error || !session.data.session) return reply({ ok: false, code: "unauthenticated" }, 401);
+    if (session.error) {
+      const failure = authFailure(session.error);
+      return reply(failure, failure.code === "unauthenticated" ? 401 : 503);
+    }
+    if (!session.data.session) return reply({ ok: false, code: "unauthenticated" }, 401);
     // The token is only forwarded; the Edge worker independently verifies its identity.
     const result = await createCloudPathPlanner({ ...identity.value, worker: createPlanningWorker(configuration, session.data.session.access_token),
       model: createPlanningModel(configuration.apiKey) }).run(command, request.signal);
