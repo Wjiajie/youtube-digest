@@ -7,6 +7,7 @@ import { initExtensionObservability } from "../src/observability";
 import { createEvidenceTransport } from "../src/evidence";
 import { createNodeStatusTransport } from "../src/node-status";
 import { createLearningNotesTransport } from "../src/learning-notes";
+import { createPlayerPositionReader } from "../src/player-position";
 import { findBoundNodes, flushOutbox, type BoundNodeContext, type OutboxCommand } from "../src/runtime";
 
 const OUTBOX_KEY = "blueprint_session_outbox_v1";
@@ -25,13 +26,14 @@ export default defineBackground(() => {
   const evidence = createEvidenceTransport(auth, apiBase);
   const nodeStatus = createNodeStatusTransport(auth, apiBase);
   const learningNotes = createLearningNotesTransport(auth, apiBase);
+  const readPlayerPosition = createPlayerPositionReader(auth);
   void cleanupLegacyStorage();
   void auth.accessToken().then((current) => current && retryOutbox(auth, current.session.userId));
   if (globalThis.chrome?.sidePanel) {
     void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   }
 
-  browser.runtime.onMessage.addListener(async (message: any) => {
+  browser.runtime.onMessage.addListener(async (message: any, sender) => {
     switch (message?.type) {
       case "AUTH_STATUS":
         return auth.status();
@@ -56,6 +58,8 @@ export default defineBackground(() => {
         return learningNotes.load(message.ownerId);
       case "SAVE_LEARNING_NOTE":
         return learningNotes.save(message.ownerId, message.input);
+      case "READ_NOTE_POSITION":
+        return readPlayerPosition(message.ownerId, message.input, sender);
       case "START_SESSION":
         return startSession(auth, message);
       case "OPEN_PATH":

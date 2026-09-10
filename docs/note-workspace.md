@@ -2,6 +2,8 @@
 
 更新：2026-09-10；固定点 `0fc2870`。本地 P8 增量，接通上一批[云端笔记](learning-notes.md)，没有新增 SQL 或托管发布。
 
+后续增量见[明确读取当前播放位置](player-position.md)：扩展可主动填写同视频的当前位置；下文保留本批手动位置工作台的验收记录，不代表自动进度同步。
+
 ## 已接通的体验
 
 Web 从成长档案或正式路径进入 `/progress/notes`；扩展从“记录 → 记录视频笔记”按需打开。两端共享 [NotesWorkspace](../packages/ui/src/learning-notes.tsx)，认证传输分别使用已有 Web Actions 和扩展后台，业务逻辑不按主题复制。

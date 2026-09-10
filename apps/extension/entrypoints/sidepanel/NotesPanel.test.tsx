@@ -65,6 +65,10 @@ test("the real shared editor forwards explicit notes and only manually replays t
   const sent: unknown[] = [];
   transport.sendMessage.mockImplementation(async message => {
     if (message.type === "LOAD_LEARNING_NOTES") return { ok: true, value };
+    if (message.type === "READ_NOTE_POSITION") {
+      expect(message).toEqual({ type: "READ_NOTE_POSITION", ownerId: "owner-a", input: { videoId: "abcdefghijk" } });
+      return { ok: true, value: { videoId: "abcdefghijk", positionSeconds: 0 } };
+    }
     expect(message).toMatchObject({ type: "SAVE_LEARNING_NOTE", ownerId: "owner-a" });
     sent.push(message.input); const command = recordLearningNoteSchema.parse(message.input);
     if (sent.length === 1) return { ok: false, code: "unavailable" };
@@ -78,6 +82,8 @@ test("the real shared editor forwards explicit notes and only manually replays t
     await act(async () => { Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value")!.set!.call(field, text);
       field.dispatchEvent(new Event(field instanceof HTMLSelectElement ? "change" : "input", { bubbles: true })); });
   }
+  await click("读取当前播放位置"); expect(sent).toHaveLength(0);
+  expect(transport.sendMessage).toHaveBeenLastCalledWith({ type: "READ_NOTE_POSITION", ownerId: "owner-a", input: { videoId: "abcdefghijk" } });
   await click("保存笔记"); expect(sent).toHaveLength(1);
   expect(host.querySelector<HTMLTextAreaElement>("textarea")!.disabled).toBe(true);
   await click("收起视频笔记"); await click("记录视频笔记"); expect(sent).toHaveLength(1);

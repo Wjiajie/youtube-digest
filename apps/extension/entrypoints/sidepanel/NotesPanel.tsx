@@ -36,13 +36,14 @@ function AccountNotes({ ownerId }: { ownerId: string }) {
   return <div className="extension-notes">
     <Button className="web-link" aria-expanded={open} aria-controls="extension-notes-content" onClick={() => { setOpen(!open); setStarted(true); }}>{open ? "收起视频笔记" : "记录视频笔记"}</Button>
     <section id="extension-notes-content" aria-label="视频笔记" hidden={!open}>
-      <p className="muted">手动选择笔记关联的视频。位置由你填写，切换当前视频不会移动草稿，也不会自动记录观看或掌握。</p>
+      <p className="muted">手动选择笔记关联的视频。可填写位置，或明确读取当前视频的位置；切换视频不会移动草稿，也不会自动记录观看或掌握。</p>
       {identityLost ? <Status tone="warning">账号连接已变化，私人笔记已隐藏。请重新连接账号。</Status> : <>
         {loading ? <Status>正在读取私人笔记…</Status> : null}
         {failed ? <Panel><Status tone="warning">暂时无法读取视频笔记，不能据此判断历史为空。</Status>
           <Button disabled={loading} onClick={() => setAttempt(value => value + 1)}>重新读取视频笔记</Button></Panel> : null}
         {initial ? <NotesWorkspace accountId={ownerId} initial={initial}
           saveAction={input => request<LearningNote>("SAVE_LEARNING_NOTE", input)}
+          capturePosition={videoId => request<{ videoId: string; positionSeconds: number }>("READ_NOTE_POSITION", { videoId })}
           reloadAction={() => request<LearningNoteWorkspace>("LOAD_LEARNING_NOTES")} /> : null}
       </>}
     </section>

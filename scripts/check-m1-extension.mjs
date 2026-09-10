@@ -21,6 +21,18 @@ assert.equal(manifest.permissions.includes("scripting"), false);
 assert.equal(manifest.host_permissions.includes("https://www.youtube.com/*"), true);
 assert.equal(manifest.host_permissions.some((permission) => /supabase\.co|127\.0\.0\.1:54321/.test(permission)), true);
 assert.equal(manifest.host_permissions.some((permission) => /supadata|deepseek/i.test(permission)), false);
+assert.equal(manifest.content_scripts?.length, 2);
+assert.deepEqual(manifest.content_scripts.map((script) => script.world).sort(), ["ISOLATED", "MAIN"]);
+for (const script of manifest.content_scripts) {
+  assert.deepEqual(script.matches, ["https://www.youtube.com/*"]);
+  assert.equal(script.all_frames, false);
+  assert.equal(script.run_at, "document_start");
+  assert.equal(script.match_about_blank ?? false, false);
+  assert.equal(script.match_origin_as_fallback ?? false, false);
+  assert.equal(script.js.length, 1);
+}
+assert.equal(manifest.externally_connectable, undefined);
+assert.equal(manifest.web_accessible_resources, undefined);
 
 const files = await readdir(output, { recursive: true });
 const text = (

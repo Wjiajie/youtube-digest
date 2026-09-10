@@ -13,7 +13,9 @@ const initial: LearningNoteWorkspace = { blueprint: { schemaVersion: 2, id: id(2
     type: "learn", position: 0, estimatedMinutes: 30, completionCriteria: "解释曝光变化", dependencyIds: [], resources: [{ id: binding, kind: "youtube_video", externalId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk" }] }] }] }] }, records: [] };
 let host: HTMLDivElement, root: Root, workspace: LearningNoteWorkspace;
 let save: (input: unknown) => Promise<ApplicationResult<LearningNote>>, read: () => Promise<ApplicationResult<LearningNoteWorkspace>>;
+let capture: ((videoId: string) => Promise<ApplicationResult<{ videoId: string; positionSeconds: number }>>) | undefined;
 beforeEach(() => {
+  capture = undefined;
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); localStorage.clear(); workspace = structuredClone(initial);
   const held = new Set<string>();
   Object.defineProperty(navigator, "locks", { configurable: true, value: { request: async (key: string, _: unknown, callback: (lock: object | null) => Promise<void>) => {
@@ -33,7 +35,7 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); host.remove(); Reflect.deleteProperty(navigator, "locks"); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 async function render(accountId = owner, theme: "cyberpunk" | "eastern" = "cyberpunk") {
-  await act(async () => root.render(<ThemeSurface theme={theme}><NotesWorkspace accountId={accountId} initial={workspace} saveAction={save} reloadAction={read} /></ThemeSurface>));
+  await act(async () => root.render(<ThemeSurface theme={theme}><NotesWorkspace accountId={accountId} initial={workspace} saveAction={save} reloadAction={read} capturePosition={capture} /></ThemeSurface>));
 }
 function button(label: string) { return [...host.querySelectorAll("button")].find(item => item.textContent === label)!; }
 async function fill(label: string, value: string) {
@@ -165,4 +167,62 @@ test("a malformed stored video identity enters copyable recovery instead of free
   expect(localStorage.getItem(storageKey)).toBe(raw);
   expect(button("已另行保存原文，重置笔记草稿").disabled).toBe(false);
   expect(button("确认原笔记提交")).toBeUndefined();
+});
+
+test("explicit player capture fills the chosen video's seconds without saving the private note", async () => {
+  const videos: string[] = [];
+  capture = async videoId => { videos.push(videoId); return { ok: true, value: { videoId, positionSeconds: 125 } }; };
+  await render(); expect(videos).toEqual([]); expect(button("读取当前播放位置")?.disabled).toBe(true);
+  await compose(); await act(async () => button("读取当前播放位置").click());
+  expect(videos).toEqual(["abcdefghijk"]);
+  expect(host.querySelector<HTMLInputElement>('[aria-label="视频位置（秒，可选）"]')!.value).toBe("125");
+  expect(host.querySelector<HTMLTextAreaElement>('[aria-label="笔记原文"]')!.value).toBe("  从光线开始。\n保留疑问。  ");
+  expect(workspace.records).toEqual([]); expect(localStorage.getItem(storageKey)).not.toContain("clientMutationId");
+  await act(async () => button("保存笔记").click()); expect(workspace.records[0]?.positionSeconds).toBe(125);
+});
+
+test.each([
+  { ok: false, code: "unavailable" },
+  { ok: true, value: { videoId: "lmnopqrstuv", positionSeconds: 1 } },
+  { ok: true, value: { videoId: "abcdefghijk", positionSeconds: -1 } },
+  { ok: true, value: { videoId: "abcdefghijk", positionSeconds: 1.2 } },
+  { ok: true, value: { videoId: "abcdefghijk", positionSeconds: 2147483648 } },
+  { ok: true, value: null },
+])("unavailable or invalid player result preserves manual location: %j", async result => {
+  capture = async () => result as Awaited<ReturnType<NonNullable<typeof capture>>>;
+  await render(); await compose(); await fill("视频位置（秒，可选）", "37");
+  await act(async () => button("读取当前播放位置").click());
+  expect(host.querySelector<HTMLInputElement>('[aria-label="视频位置（秒，可选）"]')!.value).toBe("37");
+  expect(host.textContent).toContain("原位置保留"); expect(workspace.records).toEqual([]);
+});
+
+test("an in-flight capture freezes editing and a late result never reaches a new account", async () => {
+  let release!: (value: ApplicationResult<{ videoId: string; positionSeconds: number }>) => void;
+  capture = () => new Promise(resolve => { release = resolve; });
+  await render(); await compose(); await act(async () => button("读取当前播放位置").click());
+  expect(host.textContent).toContain("正在读取当前播放位置");
+  expect(button("保存笔记").disabled).toBe(true);
+  expect(host.querySelector<HTMLSelectElement>("select")!.disabled).toBe(true);
+  expect(host.querySelector<HTMLTextAreaElement>("textarea")!.disabled).toBe(true);
+  await render(id(10)); await act(async () => release({ ok: true, value: { videoId: "abcdefghijk", positionSeconds: 99 } }));
+  expect(host.querySelector<HTMLInputElement>('[aria-label="视频位置（秒，可选）"]')!.value).toBe("");
+  expect(JSON.parse(localStorage.getItem(storageKey)!).position).toBe("0");
+});
+
+test("zero capture is retained and unresolved note submissions cannot be recaptured", async () => {
+  let calls = 0; capture = async videoId => { calls++; return { ok: true, value: { videoId, positionSeconds: 0 } }; };
+  save = async () => ({ ok: false, code: "unavailable" });
+  await render(); await compose(); await fill("视频位置（秒，可选）", "37");
+  await act(async () => button("读取当前播放位置").click());
+  expect(host.querySelector<HTMLInputElement>('[aria-label="视频位置（秒，可选）"]')!.value).toBe("0");
+  await act(async () => button("保存笔记").click());
+  expect(button("读取当前播放位置").disabled).toBe(true);
+  await act(async () => button("读取当前播放位置").click()); expect(calls).toBe(1);
+});
+
+test("player identity loss hides private notes and the Web manual adapter has no player control", async () => {
+  await render(); expect(button("读取当前播放位置")).toBeUndefined();
+  capture = async () => ({ ok: false, code: "unauthenticated" }); await render(); await compose();
+  await act(async () => button("读取当前播放位置").click()); expect(host.textContent).toContain("账号或登录状态已变化");
+  expect(host.querySelector("textarea")).toBeNull(); expect(localStorage.getItem(storageKey)).toContain("从光线开始");
 });

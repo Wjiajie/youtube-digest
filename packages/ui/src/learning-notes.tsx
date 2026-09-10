@@ -7,7 +7,8 @@ import { Button, Panel, Status } from "./index";
 
 type Props = { accountId: string; initial: LearningNoteWorkspace;
   saveAction: (input: unknown) => Promise<ApplicationResult<LearningNote>>;
-  reloadAction: () => Promise<ApplicationResult<LearningNoteWorkspace>> };
+  reloadAction: () => Promise<ApplicationResult<LearningNoteWorkspace>>;
+  capturePosition?: (videoId: string) => Promise<ApplicationResult<{ videoId: string; positionSeconds: number }>> };
 const draftSchema = z.object({ schemaVersion: z.literal(1), version: z.int().nonnegative(), bindingId: z.string(), nodeId: z.string(),
   label: z.string(), videoId: z.string(), text: z.string(), position: z.string(), reviewRequired: z.boolean().optional(), attempt: recordLearningNoteSchema.optional() }).strict()
   .refine(draft => draft.bindingId === "" ? draft.nodeId === "" && draft.videoId === "" && !draft.attempt
@@ -26,7 +27,7 @@ function recentFirst(a: LearningNote, b: LearningNote) {
 export function NotesWorkspace(props: Props) {
   return <Workspace key={`${props.accountId}:${props.initial.blueprint.id}`} {...props} />;
 }
-function Workspace({ accountId, initial, saveAction, reloadAction }: Props) {
+function Workspace({ accountId, initial, saveAction, reloadAction, capturePosition }: Props) {
   const [blueprint, setBlueprint] = useState(initial.blueprint);
   const [draft, setDraft] = useState(() => blank(initial.blueprint.version));
   const [records, setRecords] = useState(initial.records), [message, setMessage] = useState("");
@@ -72,6 +73,24 @@ function Workspace({ accountId, initial, saveAction, reloadAction }: Props) {
     node.resources.map(resource => ({ node, resource, label: `${goal.title} / ${stage.title} / ${node.title} · ${resource.externalId}` })))));
   const source = choices.find(item => item.resource.id === draft.bindingId && item.node.id === draft.nodeId && item.resource.externalId === draft.videoId);
   const changed = draft.version !== blueprint.version || Boolean(draft.bindingId && !source);
+  async function capture() {
+    if (!capturePosition || inFlight.current || frozen || changed || needsRead || draft.reviewRequired || !source || identityLost) return;
+    const generation = epoch.current;
+    inFlight.current = true; setBusy(true); setMessage("正在读取当前播放位置…");
+    try {
+      const result = await capturePosition(draft.videoId);
+      if (!active.current || generation !== epoch.current) return;
+      if (!result.ok) {
+        if (result.code === "forbidden" || result.code === "unauthenticated") setIdentityLost(true);
+        throw new Error("Player unavailable");
+      }
+      const position = result.value;
+      if (position.videoId !== draft.videoId || !Number.isInteger(position.positionSeconds) || position.positionSeconds < 0 || position.positionSeconds > 2147483647) throw new Error("Invalid position");
+      edit({ ...draft, position: String(position.positionSeconds) });
+      setMessage("已填入当前播放位置，尚未保存笔记；这不是观看或掌握证明。");
+    } catch { if (active.current && generation === epoch.current) setMessage("无法读取位置。请确认当前标签页正在播放所选视频，且不在广告或加载中；原位置保留，也可手动填写。"); }
+    finally { if (active.current && generation === epoch.current) { inFlight.current = false; setBusy(false); } }
+  }
   async function reload(generation = epoch.current) {
     if (inFlight.current) return; inFlight.current = true; setBusy(true);
     try {
@@ -137,6 +156,7 @@ function Workspace({ accountId, initial, saveAction, reloadAction }: Props) {
       <label>笔记原文<textarea aria-label="笔记原文" disabled={frozen} value={draft.text} onChange={event => edit({ ...draft, text: event.target.value })} rows={6} /></label>
       <span className="subtle">{Array.from(draft.text).length} / 8000 字符 · 仅自己可见</span>
       <label>视频位置（秒，可选）<input aria-label="视频位置（秒，可选）" disabled={frozen} inputMode="numeric" value={draft.position} onChange={event => edit({ ...draft, position: event.target.value })} /></label>
+      {capturePosition ? <Button disabled={frozen || changed || needsRead || draft.reviewRequired || !source} onClick={() => void capture()}>读取当前播放位置</Button> : null}
       <p className="subtle">填写非负整数秒，留空表示不指定位置；这不是自动记录的观看进度。</p>
       {changed ? <Status tone="warning">草稿来源与当前路径不同，请读取后明确重新关联；原提交仍可原样核对。</Status> : null}
       {!draft.attempt && (changed || draft.reviewRequired) ? <Button disabled={busy || !editable || needsRead || !source} onClick={() => {
