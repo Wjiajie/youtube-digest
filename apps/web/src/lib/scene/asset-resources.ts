@@ -10,7 +10,12 @@ export function disposeAsset(asset: Pick<GLTF, "scenes">) {
   for (const scene of asset.scenes) scene.traverse((object) => {
     if (!(object instanceof Mesh || object instanceof Line || object instanceof Points)) return;
     geometries.add(object.geometry);
-    for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+    const ownedMaterials = Array.isArray(object.material) ? [...object.material] : [object.material];
+    if (object instanceof Mesh) {
+      if (object.customDepthMaterial) ownedMaterials.push(object.customDepthMaterial);
+      if (object.customDistanceMaterial) ownedMaterials.push(object.customDistanceMaterial);
+    }
+    for (const material of ownedMaterials) {
       materials.add(material);
       for (const value of Object.values(material)) if (value instanceof Texture) {
         textures.add(value);

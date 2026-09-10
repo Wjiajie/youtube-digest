@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { BufferGeometry, Group, LineSegments, Mesh, MeshBasicMaterial, Points, Texture } from "three";
+import { BufferGeometry, Group, LineSegments, Mesh, MeshBasicMaterial, MeshDepthMaterial, MeshDistanceMaterial, Points, Texture } from "three";
 import { disposeAsset } from "./asset-resources";
 
 test("clearing an accepted asset releases mesh, line and point resources and shared materials exactly once", () => {
@@ -19,4 +19,18 @@ test("clearing an accepted asset releases mesh, line and point resources and sha
   }
   disposeAsset({ scenes: [scene] });
   expect(released.sort()).toEqual(["line", "material", "mesh", "points", "texture"]);
+});
+
+test("clearing a skin also releases its custom shadow materials and shared textures once", () => {
+  const scene = new Group(), texture = new Texture(), released: string[] = [];
+  const surface = new MeshBasicMaterial({ map: texture });
+  const mesh = new Mesh(new BufferGeometry(), surface);
+  mesh.customDepthMaterial = new MeshDepthMaterial({ map: texture });
+  mesh.customDistanceMaterial = new MeshDistanceMaterial({ map: texture });
+  for (const [name, resource] of [["texture", texture], ["surface", surface], ["depth", mesh.customDepthMaterial], ["distance", mesh.customDistanceMaterial]] as const) {
+    resource.addEventListener("dispose", () => released.push(name));
+  }
+  scene.add(mesh);
+  disposeAsset({ scenes: [scene, scene] });
+  expect(released.sort()).toEqual(["depth", "distance", "surface", "texture"]);
 });

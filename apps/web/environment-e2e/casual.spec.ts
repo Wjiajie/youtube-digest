@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
 import { resolve } from "node:path";
+import { fiveJointFixture } from "../src/lib/scene/skin-fixture";
 
 // Optional acquired-asset journey: actual model bytes and the existing preview UI.
-for (const filename of ["Casual.gltf", "Casual.source-study.glb", "Casual.weight-repaired-study.glb"]) test(`${filename} avatar renders and idle playback stops under reduced motion`, async ({ page }, info) => {
+for (const filename of ["Casual.gltf", "Casual.source-study.glb", "Casual.weight-repaired-study.glb", "Casual.full-influence-study.glb"]) test(`${filename} avatar renders and idle playback stops under reduced motion`, async ({ page }, info) => {
   const errors: string[] = [], external: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   page.on("request", request => {
@@ -30,6 +31,21 @@ for (const filename of ["Casual.gltf", "Casual.source-study.glb", "Casual.weight
   const paused = await canvas.screenshot({ path: info.outputPath("casual-reduced-motion.png") });
   await page.waitForTimeout(300);
   expect((await canvas.screenshot()).equals(paused)).toBe(true);
+  if (filename === "Casual.full-influence-study.glb") {
+    // Exclude the parent's CSS-rounded edge: error text shifts its subpixel clipping.
+    const captureInterior = async () => {
+      await canvas.scrollIntoViewIfNeeded();
+      const box = await canvas.boundingBox();
+      if (!box) throw new Error("Expected the retained canvas");
+      return page.screenshot({ clip: { x: box.x + 16, y: box.y + 16, width: box.width - 32, height: box.height - 32 } });
+    };
+    const retained = await captureInterior();
+    await page.getByLabel("选择内嵌 glTF 2.0 / GLB 2.0（最多 10 MB）", { exact: true }).setInputFiles({
+      name: "unsupported.glb", mimeType: "model/gltf-binary", buffer: Buffer.from(fiveJointFixture({ JOINTS_2: 3, WEIGHTS_2: 4 })),
+    });
+    await expect(page.getByText("试装最多支持八个骨骼影响", { exact: false })).toBeVisible();
+    expect((await captureInterior()).equals(retained)).toBe(true);
+  }
   console.info(await canvas.evaluate(element => {
     const gl = (element as HTMLCanvasElement).getContext("webgl2")!;
     const extension = gl.getExtension("WEBGL_debug_renderer_info");

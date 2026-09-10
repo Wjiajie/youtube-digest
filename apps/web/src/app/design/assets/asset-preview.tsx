@@ -3,11 +3,11 @@
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { AnimationMixer, Box3, LoadingManager, Mesh, PCFShadowMap, Vector3 } from "three";
-import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
+import { AnimationMixer, Box3, Mesh, PCFShadowMap, Vector3 } from "three";
+import type { GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { Button, Panel, Status } from "@blueprint/ui";
 import { ThemeSurface } from "@blueprint/ui/theme";
-import { validatePreviewAsset } from "@/lib/scene/preview-asset";
+import { loadPreviewAsset } from "@/lib/scene/load-preview-asset";
 import { disposeAsset } from "@/lib/scene/asset-resources";
 
 class SceneBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
@@ -68,13 +68,7 @@ export default function AssetPreview() {
     try {
       if (file.size > 10 * 1024 * 1024) throw new Error("试装文件不能超过 10 MB。");
       const data = file.name.toLowerCase().endsWith(".glb") ? await file.arrayBuffer() : await file.text();
-      validatePreviewAsset(data);
-      const manager = new LoadingManager();
-      manager.setURLModifier((url) => {
-        if (!/^(data:|blob:)/.test(url)) throw new Error("试装禁止请求外部资源。");
-        return url;
-      });
-      loaded = await new GLTFLoader(manager).parseAsync(data, "");
+      loaded = await loadPreviewAsset(data);
       const height = new Box3().setFromObject(loaded.scene).getSize(new Vector3()).y;
       if (!Number.isFinite(height) || height <= 0) throw new Error("文件没有可显示的有效几何体。");
       if (current !== request.current) { disposeAsset(loaded); return; }
