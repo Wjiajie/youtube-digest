@@ -53,6 +53,7 @@ test("real MV3 assessment requires criteria acknowledgement and recovers the ori
     const panel = await context.newPage(), errors: string[] = [];
     panel.on("pageerror", error => errors.push(error.message));
     await panel.goto(`chrome-extension://${new URL(worker.url()).host}/sidepanel.html`);
+    await panel.getByRole("tab", { name: "记录", exact: true }).click();
     await expect(panel.getByRole("button", { name: "核对节点状态", exact: true })).toBeVisible();
     expect(reads).toBe(0); expect(posts).toBe(0);
     await panel.getByRole("button", { name: "核对节点状态", exact: true }).click();
@@ -63,10 +64,15 @@ test("real MV3 assessment requires criteria acknowledgement and recovers the ori
     await panel.getByLabel("我已核对完成依据，明确作出自我确认", { exact: true }).check();
     await panel.getByRole("button", { name: "确认节点状态", exact: true }).click();
     await expect(panel.getByText("暂时无法确认保存结果，请保留当前选择。", { exact: true })).toBeVisible();
+    await panel.getByRole("tab", { name: "学习", exact: true }).click();
+    await expect(panel.getByLabel("路径节点", { exact: true })).toBeHidden();
+    await panel.getByRole("tab", { name: "记录", exact: true }).click();
+    await expect(panel.getByText("暂时无法确认保存结果，请保留当前选择。", { exact: true })).toBeVisible();
     await panel.getByRole("button", { name: "收起节点状态", exact: true }).click();
     await panel.getByRole("button", { name: "核对节点状态", exact: true }).click();
     expect(posts).toBe(1);
     await panel.reload();
+    await panel.getByRole("tab", { name: "记录", exact: true }).click();
     await panel.getByRole("button", { name: "核对节点状态", exact: true }).click();
     await expect(panel.getByLabel("路径节点", { exact: true })).toHaveValue(nodeId);
     await expect(panel.getByLabel("路径节点", { exact: true })).toBeDisabled();
@@ -89,6 +95,8 @@ test("real MV3 assessment requires criteria acknowledgement and recovers the ori
     expect(posts).toBe(2);
     await signIn(other);
     await expect(panel.getByLabel("路径节点", { exact: true })).toHaveCount(0);
+    await expect(panel.getByRole("tab", { name: "学习", exact: true })).toHaveAttribute("aria-selected", "true");
+    await panel.getByRole("tab", { name: "记录", exact: true }).click();
     await panel.getByRole("button", { name: "核对节点状态", exact: true }).click();
     await expect(panel.locator(".node-status-history article")).toHaveCount(0);
     await expect(panel.getByLabel("路径节点", { exact: true })).toHaveValue("");

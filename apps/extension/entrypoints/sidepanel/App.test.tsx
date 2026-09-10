@@ -53,6 +53,66 @@ async function clickButton(label: string) {
   await act(async () => button!.click());
 }
 
+test("learning and records are separate keyboard task views without starting private reads or losing the current path", async () => {
+  await act(async () => root.render(<App />));
+  const list = host.querySelector('[role="tablist"][aria-label="学习工作台"]');
+  expect(list).not.toBeNull();
+  const items = [...list!.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  expect(items.map(item => item.textContent)).toEqual(["学习", "记录"]);
+  const panels = [...host.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+  expect(panels.map(panel => panel.hidden)).toEqual([false, true]);
+  transport.sendMessage.mockClear();
+  items[0]!.focus();
+  await act(async () => items[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
+  expect(document.activeElement).toBe(items[1]);
+  expect(items.map(item => item.tabIndex)).toEqual([-1, 0]);
+  expect(items.map(item => item.getAttribute("aria-selected"))).toEqual(["false", "true"]);
+  expect(panels.map(panel => panel.hidden)).toEqual([true, false]);
+  expect(host.querySelector('.context-card')?.closest('[hidden]')).toBeNull();
+  expect(host.textContent).toContain("了解基础");
+  expect(transport.sendMessage.mock.calls).toHaveLength(0);
+  await act(async () => items[1]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })));
+  expect(document.activeElement).toBe(items[0]);
+  expect(panels.map(panel => panel.hidden)).toEqual([false, true]);
+  for (const [key, selected] of [["ArrowLeft", 1], ["ArrowRight", 0], ["End", 1]] as const) {
+    await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })));
+    expect(document.activeElement).toBe(items[selected]);
+    expect(items[selected]!.getAttribute("aria-controls")).toBe(panels[selected]!.id);
+    expect(panels[selected]!.getAttribute("aria-labelledby")).toBe(items[selected]!.id);
+  }
+  await clickButton("学习");
+  expect(panels.map(panel => panel.hidden)).toEqual([false, true]);
+});
+
+test("record tasks retain the mounted private workspace across tabs, video and theme but reset for a different account", async () => {
+  const original = transport.sendMessage.getMockImplementation()!;
+  transport.sendMessage.mockImplementation(async message => message.type === "LOAD_NODE_STATUS"
+    ? { ok: true, value: { blueprint: { schemaVersion: 2, id: "fd500000-0000-4000-8000-000000000001", version: 2, title: "私人路径", goals: [] }, current: [], history: [], evidence: { ok: true, value: [] } } }
+    : original(message));
+  await act(async () => root.render(<App />));
+  await clickButton("记录");
+  await clickButton("核对节点状态");
+  const select = host.querySelector('[aria-label="路径节点"]');
+  expect(select).not.toBeNull();
+  transport.sendMessage.mockClear();
+  await clickButton("学习");
+  expect(select!.closest<HTMLElement>('[role="tabpanel"]')!.hidden).toBe(true);
+  await clickButton("记录");
+  expect(host.querySelector('[aria-label="路径节点"]')).toBe(select);
+  expect(select!.closest<HTMLElement>('[role="tabpanel"]')!.hidden).toBe(false);
+  expect(transport.sendMessage.mock.calls).toHaveLength(0);
+  preferences = { theme: { id: "eastern", version: 1 }, revision: 2 };
+  await act(async () => window.dispatchEvent(new Event("focus")));
+  await act(async () => tabs.onActivated.addListener.mock.calls[0]![0]({ tabId: 8 }));
+  expect(host.querySelector('[aria-label="路径节点"]')).toBe(select);
+  expect(select!.closest<HTMLElement>('[role="tabpanel"]')!.hidden).toBe(false);
+  expect(transport.sendMessage.mock.calls.some(([message]) => message.type === "LOAD_NODE_STATUS")).toBe(false);
+  transport.sendMessage.mockResolvedValue({ connected: true, userId: "user-b", nodes: [], preferences });
+  await act(async () => storage.addListener.mock.calls[0]![0]({ blueprint_cloud_session_v1: { oldValue: { userId: "user-a" }, newValue: { userId: "user-b" } } }, "local"));
+  expect(host.querySelector('[aria-label="路径节点"]')).toBeNull();
+  expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("学习");
+});
+
 test("a revoked connection does not keep a previous learning success message", async () => {
   await act(async () => root.render(<App />));
   await clickButton("开始学习");
@@ -70,6 +130,7 @@ test("opens an account-bound evidence journal without starting a learning sessio
     : original(message));
   await act(async () => root.render(<App />));
   transport.sendMessage.mockClear();
+  await clickButton("记录");
   await clickButton("记录学习收获");
   expect(host.textContent).toContain("留下一次真实的进步");
   expect(transport.sendMessage.mock.calls.map(([message]) => message)).toEqual([{ type: "LOAD_EVIDENCE", ownerId: "user-a" }]);

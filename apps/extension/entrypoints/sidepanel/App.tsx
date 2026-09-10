@@ -8,6 +8,7 @@ import { resolveTheme, ThemeSurface } from "@blueprint/ui/theme";
 import type { BoundNodeContext } from "../../src/runtime";
 import { EvidencePanel } from "./EvidencePanel";
 import { StatusPanel } from "./StatusPanel";
+import { LearningWorkspace } from "./LearningWorkspace";
 
 type BoundNodeListItem = {
   goalTitle: string;
@@ -299,13 +300,6 @@ export function App() {
               <div className="label">当前视频对应</div>
               <p className="breadcrumb">{context.goalTitle} / {context.stageTitle}</p>
               <h2>{context.nodeTitle}</h2>
-              <div className="learning-purpose"><h3>为什么学习</h3><p>{context.description || "路径尚未填写学习说明。请结合目标与完成依据，判断本次学习的用途。"}</p></div>
-              <dl className="learning-facts">
-                <div><dt>完成依据</dt><dd>{context.completionCriteria || "尚未明确。可回到路径补充，不以观看时长判断掌握。"}</dd></div>
-                <div><dt>节点预计投入</dt><dd>{context.estimatedMinutes == null ? "尚未明确" : `${context.estimatedMinutes} 分钟`}</dd></div>
-              </dl>
-              <Button className="primary" disabled={busy} onClick={() => void startLearning()}>开始学习</Button>
-              <p className="muted learning-note">开始仅记录学习活动，不会将节点标记为完成。</p>
               <Button className="web-link" disabled={busy} onClick={() => void openPath()}>返回此节点路径</Button>
             </Panel>
           ) : (
@@ -315,8 +309,16 @@ export function App() {
               <p className="muted">{contexts.length ? "选择后会展示完成依据，开始学习会话将关联所选节点。已有成果草稿不会自动移动。" : "从下面选择一个已绑定节点，或回到 Web 选择路径。成果草稿不会随视频移动。"}</p>
             </Panel>
           )}
-          {state.userId ? <EvidencePanel ownerId={state.userId} /> : null}
-          {state.userId ? <StatusPanel ownerId={state.userId} /> : null}
+          <LearningWorkspace key={state.userId} learn={<>
+          {context ? <div className="learning-brief">
+            <div className="learning-purpose"><h3>为什么学习</h3><p>{context.description || "路径尚未填写学习说明。请结合目标与完成依据，判断本次学习的用途。"}</p></div>
+            <dl className="learning-facts">
+              <div><dt>完成依据</dt><dd>{context.completionCriteria || "尚未明确。可回到路径补充，不以观看时长判断掌握。"}</dd></div>
+              <div><dt>节点预计投入</dt><dd>{context.estimatedMinutes == null ? "尚未明确" : `${context.estimatedMinutes} 分钟`}</dd></div>
+            </dl>
+            <Button className="primary" disabled={busy} onClick={() => void startLearning()}>开始学习</Button>
+            <p className="muted learning-note">开始仅记录学习活动，不会将节点标记为完成。</p>
+          </div> : null}
           <section className="node-list" aria-label="已绑定的 YouTube 节点">
             <div className="section-heading"><h2>可学习节点</h2><Button disabled={busy} onClick={() => void load()}>刷新</Button></div>
             {state.nodes?.length ? state.nodes.map((item) => (
@@ -326,6 +328,11 @@ export function App() {
               </button>
             )) : <p className="empty">蓝图中还没有 YouTube 资源绑定。</p>}
           </section>
+          </>} record={<>
+            <div className="record-introduction"><h2>把经历留作证据</h2><p className="muted">记录实际收获，再核对完成依据。观看不等于掌握，草稿也不会随当前视频改选节点。</p></div>
+            {state.userId ? <EvidencePanel ownerId={state.userId} /> : null}
+            {state.userId ? <StatusPanel ownerId={state.userId} /> : null}
+          </>} />
           <Button className="web-link" onClick={() => void browser.runtime.sendMessage({ type: "OPEN_WEB" })}>打开 Web 蓝图</Button>
         </>
       )}

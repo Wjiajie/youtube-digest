@@ -16,7 +16,7 @@ test("real MV3 keeps explicit learning context, safe return paths and private dr
         title: index ? "独立完成曝光练习" : "理解曝光组合", description: index ? "在同一场景比较光圈与快门，记录自己的选择理由。" : "先观察画面变化，再判断参数之间的联系。",
         estimatedMinutes: index ? 45 : 20, completionCriteria: index ? "提交三张照片，并解释参数取舍。" : "用自己的话说明曝光变化。", dependencyIds: [],
         resources: [{ id: index ? secondBinding : firstBinding, kind: "youtube_video", externalId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk" }] })) }] }] };
-    let theme = "cyberpunk", offline = false;
+    let theme = "cyberpunk", offline = false, evidenceReads = 0;
     const writes: Array<{ nodeId: string; resourceBindingId: string }> = [];
     await context.route("**/*", async route => {
       const url = new URL(route.request().url());
@@ -26,7 +26,7 @@ test("real MV3 keeps explicit learning context, safe return paths and private dr
       const isOwner = route.request().headers().authorization === `Bearer fixture-${owner}`;
       if (url.pathname === "/api/v1/blueprint") return offline ? route.abort("failed") : route.fulfill({ json: isOwner ? snapshot : { ...snapshot, id: other, goals: [] } });
       if (url.pathname === "/api/v1/account-preferences") return route.fulfill({ json: { theme: { id: theme, version: 1 }, revision: 1 } });
-      if (url.pathname === "/api/v1/progress-evidence" && route.request().method() === "GET") return route.fulfill({ json: [] });
+      if (url.pathname === "/api/v1/progress-evidence" && route.request().method() === "GET") { evidenceReads++; return route.fulfill({ json: [] }); }
       if (url.pathname === "/api/v1/learning-sessions" && route.request().method() === "POST") {
         expect(isOwner).toBe(true); writes.push(route.request().postDataJSON()); return route.fulfill({ status: 201, json: { ok: true } });
       }
@@ -54,14 +54,37 @@ test("real MV3 keeps explicit learning context, safe return paths and private dr
     await expect(panel.getByLabel("本次学习节点", { exact: true })).toHaveValue(secondBinding);
     await expect(panel.getByText("提交三张照片，并解释参数取舍。", { exact: true })).toBeVisible();
     await expect(panel.getByText("45 分钟", { exact: true })).toBeVisible();
+    const learn = panel.getByRole("tab", { name: "学习", exact: true });
+    const record = panel.getByRole("tab", { name: "记录", exact: true });
+    await learn.focus();
+    await learn.press("ArrowRight");
+    await expect(record).toBeFocused();
+    await expect(record).toHaveAttribute("aria-selected", "true");
+    await expect(panel.getByText("45 分钟", { exact: true })).toBeHidden();
+    await expect(panel.getByRole("heading", { name: "独立完成曝光练习", exact: true })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "返回此节点路径", exact: true })).toBeVisible();
+    await record.press("Tab");
+    await expect(panel.getByRole("tabpanel", { name: "记录", exact: true })).toBeFocused();
+    await record.focus(); await record.press("Home");
+    await expect(learn).toBeFocused();
+    await learn.press("End"); await expect(record).toBeFocused();
+    await record.press("ArrowRight"); await expect(learn).toBeFocused();
+    expect(evidenceReads).toBe(0); expect(writes).toHaveLength(0);
     await panel.getByRole("button", { name: "开始学习", exact: true }).focus();
     await panel.getByRole("button", { name: "开始学习", exact: true }).press("Enter");
     await expect(panel.getByText("学习会话已写入你的蓝图。", { exact: true })).toBeVisible();
     expect(writes).toHaveLength(1); expect(writes[0]).toMatchObject({ nodeId: secondNode, resourceBindingId: secondBinding });
+    await record.click();
     await panel.getByRole("button", { name: "记录学习收获", exact: true }).click();
     await panel.getByLabel("关联路径节点", { exact: true }).selectOption(secondNode);
     await panel.getByLabel("这次的收获", { exact: true }).fill("准备重拍三张照片，先保留这份私人草稿。");
+    await learn.click();
+    await expect(panel.getByLabel("这次的收获", { exact: true })).toBeHidden();
+    await record.click();
+    await expect(panel.getByLabel("这次的收获", { exact: true })).toHaveValue("准备重拍三张照片，先保留这份私人草稿。");
+    expect(evidenceReads).toBe(1);
     await panel.getByRole("button", { name: "收起成果记录", exact: true }).click();
+    await learn.click();
     for (const selected of ["cyberpunk", "eastern"]) {
       theme = selected;
       await panel.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -70,7 +93,20 @@ test("real MV3 keeps explicit learning context, safe return paths and private dr
       await panel.setViewportSize({ width: 320, height: 900 });
       expect(await panel.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await panel.screenshot({ path: testInfo.outputPath(`${selected}-context-320.png`), fullPage: true });
+      await record.click();
+      expect(await panel.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      expect((await record.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await panel.screenshot({ path: testInfo.outputPath(`${selected}-record-entry-320.png`), fullPage: true });
+      await learn.click();
     }
+    await panel.emulateMedia({ forcedColors: "active", reducedMotion: "reduce" });
+    await learn.focus(); await learn.press("ArrowLeft");
+    await expect(record).toBeFocused();
+    await expect(panel.getByRole("tabpanel", { name: "记录", exact: true })).toBeVisible();
+    await record.press("ArrowLeft");
+    await expect(learn).toBeFocused();
+    await expect(panel.getByRole("tabpanel", { name: "记录", exact: true })).toBeHidden();
+    await panel.emulateMedia({ forcedColors: "none", reducedMotion: "no-preference" });
     const opened = context.waitForEvent("page");
     await panel.getByRole("button", { name: "返回此节点路径", exact: true }).click();
     const path = await opened;
@@ -86,6 +122,7 @@ test("real MV3 keeps explicit learning context, safe return paths and private dr
     await video.goto("https://www.youtube.com/watch?v=lmnopqrstuv");
     await expect(panel.getByRole("heading", { name: "没有匹配的蓝图节点", exact: true })).toBeVisible();
     await expect(panel.getByRole("button", { name: "开始学习", exact: true })).toHaveCount(0);
+    await record.click();
     await panel.getByRole("button", { name: "记录学习收获", exact: true }).click();
     await expect(panel.getByLabel("这次的收获", { exact: true })).toHaveValue("准备重拍三张照片，先保留这份私人草稿。");
     await expect(panel.getByLabel("关联路径节点", { exact: true })).toHaveValue(secondNode);

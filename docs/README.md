@@ -46,6 +46,7 @@
 40. [扩展明确节点自评](extension-node-assessment.md)：复用 Web 确认规则、核对完成依据、原提交恢复及双主题私人历史；本地增量。
 41. [资源保留与访问核查](resource-retention-research.md)：官方内容权限、数据刷新／删除规则、当前副本清单与启用门槛；不是已实现的清理机制或法律结论。
 42. [执行入口上传防护](execution-upload-protection.md)：规划、澄清、资源共用实际字节限制与绝对读取期限，保留路由认证和独立恢复。
+43. [扩展学习与记录分区](extension-learning-workspace.md)：双主题任务页签、持续挂载的私人草稿／待确认提交、明确当前路径与键盘切换。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 

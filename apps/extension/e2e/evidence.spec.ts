@@ -58,12 +58,20 @@ test("real MV3 journal preserves uncertain drafts, themes and account isolation 
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto(`chrome-extension://${new URL(worker.url()).host}/sidepanel.html`);
+    await page.getByRole("tab", { name: "记录", exact: true }).click();
     await page.getByRole("button", { name: "记录学习收获", exact: true }).click();
     await page.getByLabel("关联路径节点", { exact: true }).selectOption(nodeId);
     await page.getByLabel("这次的收获", { exact: true }).fill("第一次演讲完成，下一次放慢语速。");
     await page.getByRole("button", { name: "保存私人记录", exact: true }).click();
     await expect(page.getByText("尚不能确认是否保存。", { exact: false })).toBeVisible();
+    await page.getByRole("tab", { name: "学习", exact: true }).click();
+    await expect(page.getByLabel("这次的收获", { exact: true })).toBeHidden();
+    await page.getByRole("tab", { name: "记录", exact: true }).click();
+    await expect(page.getByText("尚不能确认是否保存。", { exact: false })).toBeVisible();
+    expect(writes).toBe(1);
     await page.reload();
+    await expect(page.getByRole("tab", { name: "学习", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("tab", { name: "记录", exact: true }).click();
     await page.getByRole("button", { name: "记录学习收获", exact: true }).click();
     await page.getByRole("button", { name: "确认原提交结果", exact: true }).click();
     await expect(page.getByText("记录已保存，仅自己可见。", { exact: false })).toBeVisible();
@@ -81,10 +89,14 @@ test("real MV3 journal preserves uncertain drafts, themes and account isolation 
     }
     await signIn(other);
     await expect(page.getByLabel("这次的收获", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: "学习", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("tab", { name: "记录", exact: true }).click();
     await page.getByRole("button", { name: "记录学习收获", exact: true }).click();
     await expect(page.getByLabel("这次的收获", { exact: true })).toHaveValue("");
     await expect(page.locator("article")).toHaveCount(0);
     await signIn(owner);
+    await expect(page.getByRole("tab", { name: "学习", exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.getByRole("tab", { name: "记录", exact: true }).click();
     await page.getByRole("button", { name: "记录学习收获", exact: true }).click();
     await expect(page.getByLabel("这次的收获", { exact: true })).toHaveValue("下一次练习的私人草稿。");
     expect(errors).toEqual([]);
