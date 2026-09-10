@@ -80,6 +80,9 @@ function Workbench({ accountId, initial, enabled, pendingTurnId, readAction, rea
   }
   function receiveSnapshot(next: ClarificationSnapshot) {
     if (next.session.id !== initial.session.id || next.session.briefId !== initial.session.briefId || next.session.revision < cloudRef.current.revision) throw new Error("Invalid snapshot");
+    // Source invalidation need not advance the summary revision. An older
+    // concurrent read must never reopen a session already observed as terminal.
+    if (cloudRef.current.status !== "active" && next.session.status === "active") return;
     const editing = JSON.stringify(fieldsRef.current) !== JSON.stringify(fieldsFrom(cloudRef.current.content));
     cloudRef.current = next.session;
     setSnapshot(previous => ({ ...next, turns: mergeTurns(previous.turns, next.turns) }));
@@ -252,7 +255,8 @@ function Workbench({ accountId, initial, enabled, pendingTurnId, readAction, rea
         </li>)}</ol>
         <div className="clarify-current"><p className="clarify-eyebrow">{session.mode === "paused" ? "已暂停 · 不会自动继续" : session.mode === "reviewable" ? "等待你核对摘要" : "当前问题"}</p><AiNarrative>{session.question}</AiNarrative></div>
         {pending ? <div className="clarify-pending"><p>本轮结果仍待核对。刷新或离开不会自动重发；取消不保证供应商停止计费。</p>
-          <a href={`/clarification/${session.id}?turn=${pending.id}`}>本轮恢复链接</a><Button disabled={cancelling} onClick={() => void cancel()}>取消本轮</Button></div> : null}
+          <a href={`/clarification/${session.id}?turn=${pending.id}`} target="_blank" rel="noopener" aria-describedby="clarify-recovery-tab">本轮恢复链接</a>
+          <p id="clarify-recovery-tab">在新标签页核对，保留当前页面的生成请求。</p><Button disabled={cancelling} onClick={() => void cancel()}>取消本轮</Button></div> : null}
         <form onSubmit={event => { event.preventDefault(); void send(); }}>
           <label className="clarify-field"><span>你的回答</span><textarea aria-label="你的回答" rows={4} maxLength={8000} value={answer} readOnly={readOnly} onChange={event => changeAnswer(event.target.value)} /></label>
           <div className="clarify-composer-footer"><small>{answer.length} / 8000</small><Button type="submit" disabled={!enabled || !answer.trim() || readOnly || needsRead || dirty || conflict || windowFull}>发送回答</Button></div>

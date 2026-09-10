@@ -69,16 +69,18 @@ for (const theme of ["cyberpunk", "eastern"]) {
       expect((await client.from("goal_clarification_turns").select("id")).data).toEqual([]);
       execFileSync("docker", ["exec", "supabase_db_blueprint-local", "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-c",
         `insert into private.goal_clarification_quotas(owner_id,available_attempts) values ('${id}',1);`], { stdio: "pipe" });
-      const completed = page.waitForResponse(response => response.url().endsWith("/api/clarification/turns") && response.request().method() === "POST");
+      const completed = page.waitForResponse(response => response.url().endsWith("/api/clarification/turns") && response.request().method() === "POST").catch(() => null);
       await page.getByLabel("你的回答", { exact: true }).fill("我想制作摄影作品。我会用相机。每周180分钟。成功依据是六张照片与取舍记录。");
       await page.getByRole("button", { name: "发送回答", exact: true }).click();
       await expect(page).toHaveURL(/\?turn=[0-9a-f-]+$/);
       const recoveryUrl = page.url();
-      const recovered = await context.newPage();
-      await recovered.goto(recoveryUrl);
+      const [recovered] = await Promise.all([context.waitForEvent("page", { timeout: 5000 }),
+        page.getByRole("link", { name: "本轮恢复链接", exact: true }).click()]);
+      await expect(recovered).toHaveURL(recoveryUrl);
       await expect(recovered.getByRole("button", { name: "取消本轮", exact: true })).toBeVisible();
       await expect(recovered.locator("[data-bp-theme]").first()).toHaveAttribute("data-bp-theme", theme);
       const response = await completed;
+      if (!response) throw new Error("Original generation request was interrupted");
       expect(response.status()).toBe(200);
       const receipt = await response.json();
       expect(receipt).toEqual({ ok: true, turnId: expect.any(String), status: "ready" });

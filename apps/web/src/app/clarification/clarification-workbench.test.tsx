@@ -243,3 +243,22 @@ it("keeps new generation locked between a settled turn read and the current summ
   await act(async () => cloud.resolve({ ok: true, value: initial }));
   expect(button("发送回答").disabled).toBe(false);
 });
+it("does not reactivate a stale session when the earlier edit's current-state read arrives last", async () => {
+  const content = { ...initial.session.content, startingPoint: "已修正的起点" };
+  const edited = { ...initial, session: { ...initial.session, content, revision: 2 } };
+  const stale = { ...edited, session: { ...edited.session, status: "stale" as const } };
+  const earlier = deferred<Awaited<ReturnType<ClarificationWorkbenchProps["readAction"]>>>();
+  let reads = 0;
+  await act(async () => root.render(<ClarificationWorkbench {...props({
+    editAction: async () => ({ ok: true, value: edited.session }),
+    readAction: () => ++reads === 1 ? earlier.promise : Promise.resolve({ ok: true, value: stale }),
+  })} />));
+  await enter("我的起点", content.startingPoint);
+  await act(async () => button("更新工作摘要").click());
+  await act(async () => button("刷新云端记录").click());
+  expect(host.textContent).toContain("来源目标定义已变化，本会话只读");
+  await act(async () => earlier.resolve({ ok: true, value: edited }));
+  expect(host.textContent).toContain("来源目标定义已变化，本会话只读");
+  expect(input("我的起点").readOnly).toBe(true);
+  expect(button("保存草稿").disabled).toBe(true);
+});
