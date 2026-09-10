@@ -2,6 +2,8 @@
 
 Not a complete collision solver: crossing edges are a sufficient defect witness,
 not proof that no face interiors, hands, accessories or subframes intersect.
+The authored top row is reported separately: moving only the loose panels cannot
+clear a crossed waist edge while keeping both its ends and the trousers fixed.
 Run the offline Blender factory/disable-autoexec invocation; args: action frame
 or --all-actions for every integer frame plus fractional authored endpoints.
 """
@@ -24,6 +26,12 @@ arm.data.pose_position = "POSE"
 arm.animation_data.use_nla = False
 robes = [obj for obj in bpy.context.scene.objects if obj.name.startswith("Eastern / split robe ")]
 assert len(robes) == 4
+waist_vertices = {}
+for obj in robes:
+    top = max(vertex.co.z for vertex in obj.data.vertices)
+    boundary = {vertex.index for vertex in obj.data.vertices if abs(vertex.co.z - top) < 1e-6}
+    assert len(boundary) == 13, "This audit expects the authored 13-vertex robe waist row"
+    waist_vertices[obj.name] = boundary
 
 
 def check_pose(action, frame):
@@ -36,7 +44,7 @@ def check_pose(action, frame):
     leg_points = [legs.matrix_world @ vertex.co for vertex in legs.data.vertices]
     assert leg_points and all(math.isfinite(value) for point in leg_points for value in point)
     tree = BVHTree.FromPolygons(leg_points, [tuple(face.vertices) for face in legs.data.polygons])
-    crossings = []
+    crossings, waist_crossings = [], []
     for obj in robes:
         evaluated = obj.evaluated_get(graph)
         points = [evaluated.matrix_world @ vertex.co for vertex in evaluated.data.vertices]
@@ -49,8 +57,12 @@ def check_pose(action, frame):
             direction = delta.normalized()
             hit, normal, face, distance = tree.ray_cast(start + direction * 1e-6, direction, delta.length - 2e-6)
             if hit is not None:
-                crossings.append({"robe": obj.name, "edge": edge.index, "leg_face": face, "point": list(hit)})
-    return {"action": action.name, "frame": frame, "crossing_count": len(crossings), "witnesses": crossings[:2]}
+                witness = {"robe": obj.name, "edge": edge.index, "vertices": list(edge.vertices), "leg_face": face, "point": list(hit)}
+                crossings.append(witness)
+                if all(index in waist_vertices[obj.name] for index in edge.vertices):
+                    waist_crossings.append(witness)
+    return {"action": action.name, "frame": frame, "crossing_count": len(crossings), "witnesses": crossings[:2],
+            "waist_crossing_count": len(waist_crossings), "waist_witnesses": waist_crossings[:2]}
 
 
 if arguments == ["--all-actions"]:
@@ -65,7 +77,9 @@ failures = [result for result in results if result["crossing_count"]]
 assert hashlib.sha256(source.read_bytes()).hexdigest() == source_hash
 summary = [{"action": name, "samples": sum(row["action"] == name for row in results),
             "failing_frames": sum(row["action"] == name for row in failures),
-            "maximum_crossings": max(row["crossing_count"] for row in results if row["action"] == name)}
+            "maximum_crossings": max(row["crossing_count"] for row in results if row["action"] == name),
+            "waist_failing_frames": sum(row["waist_crossing_count"] > 0 for row in results if row["action"] == name),
+            "maximum_waist_crossings": max(row["waist_crossing_count"] for row in results if row["action"] == name)}
            for name in sorted({row["action"] for row in results})]
 print("ROBE_CLEARANCE " + json.dumps({"source_sha256": source_hash, "samples": len(results), "actions": summary,
       "worst_witnesses": sorted(failures, key=lambda row: row["crossing_count"], reverse=True)[:5],
