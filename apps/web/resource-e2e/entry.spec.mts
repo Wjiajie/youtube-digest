@@ -57,6 +57,8 @@ test(disabled ? "disabled resource entry keeps a real signed-in account from res
   const calls = async () => (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json();
   await context.request.post("http://127.0.0.1:3166/fixture/reset");
   if (disabled) {
+    const adoption = await request({ kind: "adopt", adoptionId: randomUUID(), sourceRunId: randomUUID(), videoId: "abcdefghijk", replaceBindingId: null, accountId: owner.id });
+    expect(adoption.status()).toBe(503); expect(await adoption.json()).toEqual({ ok: false, code: "disabled" });
     const response = await request(command);
     expect(response.status()).toBe(503); expect(await response.json()).toEqual({ ok: false, code: "disabled" });
     expect(response.headers()["cache-control"]).toBe("private, no-store");
@@ -128,6 +130,19 @@ test(disabled ? "disabled resource entry keeps a real signed-in account from res
   const stranger = await account();
   expect((await context.request.post(edgeUrl, { headers: { ...edgeHeaders, Authorization: `Bearer ${stranger.token}` }, data: edgeBody })).status()).toBe(404);
   expect((await read(command.runId)).status).toBe("ready");
+  const adoption = { kind: "adopt", adoptionId: randomUUID(), sourceRunId: match.runId, videoId: "abcdefghijk", replaceBindingId: null, accountId: owner.id };
+  expect((await request(adoption)).status()).toBe(429);
+  execFileSync("docker", ["exec", "-i", "supabase_db_blueprint-local", "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1"], {
+    input: `insert into private.resource_adoption_quotas(owner_id,available_attempts) values ('${owner.id}',1);`, stdio: "pipe",
+  });
+  const adoptionResponse = await request(adoption);
+  expect(adoptionResponse.status()).toBe(200);
+  expect(await adoptionResponse.json()).toEqual({ ok: true, adoptionId: adoption.adoptionId, status: "ready" });
+  expect((await request(adoption)).status()).toBe(200);
+  expect(await calls()).toHaveLength(6);
+  const adoptionRead = await owner.client.rpc("read_resource_adoption", { p_adoption_id: adoption.adoptionId });
+  expect(adoptionRead.error).toBeNull(); expect(adoptionRead.data.proposal_id).toBeTruthy();
+  expect((await store.getMainBlueprint(owner.id))?.version).toBe(1);
   await context.clearCookies();
   expect((await request(match)).status()).toBe(401);
 });
@@ -152,21 +167,23 @@ test("a stalled authenticated upload reaches its deadline without reserving an o
   expect(await (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json()).toEqual([]);
 });
 
-for (const theme of ["cyberpunk", "eastern"] as const) test(`resource workbench ${theme}: real node → discovery → captions → matching → recover and cancel`, async ({ page, context }, testInfo) => {
+for (const theme of ["cyberpunk", "eastern"] as const) test(`resource workbench ${theme}: discover → match → verify → explicitly append or replace without losing learning history`, async ({ page, context }, testInfo) => {
   test.skip(disabled, "The separate off-switch test verifies disabled execution; this journey explicitly enables fixtures.");
   const owner = await account(context), actor = { userId: owner.id, client: "web" as const };
   const store = createSupabaseBlueprintStore(owner.client), current = await store.getMainBlueprint(owner.id);
   if (!current) throw new Error("Missing Blueprint");
-  const nodeId = randomUUID(), goalId = randomUUID();
+  const nodeId = randomUUID(), goalId = randomUUID(), oldBindingId = randomUUID();
+  const originalResources = theme === "eastern" ? [{ id: oldBindingId, kind: "youtube_video" as const, externalId: "lmnopqrstuv", url: "https://www.youtube.com/watch?v=lmnopqrstuv" }] : [];
   const app = createBlueprintApplication({ store, newId: randomUUID, now: () => new Date() });
   const proposed = await app.createProposal(actor, { baseVersion: 0, clientMutationId: randomUUID(), draft: { ...current,
     goals: [{ id: goalId, title: "用照片讲一个真实的故事", position: 0, stages: [{ id: randomUUID(), title: "掌握光线与曝光", position: 0,
       nodes: [{ id: nodeId, title: "比较光圈与快门的组合", type: "learn", position: 0, estimatedMinutes: 30,
-        description: "在同一场景拍摄，观察主体与背景的变化。", completionCriteria: "提交三组照片，解释参数取舍。", dependencyIds: [], resources: [] }] }] }] } });
+        description: "在同一场景拍摄，观察主体与背景的变化。", completionCriteria: "提交三组照片，解释参数取舍。", dependencyIds: [], resources: originalResources }] }] }] } });
   if (!proposed.ok) throw new Error("Missing proposal");
   expect((await app.applyProposal(actor, { proposalId: proposed.value.id, expectedVersion: 0, clientMutationId: randomUUID() })).ok).toBe(true);
+  if (theme === "eastern") expect((await app.startLearningSession(actor, { nodeId, resourceBindingId: oldBindingId, clientMutationId: randomUUID(), startedAt: new Date().toISOString() })).ok).toBe(true);
   execFileSync("docker", ["exec", "-i", "supabase_db_blueprint-local", "psql", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1"], {
-    input: `insert into private.resource_quotas(owner_id,kind,available_attempts) values ('${owner.id}','discover',3),('${owner.id}','captions',1),('${owner.id}','match',1);`, stdio: "pipe",
+    input: `insert into private.resource_quotas(owner_id,kind,available_attempts) values ('${owner.id}','discover',3),('${owner.id}','captions',1),('${owner.id}','match',1); insert into private.resource_adoption_quotas(owner_id,available_attempts) values ('${owner.id}',1);`, stdio: "pipe",
   });
   const errors: string[] = []; context.on("page", tab => tab.on("pageerror", error => errors.push(error.message)));
   page.on("pageerror", error => errors.push(error.message));
@@ -229,7 +246,43 @@ for (const theme of ["cyberpunk", "eastern"] as const) test(`resource workbench 
   expect((await owner.client.rpc("read_resource_run", { p_run_id: queued })).data.status).toBe("cancelled");
   expect((await store.getMainBlueprint(owner.id))?.version).toBe(1);
   expect(await (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json()).toHaveLength(5);
+  if (theme === "eastern") {
+    await expect(matchPage.getByRole("button", { name: "核验并准备采用", exact: true })).toBeDisabled();
+    await matchPage.getByRole("combobox", { name: "资源变更方式", exact: true }).selectOption(oldBindingId);
+  }
+  const verifying = matchPage.waitForResponse(response => response.url().endsWith("/api/resources/runs") && response.request().method() === "POST");
+  await matchPage.getByRole("button", { name: "核验并准备采用", exact: true }).click();
+  expect((await verifying).status()).toBe(200);
+  const adoptionPopup = context.waitForEvent("page");
+  await matchPage.getByRole("link", { name: "打开本次采用记录", exact: true }).click();
+  const adoptionPage = await adoptionPopup; await adoptionPage.waitForLoadState("domcontentloaded");
+  await expect(adoptionPage.getByRole("heading", { name: "请确认资源变更", exact: true })).toBeVisible();
+  await expect(adoptionPage.locator("[data-bp-theme]").first()).toHaveAttribute("data-bp-theme", theme);
+  expect((await store.getMainBlueprint(owner.id))?.version).toBe(1);
+  expect(await (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json()).toHaveLength(6);
+  expect(await adoptionPage.content()).not.toContain("Match Resources to a Learning Path Node");
+  expect(await adoptionPage.content()).not.toContain("Compare aperture and shutter speed.");
+  if (theme === "eastern") await expect(adoptionPage.getByText("YouTube · lmnopqrstuv", { exact: true })).toBeVisible();
+  for (const width of [1440, 320]) {
+    await adoptionPage.setViewportSize({ width, height: 1000 });
+    expect(await adoptionPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await adoptionPage.screenshot({ path: testInfo.outputPath(`${theme}-adoption-${width}.png`), fullPage: true });
+  }
+  await adoptionPage.getByRole("button", { name: "确认并绑定资源", exact: true }).click();
+  await expect(adoptionPage.getByRole("heading", { name: "已绑定到正式路径", exact: true })).toBeVisible();
+  await adoptionPage.reload();
+  await expect(adoptionPage.getByText("资源已写入正式蓝图 v2；没有将节点标记为完成。", { exact: true })).toBeVisible();
+  const formal = await store.getMainBlueprint(owner.id);
+  expect(formal?.version).toBe(2);
+  expect(formal?.goals[0].stages[0].nodes[0].resources).toEqual([{ id: expect.any(String), kind: "youtube_video", externalId: "abcdefghijk", url: "https://www.youtube.com/watch?v=abcdefghijk" }]);
+  expect(formal?.goals[0].stages[0].nodes[0].resources[0].id).not.toBe(oldBindingId);
+  if (theme === "eastern") expect(await app.listLearningSessions(actor)).toMatchObject({ ok: true, value: [{ resourceBindingId: oldBindingId }] });
+  await matchPage.reload();
+  await expect(matchPage.locator(`a[href="${new URL(adoptionPage.url()).pathname}"]`)).toHaveCount(1);
+  expect(await (await context.request.get("http://127.0.0.1:3166/fixture/calls")).json()).toHaveLength(6);
   await account(context);
+  await adoptionPage.getByRole("button", { name: "读取采用记录", exact: true }).click();
+  await expect(adoptionPage.getByRole("heading", { name: "比较光圈与快门的组合", exact: true })).toHaveCount(0);
   await matchPage.getByRole("button", { name: "读取最新状态", exact: true }).click();
   await expect(matchPage.getByRole("heading", { name: "比较光圈与快门的组合", exact: true })).toHaveCount(0);
   await expect(matchPage.getByText("Compare aperture and shutter speed.", { exact: true })).toHaveCount(0);

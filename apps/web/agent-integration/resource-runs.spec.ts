@@ -12,6 +12,11 @@ import type { ResourceWorker } from "../src/lib/agent/resource-worker";
 import { createSupabaseBlueprintStore } from "../src/lib/supabase/store";
 import { createResourceProvider } from "../src/lib/resources/provider";
 import { createPlanningModel } from "../src/lib/agent/planning-runtime";
+import { createCloudResourceAdoption } from "../src/lib/agent/cloud-resource-adoption";
+import { createResourceAdoptionAccess } from "../src/lib/agent/resource-adoption-access";
+import { createVideoVerification } from "../src/lib/resources/verification";
+import type { ResourceAdoptionWorker } from "../src/lib/agent/resource-adoption";
+import { createResourceAdoptionWorkspace } from "../src/lib/agent/resource-adoption-workspace";
 
 const local = localSupabaseTestConfig();
 const authOptions = { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false };
@@ -101,9 +106,93 @@ async function externalFixture(options: { pending?: boolean; jobStillPending?: b
     if (!["https://www.googleapis.com", "https://api.supadata.ai", "https://api.deepseek.com"].includes(url.origin)) throw new Error("Unexpected external origin");
     return fetch(`http://127.0.0.1:${address.port}${url.pathname}${url.search}`, init);
   };
-  return { calls, modelBodies, provider: createResourceProvider({ youtubeApiKey: "fixture-youtube-key", supadataApiKey: "fixture-native-key", fetch: fetcher }),
+  return { calls, modelBodies, fetch: fetcher, provider: createResourceProvider({ youtubeApiKey: "fixture-youtube-key", supadataApiKey: "fixture-native-key", fetch: fetcher }),
     model: createPlanningModel("fixture-model-key", fetcher) };
 }
+
+function adoptionWorker(ownerId: string): ResourceAdoptionWorker {
+  return { claim: async input => await admin.rpc("claim_resource_adoption", { p_owner_id: ownerId, p_adoption_id: input.adoptionId, p_lease_id: input.leaseId }),
+    finish: async input => await admin.rpc("finish_resource_adoption", { p_owner_id: ownerId, p_adoption_id: input.adoptionId, p_lease_id: input.leaseId, p_result: input.result }) };
+}
+
+it("freshly verifies a matched candidate once, prepares an immutable proposal, and only explicit confirmation binds it", async () => {
+  const owner = await fixture(), external = await externalFixture();
+  const resources = createCloudResourceRunner({ ...owner, ...external });
+  expect((await resources.run(owner.command, signal())).ok).toBe(true);
+  const sourceRunId = randomUUID();
+  const match = await resources.run({ kind: "match", runId: sourceRunId, sourceRunId: owner.command.runId }, signal());
+  expect(match).toMatchObject({ ok: true, run: { status: "ready", result: { status: "matched" } } });
+  localSql(`insert into private.resource_adoption_quotas(owner_id,available_attempts) values ('${owner.id}',1);`);
+  const command = { adoptionId: randomUUID(), sourceRunId, videoId, replaceBindingId: null };
+  const adoption = createCloudResourceAdoption({ client: owner.client, actor: owner.actor, worker: adoptionWorker(owner.id),
+    verification: createVideoVerification({ youtubeApiKey: "fixture-youtube-key", fetch: external.fetch }) });
+  const prepared = await adoption.run(command, signal());
+  expect(prepared).toMatchObject({ ok: true, adoption: { id: command.adoptionId, status: "ready", result: { status: "verified" } } });
+  if (!prepared.ok || !prepared.adoption.proposalId) throw new Error("Missing prepared adoption");
+  const workspace = createResourceAdoptionWorkspace(owner.client, owner.actor);
+  const review = await workspace.read(command.adoptionId);
+  expect(review).toMatchObject({ ok: true, value: { nodeTitle: "曝光", before: [], after: [{ videoId }], proposal: { status: "pending" } } });
+  expect(JSON.stringify(review)).not.toMatch(/instructions|segments|owned-native-job|input_blueprint/);
+  expect((await owner.store.getMainBlueprint(owner.id))?.version).toBe(1);
+  expect(external.calls).toEqual(["/youtube/v3/search", "/youtube/v3/videos", "/v1/transcript", "/chat/completions", "/youtube/v3/videos"]);
+  expect(await adoption.run(command, signal())).toEqual(prepared);
+  expect(external.calls).toHaveLength(5);
+  const access = createResourceAdoptionAccess(owner.client, owner.actor);
+  const applied = await access.apply(command.adoptionId, prepared.adoption.proposalId, 1);
+  expect(applied).toMatchObject({ ok: true, adoption: { status: "applied" } });
+  expect(await workspace.read(command.adoptionId)).toMatchObject({ ok: true, value: { status: "applied", proposal: { appliedVersion: 2 } } });
+  expect(await access.apply(command.adoptionId, prepared.adoption.proposalId, 1)).toEqual(applied);
+  const official = await owner.store.getMainBlueprint(owner.id);
+  expect(official?.version).toBe(2);
+  expect(official?.goals[0].stages[0].nodes[0].resources).toEqual([{ id: prepared.adoption.newBindingId, kind: "youtube_video", url: `https://www.youtube.com/watch?v=${videoId}`, externalId: videoId }]);
+  expect(external.calls).toHaveLength(5);
+});
+
+it("keeps expired adoption proposals reviewable but unapplyable, isolated and explicitly rejectable without another provider call", async () => {
+  const owner = await fixture(), outsider = await fixture(), external = await externalFixture();
+  const resources = createCloudResourceRunner({ ...owner, ...external });
+  expect((await resources.run(owner.command, signal())).ok).toBe(true);
+  const sourceRunId = randomUUID();
+  expect((await resources.run({ kind: "match", runId: sourceRunId, sourceRunId: owner.command.runId }, signal())).ok).toBe(true);
+  localSql(`insert into private.resource_adoption_quotas(owner_id,available_attempts) values ('${owner.id}',1);`);
+  const command = { adoptionId: randomUUID(), sourceRunId, videoId, replaceBindingId: null };
+  const runner = createCloudResourceAdoption({ client: owner.client, actor: owner.actor, worker: adoptionWorker(owner.id), verification: createVideoVerification({ youtubeApiKey: "fixture-key", fetch: external.fetch }) });
+  const ready = await runner.run(command, signal());
+  if (!ready.ok || !ready.adoption.proposalId) throw new Error("Missing adoption proposal");
+  const workspace = createResourceAdoptionWorkspace(owner.client, owner.actor);
+  expect(await createResourceAdoptionWorkspace(outsider.client, outsider.actor).read(command.adoptionId)).toEqual({ ok: false, code: "not_found" });
+  expect(await createResourceAdoptionAccess(owner.client, { ...owner.actor, client: "extension" }).read(command.adoptionId)).toEqual({ ok: false, code: "forbidden" });
+  // Clock boundary only: retain a coherent elapsed verification window in this disposable fixture.
+  localSql(`update public.resource_adoptions set verified_at=clock_timestamp()-interval '11 minutes',valid_until=clock_timestamp()-interval '1 minute' where id='${command.adoptionId}';`);
+  expect(await workspace.read(command.adoptionId)).toMatchObject({ ok: true, value: { status: "stale", after: [{ videoId }], proposal: { status: "pending" } } });
+  expect(await workspace.apply(command.adoptionId, ready.adoption.proposalId, 1)).toEqual({ ok: false, code: "version_conflict" });
+  expect(await workspace.reject(command.adoptionId)).toMatchObject({ ok: true, value: { status: "rejected", proposal: { status: "rejected" } } });
+  expect(await workspace.reject(command.adoptionId)).toMatchObject({ ok: true, value: { status: "rejected" } });
+  expect((await owner.store.getMainBlueprint(owner.id))?.version).toBe(1);
+  expect(external.calls).toHaveLength(5);
+});
+
+it("retains a failed fresh verification for recovery and cancels a queued verification without external work", async () => {
+  const owner = await fixture(), options = { rateLimit: false }, external = await externalFixture(options);
+  const resources = createCloudResourceRunner({ ...owner, ...external });
+  expect((await resources.run(owner.command, signal())).ok).toBe(true);
+  const sourceRunId = randomUUID();
+  expect((await resources.run({ kind: "match", runId: sourceRunId, sourceRunId: owner.command.runId }, signal())).ok).toBe(true);
+  localSql(`insert into private.resource_adoption_quotas(owner_id,available_attempts) values ('${owner.id}',2);`);
+  const command = { adoptionId: randomUUID(), sourceRunId, videoId, replaceBindingId: null };
+  options.rateLimit = true;
+  const runner = createCloudResourceAdoption({ client: owner.client, actor: owner.actor, worker: adoptionWorker(owner.id), verification: createVideoVerification({ youtubeApiKey: "fixture-key", fetch: external.fetch }) });
+  expect(await runner.run(command, signal())).toMatchObject({ ok: true, adoption: { status: "failed", result: { status: "rate_limited" }, proposalId: null } });
+  const workspace = createResourceAdoptionWorkspace(owner.client, owner.actor);
+  expect(await workspace.read(command.adoptionId)).toMatchObject({ ok: true, value: { status: "failed", outcome: "rate_limited", after: null, proposal: null } });
+  expect(await runner.run(command, signal())).toMatchObject({ ok: true, adoption: { status: "failed" } });
+  const queued = { ...command, adoptionId: randomUUID() };
+  expect((await owner.client.rpc("begin_resource_adoption", { p_request: queued })).error).toBeNull();
+  expect(await workspace.cancel(queued.adoptionId)).toMatchObject({ ok: true, value: { status: "cancelled", proposal: null } });
+  expect(await workspace.cancel(queued.adoptionId)).toMatchObject({ ok: true, value: { status: "cancelled" } });
+  expect(external.calls).toHaveLength(5);
+  expect((await owner.store.getMainBlueprint(owner.id))?.version).toBe(1);
+});
 
 it("persists an account's discovery → explicit native-job read → grounded match and recovers each without new external calls", async () => {
   const owner = await fixture(), external = await externalFixture({ pending: true });

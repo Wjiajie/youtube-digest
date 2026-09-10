@@ -63,12 +63,14 @@ try {
     const statusUpgrade = file.endsWith("_node_status_confirmations.sql") ? await seedStatusUpgrade() : null;
     const clarificationUpgrade = file.endsWith("_goal_clarification_sessions.sql") ? await seedClarificationUpgrade() : null;
     const resourceUpgrade = file.endsWith("_resource_runs.sql") ? await captureResourceUpgrade() : null;
+    const adoptionUpgrade = file.endsWith("_resource_adoption.sql") ? await seedAdoptionUpgrade() : null;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
     if (legacy) await verifyLegacyPlanningUpgrade(legacy);
     if (statusUpgrade) await verifyStatusUpgrade(statusUpgrade);
     if (clarificationUpgrade) await verifyClarificationUpgrade(clarificationUpgrade);
     if (resourceUpgrade) await verifyResourceUpgrade(resourceUpgrade);
+    if (adoptionUpgrade) await verifyAdoptionUpgrade(adoptionUpgrade);
   }
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
@@ -474,4 +476,52 @@ async function verifyResourceUpgrade(before) {
     has_table_privilege('service_role','private.resource_quotas','DELETE') as quota_delete`)).rows[0];
   assert.deepEqual(acl, { anon_begin: false, user_claim: false, admin_direct_write: false, user_lease: false, quota_delete: false },
     "resource migration retains narrow explicit execution and quota privileges");
+}
+
+async function seedAdoptionUpgrade() {
+  await db.exec("reset role");
+  const owner = "d8000000-0000-4000-8000-000000000001";
+  const node = "d8000000-0000-4000-8000-000000000012";
+  const binding = "d8000000-0000-4000-8000-000000000013";
+  await db.query("insert into auth.users(id,email) values($1,'adoption-upgrade@example.test')", [owner]);
+  await db.query(`insert into public.goals(id,owner_id,blueprint_id,title,position)
+    select 'd8000000-0000-4000-8000-000000000010',owner_id,id,'Preserved goal',0 from public.blueprints where owner_id=$1`, [owner]);
+  await db.query(`insert into public.stages(id,owner_id,goal_id,title,position)
+    values('d8000000-0000-4000-8000-000000000011',$1,'d8000000-0000-4000-8000-000000000010','Preserved stage',0)`, [owner]);
+  await db.query(`insert into public.path_nodes(id,owner_id,stage_id,node_type,title,position)
+    values($2,$1,'d8000000-0000-4000-8000-000000000011','learn','Preserved node',0)`, [owner, node]);
+  await db.query(`insert into public.resource_bindings(id,owner_id,node_id,kind,url,external_id,position)
+    values($3,$1,$2,'youtube_video','https://www.youtube.com/watch?v=abcdefghijk','abcdefghijk',0)`, [owner, node, binding]);
+  await becomeUser(owner);
+  const snapshot = (await db.query("select public.read_blueprint_snapshot_v2($1) as value", [owner])).rows[0].value;
+  await db.query(`insert into public.learning_sessions(owner_id,node_id,resource_binding_id,source,started_at,client_mutation_id)
+    values($1,$2,$3,'extension',now(),gen_random_uuid())`, [owner, node, binding]);
+  await db.query(`insert into public.blueprint_proposals(owner_id,blueprint_id,base_version,proposed_snapshot,client_mutation_id)
+    values($1,$2,0,$3,gen_random_uuid())`, [owner, snapshot.id, snapshot]);
+  await db.exec("reset role");
+  await db.query(`insert into public.resource_runs(id,owner_id,blueprint_id,blueprint_version,node_id,kind,preferences,learner_context,input_blueprint,result,status,expires_at)
+    values('d8000000-0000-4000-8000-000000000020',$1,$2,0,$3,'discover','{}','{}',$4,'{"status":"discovered","candidates":[]}','ready',now()+interval '120 seconds')`, [owner, snapshot.id, node, snapshot]);
+  return captureResourceUpgrade();
+}
+
+async function verifyAdoptionUpgrade(before) {
+  assert.deepEqual(await captureResourceUpgrade(), {
+    ...before,
+    "public.resource_adoptions": [],
+    "private.resource_adoption_quotas": [],
+    "private.resource_adoption_leases": [],
+  }, "adoption migration preserves exact pre-existing source, proposal, binding and learning-session rows without fabricating allowance");
+  const acl = (await db.query(`select
+    has_function_privilege('anon','public.begin_resource_adoption(jsonb)','EXECUTE') as anon_begin,
+    has_function_privilege('authenticated','public.claim_resource_adoption(uuid,uuid,uuid)','EXECUTE') as user_claim,
+    has_function_privilege('authenticated','private.apply_blueprint_proposal_pre_adoption(uuid,bigint,uuid)','EXECUTE') as old_guard,
+    has_table_privilege('service_role','public.resource_adoptions','UPDATE') as direct_update,
+    has_table_privilege('authenticated','private.resource_adoption_leases','SELECT') as private_lease,
+    has_table_privilege('service_role','private.resource_adoption_quotas','DELETE') as quota_delete`)).rows[0];
+  assert.deepEqual(acl, { anon_begin: false, user_claim: false, old_guard: false, direct_update: false, private_lease: false, quota_delete: false },
+    "adoption migration preserves narrow grants and cannot expose legacy apply bypass");
+  await becomeUser("d9000000-0000-4000-8000-000000000101");
+  assert.equal(Number((await db.query("select public.apply_blueprint_proposal('d9000000-0000-4000-8000-000000000140',0,'d9000000-0000-4000-8000-000000000160') as version")).rows[0].version), 1,
+    "new adoption guard retains exact historical manual apply receipt");
+  await db.exec("reset role");
 }

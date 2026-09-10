@@ -1,6 +1,6 @@
 import { createVerifiedWorker, object, exact, uuid, skill, usage, string, integer, array, type RecordValue, type Environment, type ClientFactory } from "../_shared/verified-worker.ts";
 
-type ResourceRpc = "claim_resource_run" | "finish_resource_run";
+type ResourceRpc = "claim_resource_run" | "finish_resource_run" | "claim_resource_adoption" | "finish_resource_adoption";
 const videoId = (value: unknown) => string(value, 11, 11) && /^[A-Za-z0-9_-]{11}$/.test(value);
 const language = (value: unknown) => string(value, 21, 2) && /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,2}$/.test(value);
 const region = (value: unknown) => string(value, 2, 2) && /^[A-Z]{2}$/.test(value);
@@ -89,10 +89,21 @@ function matched(value: RecordValue): boolean {
       && videoId(item.videoId) && integer(item.totalSegments, 1) && integer(item.sampledSegments, 1, 24) && typeof item.textTruncated === "boolean", 1);
 }
 const safeErrors: Record<string, string[]> = {
-  "42501": ["RESOURCE_FORBIDDEN"], P0002: ["RESOURCE_NOT_FOUND"],
-  "22023": ["RESOURCE_INVALID", "RESOURCE_INVALID_SKILL", "RESOURCE_INVALID_RESULT", "RESOURCE_COMPLETION_REUSED", "RESOURCE_INVALID_STATE", "RESOURCE_RUN_REUSED", "RESOURCE_SOURCE_CONSUMED"],
-  "40001": ["RESOURCE_VERSION_CONFLICT"], P0001: ["RESOURCE_BUSY", "RESOURCE_QUOTA_EXHAUSTED"],
+  "42501": ["RESOURCE_FORBIDDEN", "RESOURCE_ADOPTION_FORBIDDEN"], P0002: ["RESOURCE_NOT_FOUND", "RESOURCE_ADOPTION_NOT_FOUND"],
+  "22023": ["RESOURCE_INVALID", "RESOURCE_INVALID_SKILL", "RESOURCE_INVALID_RESULT", "RESOURCE_COMPLETION_REUSED", "RESOURCE_INVALID_STATE", "RESOURCE_RUN_REUSED", "RESOURCE_SOURCE_CONSUMED",
+    "RESOURCE_ADOPTION_INVALID", "RESOURCE_ADOPTION_RUN_REUSED", "RESOURCE_ADOPTION_INVALID_STATE", "RESOURCE_ADOPTION_INVALID_RESULT", "RESOURCE_ADOPTION_COMPLETION_REUSED"],
+  "40001": ["RESOURCE_VERSION_CONFLICT", "RESOURCE_ADOPTION_SOURCE_CHANGED", "RESOURCE_ADOPTION_VERIFICATION_EXPIRED"],
+  "23514": ["RESOURCE_ADOPTION_PROPOSAL_INVALID"],
+  P0001: ["RESOURCE_BUSY", "RESOURCE_QUOTA_EXHAUSTED", "RESOURCE_ADOPTION_BUSY", "RESOURCE_ADOPTION_QUOTA_EXHAUSTED"],
 };
+
+function verification(value: unknown): boolean {
+  if (!object(value)) return false;
+  if (value.status !== "verified") return exact(value, ["status"]) && oneOf(value.status, [...failures, "not_available", "changed"]);
+  const v = value.video;
+  return exact(value, ["status", "video"]) && object(v) && exact(v, ["videoId", "title", "channelTitle", "publishedAt", "durationSeconds"])
+    && videoId(v.videoId) && string(v.title, 500, 1) && string(v.channelTitle, 500, 1) && timestamp(v.publishedAt) && integer(v.durationSeconds, 1, 86400);
+}
 
 /** Fixed persistence operations; discovery and inference remain in the Node runner. */
 export function createResourceWorker(env: Environment, createClient: ClientFactory<ResourceRpc>, forbiddenSecrets: readonly string[] = []) {
@@ -100,7 +111,14 @@ export function createResourceWorker(env: Environment, createClient: ClientFacto
   return createVerifiedWorker({ ...env, workerSecret: reused ? "" : env.workerSecret }, createClient, {
     bodyLimit: 8 * 1024 * 1024, errorPrefix: "RESOURCE", safeErrors,
     decodeOperation(payload) {
-      if (!object(payload) || !uuid(payload.runId) || !uuid(payload.leaseId)) return null;
+      if (!object(payload) || !uuid(payload.leaseId)) return null;
+      if (payload.operation === "adoption_claim" && exact(payload, ["operation", "adoptionId", "leaseId"]) && uuid(payload.adoptionId)) {
+        return { name: "claim_resource_adoption", args: { p_adoption_id: payload.adoptionId, p_lease_id: payload.leaseId } };
+      }
+      if (payload.operation === "adoption_finish" && exact(payload, ["operation", "adoptionId", "leaseId", "result"]) && uuid(payload.adoptionId) && verification(payload.result)) {
+        return { name: "finish_resource_adoption", args: { p_adoption_id: payload.adoptionId, p_lease_id: payload.leaseId, p_result: payload.result } };
+      }
+      if (!uuid(payload.runId)) return null;
       if (payload.operation === "claim" && exact(payload, ["operation", "runId", "leaseId", "skill"])
         && (payload.skill === null || skill(payload.skill, "blueprint-match-resources"))) {
         return { name: "claim_resource_run", args: { p_run_id: payload.runId, p_lease_id: payload.leaseId, p_skill: payload.skill } };

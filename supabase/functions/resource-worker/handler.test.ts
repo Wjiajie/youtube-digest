@@ -36,6 +36,27 @@ test("resource claim derives the owner from verified Auth and preserves the exac
   assert.equal(response.headers.get("cache-control"), "no-store");
 });
 
+test("adoption claims use the independently verified owner and cannot substitute a caller-selected RPC", async () => {
+  const f = fixture();
+  assert.equal((await f.worker(request({ operation: "adoption_claim", adoptionId: runId, leaseId }))).status, 200);
+  assert.deepEqual(f.calls, [{ name: "claim_resource_adoption", args: { p_owner_id: owner, p_adoption_id: runId, p_lease_id: leaseId } }]);
+  const bad = fixture();
+  assert.equal((await bad.worker(request({ operation: "adoption_claim", adoptionId: runId, leaseId, ownerId: owner }))).status, 422);
+  assert.deepEqual(bad.keys, []);
+});
+
+test("adoption finish accepts only bounded verification receipts, never a client proposal or freshness timestamp", async () => {
+  const result = { status: "verified", video: { videoId: "abcdefghijk", title: "Exposure", channelTitle: "Camera", publishedAt: "2025-01-02T00:00:00Z", durationSeconds: 300 } };
+  const f = fixture();
+  assert.equal((await f.worker(request({ operation: "adoption_finish", adoptionId: runId, leaseId, result }))).status, 200);
+  assert.deepEqual(f.calls, [{ name: "finish_resource_adoption", args: { p_owner_id: owner, p_adoption_id: runId, p_lease_id: leaseId, p_result: result } }]);
+  for (const invalid of [{ ...result, verifiedAt: "2026-09-10T00:00:00Z" }, { ...result, proposal: {} }, { ...result, video: { ...result.video, title: "x".repeat(501) } },
+    { ...result, video: { ...result.video, publishedAt: "2026-02-30T00:00:00Z" } }, { ...result, video: { ...result.video, durationSeconds: 0 } }]) {
+    const bad = fixture(); assert.equal((await bad.worker(request({ operation: "adoption_finish", adoptionId: runId, leaseId, result: invalid }))).status, 422);
+    assert.deepEqual(bad.keys, []);
+  }
+});
+
 const source = { blueprintId: owner, blueprintVersion: 3, nodeId: leaseId, checkedAt: "2026-09-10T03:00:00.000Z" };
 const requests = { catalogMayHaveRun: true, transcriptVideoIds: ["abcdefghijk"] };
 const video = { videoId: "abcdefghijk", title: "Research basics", description: "A captioned lesson", channelId: "channel", channelTitle: "Learning",

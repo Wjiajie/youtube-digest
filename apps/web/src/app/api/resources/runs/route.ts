@@ -5,11 +5,15 @@ import { createCloudResourceRunner } from "@/lib/agent/cloud-resource-runner";
 import { resourceConfiguration, createResourceWorker } from "@/lib/agent/resource-runtime";
 import { createPlanningModel } from "@/lib/agent/planning-runtime";
 import { createResourceProvider } from "@/lib/resources/provider";
+import { resourceAdoptionCommandSchema } from "@/lib/agent/resource-adoption";
+import { resourceAdoptionConfiguration, createResourceAdoptionWorker } from "@/lib/agent/resource-adoption-runtime";
+import { createCloudResourceAdoption } from "@/lib/agent/cloud-resource-adoption";
+import { createVideoVerification } from "@/lib/resources/verification";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
 const inputSchema = z.discriminatedUnion("kind", [startResourceRunSchema.options[0].extend({ accountId: z.uuid() }),
-  startResourceRunSchema.options[1].extend({ accountId: z.uuid() })]);
+  startResourceRunSchema.options[1].extend({ accountId: z.uuid() }), resourceAdoptionCommandSchema.extend({ kind: z.literal("adopt"), accountId: z.uuid() })]);
 const reply = (body: unknown, status: number) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 
 /** Explicit execution only. Recovery and cancellation remain separate from this long request. */
@@ -43,22 +47,32 @@ export async function POST(request: Request) {
     if (!parsed.success) return reply({ ok: false, code: "invalid" }, 422);
     const { accountId, ...command } = parsed.data;
     if (identity.value.actor.userId !== accountId || identity.value.actor.client !== "web") return reply({ ok: false, code: "forbidden" }, 403);
-    const configuration = resourceConfiguration();
-    if (!configuration) return reply({ ok: false, code: "disabled" }, 503);
+    const configuration = command.kind === "adopt" ? null : resourceConfiguration();
+    const adoptionConfig = command.kind === "adopt" ? resourceAdoptionConfiguration() : null;
+    if (!configuration && !adoptionConfig) return reply({ ok: false, code: "disabled" }, 503);
     const session = await identity.value.client.auth.getSession();
     if (session.error) {
       const failure = authFailure(session.error);
       return reply(failure, failure.code === "unauthenticated" ? 401 : 503);
     }
     if (!session.data.session) return reply({ ok: false, code: "unauthenticated" }, 401);
+    const statuses = { forbidden: 403, invalid: 422, not_found: 404, version_conflict: 409, quota_exhausted: 429,
+      busy: 409, unavailable: 503, cancelled: 409, input_too_large: 413 };
+    if (command.kind === "adopt" && adoptionConfig) {
+      const { kind: _kind, ...adoption } = command;
+      const result = await createCloudResourceAdoption({ ...identity.value,
+        worker: createResourceAdoptionWorker(adoptionConfig, session.data.session.access_token),
+        verification: createVideoVerification({ youtubeApiKey: adoptionConfig.youtubeApiKey }),
+      }).run(adoption, request.signal);
+      return result.ok ? reply({ ok: true, adoptionId: result.adoption.id, status: result.adoption.status }, 200) : reply(result, statuses[result.code]);
+    }
+    if (command.kind === "adopt" || !configuration) return reply({ ok: false, code: "disabled" }, 503);
     // Edge verifies the forwarded token itself; the browser cannot choose an owner or RPC.
     const result = await createCloudResourceRunner({ ...identity.value,
       worker: createResourceWorker(configuration, session.data.session.access_token), model: createPlanningModel(configuration.apiKey),
       provider: createResourceProvider({ youtubeApiKey: configuration.youtubeApiKey, supadataApiKey: configuration.supadataApiKey }),
     }).run(command, request.signal);
     if (result.ok) return reply({ ok: true, runId: result.run.id, status: result.run.status }, 200);
-    const statuses = { forbidden: 403, invalid: 422, not_found: 404, version_conflict: 409, quota_exhausted: 429,
-      busy: 409, unavailable: 503, cancelled: 409, input_too_large: 413 };
     return reply(result, statuses[result.code]);
   } catch { return reply({ ok: false, code: "unavailable" }, 503); }
 }

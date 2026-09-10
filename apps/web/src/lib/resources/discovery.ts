@@ -14,7 +14,7 @@ const requestSchema = z.strictObject({
 });
 type Candidate = { video: VideoMetadata; url: string; transcript: TranscriptResult;
   languageFallback: boolean | null; eligibleForMatching: boolean; matching: "not_evaluated" };
-function exclusion(video: VideoMetadata, preferences: z.infer<typeof resourcePreferencesSchema>, checkedAt: string) {
+export function resourceExclusion(video: VideoMetadata, preferences: z.infer<typeof resourcePreferencesSchema>, checkedAt: string) {
   if (video.privacyStatus !== "public") return "not_public";
   if (video.uploadStatus !== "processed") return "not_processed";
   if (video.liveBroadcastContent !== "none") return "live_or_upcoming";
@@ -47,9 +47,9 @@ export function createResourceDiscovery(dependencies: { provider: ResourceProvid
         const catalog = await dependencies.provider.search({ query, regionCode: preferences.regionCode, relevanceLanguage: preferences.language }, signal);
         if (signal.aborted) return { status: "cancelled" as const, requests };
         if (catalog.status !== "ready") return { status: catalog.status, requests };
-        const rejected: { videoId: string; reason: NonNullable<ReturnType<typeof exclusion>> }[] = [];
+        const rejected: { videoId: string; reason: NonNullable<ReturnType<typeof resourceExclusion>> }[] = [];
         const available = catalog.videos.filter(video => {
-          const reason = exclusion(video, preferences, checkedAt);
+          const reason = resourceExclusion(video, preferences, checkedAt);
           if (reason) rejected.push({ videoId: video.videoId, reason });
           return !reason;
         });

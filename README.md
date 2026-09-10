@@ -61,6 +61,7 @@ npm run supabase:test
 npm run test:agent-runs
 npm run test:planning-review
 npm run test:clarification-workbench
+npm run test:resource-entry
 ```
 
 `check:m1` runs type checks, domain/extension tests, an embedded PostgreSQL migration contract, both production builds, and an extension security-surface check. `supabase:test` requires the local Supabase stack and is the final RLS integration gate.
@@ -70,6 +71,8 @@ npm run test:clarification-workbench
 `test:planning-review` verifies the production reading/cancellation UI with a real temporary local account and RPC-created fixture draft. It does not enable model generation or apply a plan. See [planning review](docs/agent-planning-review.md).
 
 `test:clarification-workbench` verifies explicit creation, conversation, summary editing and definition confirmation through production Web, real local Auth/database/Edge, and a test-process-only provider response. It requires the local stack and CLI, cleans up its temporary accounts, and never calls paid models. See [clarification workbench](docs/agent-clarification-workbench.md).
+
+`test:resource-entry` verifies discovery, matching, fresh video verification and explicit resource adoption/replacement through production Web and local Auth/database/Edge. External HTTP responses are isolated fixtures; no real provider calls or account credits are used. Both themes and preserved learning history are covered. See [resource adoption and remaining gates](docs/resource-adoption.md).
 
 ## Documentation
 

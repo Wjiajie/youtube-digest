@@ -11,6 +11,7 @@ export type ResourceCandidateView = { videoId: string; url: string; title: strin
   assessment: null | { role: "recommended" | "alternative" | "rejected"; relevance: string; levelFit: string; languageFit: string; timeFit: string; freshness: string;
     limitations: string[]; evidence: { quote: string; offsetMs: number }[]; totalSegments: number; sampledSegments: number; textTruncated: boolean } };
 export type ResourceRunView = { id: string; nodeId: string; nodeTitle: string; goalId: string; goalTitle: string; blueprintVersion: number;
+  bindings?: { id: string; videoId: string; url: string }[]; adoptions?: { id: string; videoId: string; createdAt: string }[];
   kind: "discover" | "captions" | "match"; sourceRunId: string | null; childId: string | null; nextKind: "captions" | "match" | null;
   status: "queued" | "running" | "ready" | "failed" | "cancelled" | "interrupted" | "stale"; createdAt: string; expiresAt: string;
   preferences: ResourcePreferences; learnerContext: { startingPoint: string | null; constraints: string | null }; skillVersion: string | null;
@@ -18,6 +19,6 @@ export type ResourceRunView = { id: string; nodeId: string; nodeTitle: string; g
 export type ResourceNodeView = { nodeId: string; nodeTitle: string; goalId: string; goalTitle: string; blueprintVersion: number;
   description: string | null; completionCriteria: string | null; estimatedMinutes: number | null;
   records: { id: string; kind: "discover" | "captions" | "match"; createdAt: string }[]; offset: number; hasMore: boolean };
-export type ResourceRunReviewProps = { accountId: string; initial: ResourceRunView; enabled: boolean;
+export type ResourceRunReviewProps = { accountId: string; initial: ResourceRunView; enabled: boolean; adoptionEnabled?: boolean;
   readAction: () => Promise<ResourceUiResult<ResourceRunView>>;
   cancelAction: () => Promise<ResourceUiResult<ResourceRunView>> };

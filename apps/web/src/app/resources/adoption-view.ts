@@ -1,0 +1,10 @@
+import type { ResourceUiResult } from "./resource-view";
+export type ResourceBindingView = { id: string; videoId: string; url: string };
+export type AdoptionView = { id: string; sourceRunId: string; nodeId: string; nodeTitle: string; goalId: string; goalTitle: string;
+  blueprintVersion: number; status: "queued" | "running" | "ready" | "failed" | "cancelled" | "interrupted" | "stale" | "applied" | "rejected";
+  selected: { videoId: string; title: string; channel: string }; replaceBindingId: string | null;
+  outcome: string | null; verifiedAt: string | null; validUntil: string | null; before: ResourceBindingView[]; after: ResourceBindingView[] | null;
+  proposal: { id: string; status: "pending" | "applied" | "rejected"; appliedVersion: number | null } | null };
+export type AdoptionReviewProps = { accountId: string; initial: AdoptionView;
+  readAction: () => Promise<ResourceUiResult<AdoptionView>>; cancelAction: () => Promise<ResourceUiResult<AdoptionView>>;
+  rejectAction: () => Promise<ResourceUiResult<AdoptionView>>; applyAction: (proposalId: string, expectedVersion: number) => Promise<ResourceUiResult<AdoptionView>> };

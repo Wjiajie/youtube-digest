@@ -22,7 +22,7 @@ export function workerConfiguration(stage: Stage) {
 const receiptSchema = z.strictObject({ data: z.unknown(), error: z.strictObject({ code: z.string(), message: z.string() }).nullable() });
 
 /** Shared transport only; each stage adapter owns its typed claim/finish interface. */
-export function workerTransport(stage: Stage, configuration: NonNullable<ReturnType<typeof workerConfiguration>>,
+export function workerTransport(stage: Stage, configuration: { url: string; publishableKey: string; workerKey: string },
   accessToken: string, fetcher: typeof fetch) {
   return async (body: object) => {
     try {

@@ -5,6 +5,7 @@ import { Panel, Status } from "@blueprint/ui";
 import { resolveRequestActor } from "@/lib/supabase/request";
 import { createResourceWorkspace } from "@/lib/agent/resource-workspace";
 import { resourceConfiguration } from "@/lib/agent/resource-runtime";
+import { resourceAdoptionConfiguration } from "@/lib/agent/resource-adoption-runtime";
 import { AccountThemeShell } from "../../account-theme-shell";
 import { AuthUnavailable } from "../../auth-unavailable";
 import { readResourceRunAction, cancelResourceRunAction } from "../../resource-actions";
@@ -24,7 +25,7 @@ export default async function ResourceRunPage({ params }: { params: Promise<{ id
   const result = await createResourceWorkspace(client, actor).read(id);
   return <AccountThemeShell accountId={actor.userId} client={client}><main className="shell resource-shell">
     <nav aria-label="资源导航"><Link className="bp-button" prefetch={false} href="/paths">← 全部路径</Link></nav>
-    {result.ok ? <ResourceRunReview key={`${actor.userId}:${id}`} accountId={actor.userId} initial={result.value} enabled={resourceConfiguration() !== null}
+    {result.ok ? <ResourceRunReview key={`${actor.userId}:${id}`} accountId={actor.userId} initial={result.value} enabled={resourceConfiguration() !== null} adoptionEnabled={resourceAdoptionConfiguration() !== null}
       readAction={readResourceRunAction.bind(null, actor.userId, id)} cancelAction={cancelResourceRunAction.bind(null, actor.userId, id)} />
       : <Panel><h1>暂时无法打开运行记录</h1><Status tone="warning">{result.code === "not_found" || result.code === "forbidden"
         ? "没有找到可访问的记录；新提交可能尚未创建，请核对原页面和账号，不要重复消费。" : "读取服务暂时不可用，没有删除已有结果，也不会重新执行。"}</Status><a className="bp-button" href={path}>重新读取</a></Panel>}

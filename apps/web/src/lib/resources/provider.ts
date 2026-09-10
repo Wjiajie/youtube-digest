@@ -45,6 +45,25 @@ function parseTranscript(data: unknown): TranscriptResult {
   return result.success ? { status: "ready", language: result.data.lang, availableLanguages: result.data.availableLangs, segments: result.data.content } : { status: "unavailable" };
 }
 
+/** A fresh, exact-ID metadata lookup; it cannot search or initiate subtitle jobs. */
+export function createVideoLookup(config: { youtubeApiKey?: string; fetch?: typeof fetch }) {
+  return async (id: string, signal: AbortSignal) => {
+    if (signal.aborted) return { status: "cancelled" as const };
+    if (!videoId.safeParse(id).success) return { status: "invalid_input" as const };
+    if (!config.youtubeApiKey?.trim()) return { status: "unavailable" as const };
+    const url = new URL("https://www.googleapis.com/youtube/v3/videos");
+    url.search = new URLSearchParams({ part: "snippet,contentDetails,status", id, key: config.youtubeApiKey }).toString();
+    const response = await requestProviderJson(config.fetch ?? globalThis.fetch, url, {}, signal);
+    if (!response.ok) return response.failure;
+    const data = collection.safeParse(response.data);
+    if (!data.success || response.status !== 200 || data.data.items.length > 1) return { status: "unavailable" as const };
+    if (!data.data.items.length) return { status: "not_found" as const };
+    const parsed = metadata.safeParse(data.data.items[0]);
+    if (!parsed.success || parsed.data.videoId !== id) return { status: "unavailable" as const };
+    return { status: "ready" as const, video: parsed.data };
+  };
+}
+
 /** Fixed provider origins; credentials are supplied by a server caller, never read from the environment. */
 export function createResourceProvider(config: { youtubeApiKey?: string; supadataApiKey?: string; fetch?: typeof fetch }): ResourceProvider {
   const fetcher = config.fetch ?? globalThis.fetch;

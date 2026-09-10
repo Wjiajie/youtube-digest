@@ -8,6 +8,7 @@ import type { ResourceRun } from "./resource-run";
 
 const historyRow = z.strictObject({ id: z.uuid(), owner_id: z.uuid(), node_id: z.uuid(), kind: z.enum(["discover", "captions", "match"]), created_at: z.iso.datetime({ offset: true }) });
 const childRow = z.strictObject({ id: z.uuid(), owner_id: z.uuid(), source_run_id: z.uuid() });
+const adoptionRow = z.strictObject({ id: z.uuid(), owner_id: z.uuid(), source_run_id: z.uuid(), video_id: z.string().regex(/^[A-Za-z0-9_-]{11}$/), created_at: z.iso.datetime({ offset: true }) });
 function project(run: ResourceRun, childId: string | null): ResourceRunView {
   const goal = run.blueprint.goals.find(goal => goal.stages.some(stage => stage.nodes.some(node => node.id === run.nodeId)))!;
   const node = goal.stages.flatMap(stage => stage.nodes).find(node => node.id === run.nodeId)!;
@@ -18,6 +19,7 @@ function project(run: ResourceRun, childId: string | null): ResourceRunView {
     ? result.candidates.some(candidate => candidate.transcript.status === "pending") ? "captions"
       : result.candidates.some(candidate => candidate.eligibleForMatching) ? "match" : null : null;
   return { id: run.id, nodeId: run.nodeId, nodeTitle: node.title, goalId: goal.id, goalTitle: goal.title, blueprintVersion: run.blueprintVersion,
+    bindings: node.resources.map(binding => ({ id: binding.id, videoId: binding.externalId, url: binding.url })),
     kind: run.kind, sourceRunId: run.sourceRunId, childId, nextKind, status: run.status, createdAt: run.createdAt, expiresAt: run.expiresAt,
     preferences: run.preferences, learnerContext: run.learnerContext, skillVersion: run.skill?.version ?? null,
     result: result ? { status: result.status, summary: matched?.summary ?? null,
@@ -50,7 +52,12 @@ export function createResourceWorkspace(client: SupabaseClient, identity: Actor)
       if (child.error) return resourceRunFailure(child.error);
       const children = z.array(childRow).max(1).parse(child.data);
       if (children.some(row => row.owner_id !== actor.userId || row.source_run_id !== id)) throw new Error("Invalid resource successor");
-      return { ok: true, value: project(current.run, children[0]?.id ?? null) };
+      const attempts = await client.from("resource_adoptions").select("id,owner_id,source_run_id,video_id,created_at")
+        .eq("owner_id", actor.userId).eq("source_run_id", id).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(20);
+      if (attempts.error) return resourceRunFailure(attempts.error);
+      const rows = z.array(adoptionRow).max(20).parse(attempts.data);
+      if (rows.some(row => row.owner_id !== actor.userId || row.source_run_id !== id)) throw new Error("Invalid adoption history");
+      return { ok: true, value: { ...project(current.run, children[0]?.id ?? null), adoptions: rows.map(row => ({ id: row.id, videoId: row.video_id, createdAt: row.created_at })) } };
     } catch { return { ok: false, code: "unavailable" }; }
   }
   return { read: (id: string) => record(id, "read"), cancel: (id: string) => record(id, "cancel"),

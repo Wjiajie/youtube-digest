@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Panel, Status } from "@blueprint/ui";
 import type { ResourceCandidateView, ResourceNodeView, ResourceRunReviewProps, ResourceUiCommand, ResourceUiResult, ResourceRunView } from "./resource-view";
 import "./resource-workbench.css";
+import { AdoptionStart } from "./adoption-review";
 
 const kindLabels = { discover: "视频检索", captions: "字幕核对", match: "匹配建议" };
 const dateLabel = (value: string) => `${value.slice(0, 10)} ${value.slice(11, 16)} UTC`;
@@ -102,7 +103,7 @@ export function ResourceRunReview(props: ResourceRunReviewProps) {
   if (owner.current !== props.accountId) return <IdentityLost />;
   return <RunReview key={`${props.accountId}:${props.initial.id}`} {...props} />;
 }
-function RunReview({ accountId, initial, enabled, readAction, cancelAction }: ResourceRunReviewProps) {
+function RunReview({ accountId, initial, enabled, adoptionEnabled = false, readAction, cancelAction }: ResourceRunReviewProps) {
   const [run, setRun] = useState(initial), [hidden, setHidden] = useState(false), [message, setMessage] = useState("");
   const [reading, setReading] = useState(false), [cancelling, setCancelling] = useState(false), [needsRead, setNeedsRead] = useState(false);
   const revision = useRef(0), mounted = useRef(true), locks = useRef({ read: false, cancel: false });
@@ -155,7 +156,11 @@ function RunReview({ accountId, initial, enabled, readAction, cancelAction }: Re
         {!["discovered", "matched", "no_match", "no_candidates"].includes(result.status) && result.candidates.length > 0 && <Status tone="warning">本次依据中的候选：以下保留之前的检索材料，不是本次成功推荐，也不代表字幕已重新核对。</Status>}
         {result.uninspectedCount > 0 && <p className="resource-muted">另有 {result.uninspectedCount} 个候选尚未核对字幕；未参与本次匹配。</p>}
         {result.rejected.length > 0 && <details><summary>查看 {result.rejected.length} 条筛选排除记录</summary><ul>{result.rejected.map(item => <li key={`${item.videoId}:${item.reason}`}><code>{item.videoId}</code> · {rejectionLabel(item.reason)}</li>)}</ul></details>}
-      </Panel>{result.candidates.map((candidate, index) => <Candidate key={candidate.videoId} candidate={candidate} index={index} />)}</> : <Panel className="resource-card resource-empty"><p className="resource-eyebrow">AWAITING EVIDENCE</p><h2>尚无可展示的材料</h2><p>等待真实检索与字幕证据。这里不会预填推荐内容。</p></Panel>}
+      </Panel>{result.candidates.map((candidate, index) => <div className="resource-candidate-group" key={candidate.videoId}><Candidate candidate={candidate} index={index} />
+        {run.status === "ready" && result.status === "matched" && candidate.assessment && candidate.assessment.role !== "rejected" && <Panel className="resource-card">
+          <AdoptionStart accountId={accountId} sourceRunId={run.id} videoId={candidate.videoId} bindings={run.bindings ?? []}
+            enabled={adoptionEnabled && !needsRead && !reading && !cancelling} onIdentityLost={() => setHidden(true)} />
+        </Panel>}</div>)}</> : <Panel className="resource-card resource-empty"><p className="resource-eyebrow">AWAITING EVIDENCE</p><h2>尚无可展示的材料</h2><p>等待真实检索与字幕证据。这里不会预填推荐内容。</p></Panel>}
     </section><aside className="resource-aside"><Panel className="resource-card"><p className="resource-eyebrow">NEXT / EXPLICIT ACTION</p><h2>下一步由你决定</h2>
       {!enabled && <Status tone="warning">资源服务暂未启用。仍可读取记录、取消运行与查看历史。</Status>}
       {run.childId ? <><p>这个结果已有后续运行，包括已取消或中断的运行。不会重复创建另一个分支。</p><a className="bp-button" href={`/resources/${run.childId}`}>查看已有后续运行</a></> : canContinue ? <>
@@ -167,7 +172,8 @@ function RunReview({ accountId, initial, enabled, readAction, cancelAction }: Re
       {run.learnerContext.startingPoint && <><dt>我的起点</dt><dd>{run.learnerContext.startingPoint}</dd></>}{run.learnerContext.constraints && <><dt>学习约束</dt><dd>{run.learnerContext.constraints}</dd></>}
       {run.skillVersion && <><dt>匹配规则版本</dt><dd>{run.skillVersion}</dd></>}</dl>
       {run.sourceRunId && <a href={`/resources/${run.sourceRunId}`}>查看上一步来源</a>}
-      <p className="resource-muted">次数不等于人民币账单。推荐不是质量保证；正式绑定还需要独立确认流程。</p>
+      <p className="resource-muted">次数不等于人民币账单。推荐不是质量保证；正式绑定需要重新核验与明确确认。</p>
+      {!!run.adoptions?.length && <section><h3>采用记录</h3><p className="resource-muted">最近 20 条；打开核对状态，不会重新核验。</p><ol>{run.adoptions.map(item => <li key={item.id}><a href={`/resources/adoptions/${item.id}`}>YouTube · {item.videoId}</a><p className="resource-muted">{dateLabel(item.createdAt)}</p></li>)}</ol></section>}
     </Panel></aside></div>
   </div>;
 }
