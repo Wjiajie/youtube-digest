@@ -122,6 +122,12 @@ it("recovers two real durable turns, preserves actual question-answer history an
     history: [{ question: "你希望实现什么目标？", answer: firstCommand.message }],
     result: { status: "reviewable", content: { startingPoint: "新手", weeklyMinutes: 180 }, source: { briefRevision: 1 } } });
   expect(model.doGenerateCalls).toHaveLength(2);
+  const currentInput = model.doGenerateCalls[1].prompt.find(item => item.role === "user");
+  if (!currentInput || typeof currentInput.content === "string") throw new Error("Missing current conversation input");
+  const currentText = currentInput.content.find(item => item.type === "text");
+  if (!currentText || currentText.type !== "text") throw new Error("Missing current conversation text");
+  expect(JSON.parse(currentText.text)).toMatchObject({ currentQuestion: "你会如何判断学有所获？",
+    message: secondCommand.message, history: [{ question: "你希望实现什么目标？", answer: firstCommand.message }] });
   expect(await readGoalBrief(owner.client, owner.actor, owner.briefId)).toMatchObject({ ok: true, value: { revision: 1, status: "draft" } });
   const saved = await owner.access.save({ sessionId, expectedRevision: 3, confirm: true, clientMutationId: randomUUID() });
   expect(saved).toMatchObject({ ok: true, value: { brief: { revision: 2, status: "confirmed", content: { outcome: "完成六张家庭照片" } } } });

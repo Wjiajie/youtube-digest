@@ -52,7 +52,8 @@ export function createCloudGoalClarifier(dependencies: {
         if (current.status !== "running" || JSON.stringify(current.skill) !== JSON.stringify(skill)) return { ok: false, code: "unavailable" };
         const result = clarificationResultSchema.parse(await createGoalClarifier({ model: dependencies.model }).run({
           turnId: current.id, brief: current.sourceBrief, workingContent: current.workingContent,
-          message: current.message, history: current.history, signal, expectedSkillSha256: skill.sha256,
+          currentQuestion: current.inputQuestion, message: current.message, history: current.history,
+          signal, expectedSkillSha256: skill.sha256,
         }));
         const completion = { turnId: turn.id, leaseId, result };
         const finished = await finish(completion);

@@ -9,6 +9,7 @@ const text = (limit: number) => z.string().min(1).max(limit).refine(value => val
 const requestSchema = z.strictObject({
   turnId: z.uuid(), signal: z.instanceof(AbortSignal), brief: goalBriefSchema,
   workingContent: goalBriefContentSchema.optional(),
+  currentQuestion: text(1_000).optional(),
   message: text(8_000), history: z.array(z.strictObject({ question: text(1_000), answer: text(8_000) })).max(12),
   expectedSkillSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
@@ -32,7 +33,7 @@ export function createGoalClarifier(dependencies: { model: Exclude<LanguageModel
         }
         const result = await generateStructuredSkill({ model: dependencies.model, instructions: skill.instructions,
           schema: clarificationCandidateSchema, maxOutputTokens: 8_000, signal,
-          prompt: JSON.stringify({ brief: workingContent, history, message }),
+          prompt: JSON.stringify({ brief: workingContent, history, currentQuestion: parsed.data.currentQuestion ?? null, message }),
         });
         if (result.status !== "generated") return result;
         usage = result.usage;
