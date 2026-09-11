@@ -32,6 +32,6 @@ export const config = {
   matcher: [
     // These exact routes independently verify Auth. Next's proxy body
     // finalization waits for EOF, hiding a stalled upload from its read deadline.
-    "/((?!api/(?:resources/runs|planning/runs|clarification/turns|(?:v1/)?translations/runs(?:/[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})?|v1/learning-notes|v1/learning-positions)/?$|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!api/(?:resources/runs|planning/runs|clarification/turns|(?:v1/)?translations/runs(?:/[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})?|(?:v1/)?explanations/runs(?:/find|/[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})?|v1/learning-notes|v1/learning-positions)/?$|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

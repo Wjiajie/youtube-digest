@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
     "/api/clarification/turns": ["./src/lib/agent/skills/clarify-goal/v1/SKILL.md"],
     "/api/resources/runs": ["./src/lib/agent/skills/match-resources/v1/SKILL.md"],
     "/api/translations/runs": ["./src/lib/agent/skills/translate-transcript/v1/SKILL.md"],
+    "/api/explanations/runs": ["./src/lib/agent/skills/explain-selection/v1/SKILL.md"],
+    "/api/v1/explanations/runs": ["./src/lib/agent/skills/explain-selection/v1/SKILL.md"],
   },
 };
 

@@ -1,7 +1,8 @@
 type BodyResult = { ok: true; value: unknown } | { ok: false; status: 408 | 413 | 422 };
 
 /** Execution uploads share one absolute deadline, not a timeout restarted per chunk. */
-export async function readBoundedJson(request: Request, maxBytes: number): Promise<BodyResult> {
+export async function readBoundedJson(request: Request, maxBytes: number, budget?: AbortSignal): Promise<BodyResult> {
+  const signal = budget ? AbortSignal.any([request.signal, budget]) : request.signal;
   const reader = request.body?.getReader();
   if (!reader) return { ok: false, status: 422 };
   let size = 0, text = "", timer: ReturnType<typeof setTimeout> | undefined;
@@ -11,13 +12,13 @@ export async function readBoundedJson(request: Request, maxBytes: number): Promi
   let onAbort = () => {};
   const cancelled = new Promise<never>((_resolve, reject) => {
     onAbort = () => reject(new DOMException("Upload aborted", "AbortError"));
-    request.signal.addEventListener("abort", onAbort, { once: true });
-    if (request.signal.aborted) onAbort();
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
   });
   try {
     while (true) {
       const chunk = await Promise.race([reader.read(), deadline, cancelled]);
-      if (request.signal.aborted) throw new DOMException("Upload aborted", "AbortError");
+      if (signal.aborted) throw new DOMException("Upload aborted", "AbortError");
       if (chunk.done) break;
       size += chunk.value.byteLength;
       if (size > maxBytes) { void reader.cancel().catch(() => {}); return { ok: false, status: 413 }; }
@@ -29,5 +30,5 @@ export async function readBoundedJson(request: Request, maxBytes: number): Promi
     // Teardown belongs to the sender. A stalled/rejected cancellation cannot hold the response open.
     void reader.cancel().catch(() => {});
     return { ok: false, status: error === timeout ? 408 : 422 };
-  } finally { clearTimeout(timer); request.signal.removeEventListener("abort", onAbort); reader.releaseLock(); }
+  } finally { clearTimeout(timer); signal.removeEventListener("abort", onAbort); reader.releaseLock(); }
 }
