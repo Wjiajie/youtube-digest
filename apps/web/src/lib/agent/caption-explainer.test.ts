@@ -87,7 +87,7 @@ test("bounds the selected span and sends nearby excerpts instead of the whole pa
   expect(model.doGenerateCalls).toHaveLength(1);
 });
 
-test.each(["invented", "wrong-segment", "context-only", "duplicate", "empty", "extra-field", "oversized"])("rejects %s explanation output atomically", async kind => {
+test.each(["invented", "wrong-segment", "context-only", "duplicate", "empty", "extra-field", "oversized", "broken-unicode", "nul"])("rejects %s explanation output atomically", async kind => {
   const value = answer();
   if (kind === "invented") value.evidence[0]!.quote = "not in supplied text";
   if (kind === "wrong-segment") value.evidence[0]!.segmentIndex = 21;
@@ -95,6 +95,8 @@ test.each(["invented", "wrong-segment", "context-only", "duplicate", "empty", "e
   if (kind === "duplicate") value.evidence.push({ ...value.evidence[0]! });
   if (kind === "empty") value.reasoning = "\n ";
   if (kind === "oversized") value.meaning = "文".repeat(2001);
+  if (kind === "broken-unicode") value.meaning = "Unpaired surrogate: \ud83d";
+  if (kind === "nul") value.meaning = "A\u0000B";
   const model = new MockLanguageModelV4({ doGenerate: reply(kind === "extra-field" ? { ...value, ownerId: id(99) } : value) });
   expect(await createCaptionExplainer({ model }).run(input())).toEqual({ status: "invalid_output", providerMayHaveRun: true,
     usage: { inputTokens: 20, outputTokens: 40, totalTokens: 60 } });
