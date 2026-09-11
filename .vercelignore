@@ -20,7 +20,8 @@ node_modules/
 .claude/
 .tools/
 .goal-loop/
-skills/
+# Exclude only legacy root Skills, not the runtime Agent Skills under apps/web.
+/skills/
 skills-lock.json
 .playwright-mcp/
 test-results/

@@ -84,10 +84,37 @@ OAuth Server 当前为 Supabase Public Beta。认证细节被限制在 Web Conse
 
 Supabase 默认邮件服务只适合项目成员个人自测，并有严格限额。开始邀请外部邮箱前，必须在 **Authentication → Emails → SMTP Settings** 配置自有 SMTP；这不是个人自测的前置条件。
 
-## 5. 密钥边界
+## 5. 预构建发布（已有项目）
+
+2026-09-11 起，本地预构建发布需先准备输出，避免 Vercel 构建器额外加入本地环境文件、而上传规则又将它们排除的冲突：
+
+```sh
+vercel build --prod
+npm run prepare:vercel-output
+vercel deploy --prebuilt --prod --skip-domain
+```
+
+以上命令使用已登录并已关联的同一项目；本机可通过 `scripts/with-m1-runtime.sh` 使用外置盘运行时。不要为了修复缺失文件而允许上传 `.env.local`。准备步骤只移除生成的 `filePathMap` 中本地 `.env`／`.env.*` 依赖，保留部署环境注入和应用文件；每次重新构建后都要再执行。运行时 Agent Skills 必须上传，仓库根目录旧 `skills/` 才被排除。实际验收以 Vercel `READY` 和 HTTP 结果为准，不能仅依据本地编译通过。
+
+`--skip-domain` 不等于所有别名都保持不动：本次 CLI 仍更新了自动生成的项目别名。因此每次检查主域名的实际 deployment ID，数据库与扩展未准备好前不切换主域名。Snapshot 2 会拒绝旧格式提案写入，切换安排见[节点规划的发布边界](node-planning.md#发布与兼容边界)；不能单独先迁移而让旧页面长期不可编辑。
+
+### 2026-09-11 F1 核查与候选
+
+- Supabase 项目健康；实际托管仍为 7 条迁移、本地 26 条，相差 19 条；托管仅 `prepare-invited-login` 一个 Edge Function。规划、澄清、资源、翻译、讲解 Worker 均未部署。
+- 已有两个 Auth 用户；指定自测账号存在且邀请已使用。未发送新邮件、读取目标正文或重置数据。
+- Vercel 插件列出项目为空，但外置盘现有 CLI 登录配置可以访问原项目；不是项目被删除，不需要新建。生产配置目前仅三个公开 Supabase／OAuth 变量，尚无 Agent 启用和提供方／Worker 配置。
+- 主域名仍为 `dpl_3P1TjdDz3WtaHEokBWxZaR8rvpYM`，页面 release 标记 `c53111f85b8b07ff307e3251bcc8f87cee1ffcc4`。旧版 10 项未登录入口检查通过。
+- 新候选 [blueprint-m1-lw0blbqqo](https://blueprint-m1-lw0blbqqo-norlymangune65-4981.vercel.app) 为 `dpl_DxNrkuZPCDS9QySgDuSUq3ujcxVi`，状态 `READY`；自动项目别名指向此候选，主域名未切换。10 项实际候选未登录 HTTP 检查通过，覆盖登录页、受保护页面重定向、私有 API 拒绝及设计入口关闭；未验证登录后业务。应用源码固定点 `07bffd8`，打包修复属于本批后续提交。
+- 初次候选因缺失 `.env.example` 失败，移除本地环境文件映射后，第二次因误排除运行时 Skill 失败；收窄根目录忽略规则后第三次成功。错误页返回的 HTTP 200 不算应用通过。未修改 Next 运行时配置或放宽环境文件上传。
+- 本地完整 `check:m1` 通过 1260 项应用与 108 项 Worker 测试、类型、升级契约及两端构建；新增发布准备回归通过，包含其余文件／注入配置保留与重复执行。Vercel 上传清单实查包含五套运行时 Skill，不含本地环境文件；原“找不到普通 Skill 文件”探针没有识别 `filePathMap`，属于检查方式问题，未据此修改应用。
+- 扩展已按正式 Web／Supabase 地址重建并通过安全检查，Manifest SHA-256 为 `7408b80980dc5ff5675eae804846308408688f1b026bf4ae7173333cec5f321b`；没有在用户浏览器中加载或重载。默认本地构建会重新生成 localhost 产物，安装前须核对三项 HTTPS 主机。
+
+未完成：19 条增量迁移的协调发布、Worker／额度／提供方配置、真实账号与扩展升级、完整 F1–F4 连续旅程。托管部分旧迁移与本地同名但时间戳不同，必须核对名称与内容，不直接按版本号重放全部迁移。本批没有迁移、模型调用、付费升级或主域名切换；候选可构建不代表已通过登录后业务验收。
+
+## 6. 密钥边界
 
 - 浏览器可见：Supabase Publishable Key、OAuth Public Client ID、Sentry DSN。
 - 仅 Supabase Edge Function：平台自动注入的 Supabase Service Role。
 - 仅 Web 构建服务端：Sentry 上传令牌（如启用）。
-- M1 不配置 DeepSeek、YouTube Data API 或 Supadata Key。
+- 早期 M1 仅使用公开配置；当前 F1–F4 将接入服务端 DeepSeek、YouTube Data API、Supadata 及独立 Worker 凭据，但本批尚未配置或启用。提供方 Key 不得进入 `NEXT_PUBLIC_*`、`WXT_PUBLIC_*` 或客户端包；新增费用仍遵守用户预算与审批边界。
 - `.env.m1-cloud.local` 只保存 Project Ref、受邀自测邮箱和最终验收状态；Supabase Personal Access Token 与数据库密码只存在于向导进程内。
