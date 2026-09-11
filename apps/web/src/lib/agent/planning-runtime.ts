@@ -9,7 +9,7 @@ export function planningConfiguration() {
 
 /** The fetch seam is for SDK integration tests; no runtime proxy URL or model override. */
 export function createPlanningModel(apiKey: string, fetch?: DeepSeekProviderSettings["fetch"]) {
-  return createDeepSeek({ apiKey, fetch })("deepseek-v4-flash");
+  return createDeepSeek({ apiKey, fetch })("deepseek-flash");
 }
 
 export function createPlanningWorker(configuration: NonNullable<ReturnType<typeof planningConfiguration>>,

@@ -6,7 +6,7 @@ import { parseTranslationRun, type TranslationRun } from "./translation-run";
 const id = z.uuid().transform(value => value.toLowerCase());
 const beginSchema = z.strictObject({ runId: id, bindingId: id, videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
   sourceRunId: id, offset: z.int().min(0).max(19999).multipleOf(20), targetLanguage: z.literal("zh-Hans") });
-type FailureCode = "forbidden" | "not_found" | "invalid" | "quota_exhausted" | "busy" | "unavailable";
+type FailureCode = "forbidden" | "not_found" | "invalid" | "quota_exhausted" | "busy" | "unavailable" | "cancelled";
 export type TranslationRunResponse = { ok: true; run: TranslationRun } | { ok: false; code: FailureCode };
 export function translationRunFailure(error: { code?: string; message?: string }): { ok: false; code: FailureCode } {
   if (error.code === "42501") return { ok: false, code: "forbidden" };
@@ -21,17 +21,18 @@ export function translationRunFailure(error: { code?: string; message?: string }
 export function createTranslationRunAccess(client: SupabaseClient, identity: Actor) {
   const actor = { ...identity };
   const allowed = actor.client === "web" && id.safeParse(actor.userId).success;
-  async function request(name: string, args: Record<string, unknown>, runId: string): Promise<TranslationRunResponse> {
+  async function request(name: string, args: Record<string, unknown>, runId: string, signal?: AbortSignal): Promise<TranslationRunResponse> {
     try {
-      const { data, error } = await client.rpc(name, args);
+      const query = client.rpc(name, args);
+      const { data, error } = await (signal ? query.abortSignal(signal) : query);
       return error ? translationRunFailure(error) : { ok: true, run: parseTranslationRun(data, actor.userId, runId) };
     } catch { return { ok: false, code: "unavailable" }; }
   }
-  async function command(name: string, runId: string): Promise<TranslationRunResponse> {
+  async function command(name: string, runId: string, signal?: AbortSignal): Promise<TranslationRunResponse> {
     if (!allowed) return { ok: false, code: "forbidden" };
     const parsed = id.safeParse(runId);
     if (!parsed.success) return { ok: false, code: "invalid" };
-    return request(name, { p_run_id: parsed.data }, parsed.data);
+    return request(name, { p_run_id: parsed.data }, parsed.data, signal);
   }
   return {
     async begin(input: unknown): Promise<TranslationRunResponse> {
@@ -44,7 +45,7 @@ export function createTranslationRunAccess(client: SupabaseClient, identity: Act
         || result.run.target_language !== parsed.data.targetLanguage)) return { ok: false, code: "unavailable" };
       return result;
     },
-    read: (runId: string) => command("read_translation_run", runId),
+    read: (runId: string, signal?: AbortSignal) => command("read_translation_run", runId, signal),
     cancel: (runId: string) => command("cancel_translation_run", runId),
   };
 }

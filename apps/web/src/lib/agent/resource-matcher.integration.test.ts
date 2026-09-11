@@ -73,7 +73,7 @@ test("source-bound discovery feeds the actual DeepSeek SDK through local HTTP wi
       assessments: [{ videoId: first, evidence: [{ segmentIndex: 0, quote: "Compare aperture and shutter speed.", offsetMs: 1500 }] }] });
     expect(modelBodies).toHaveLength(1);
     const body = JSON.parse(modelBodies[0]);
-    expect(body).toMatchObject({ model: "deepseek-v4-flash", response_format: { type: "json_object" } });
+    expect(body).toMatchObject({ model: "deepseek-flash", response_format: { type: "json_object" } });
     const system = body.messages.filter((message: { role: string }) => message.role === "system").map((message: { content: string }) => message.content).join("\n");
     expect(system).toContain("Match Resources to a Learning Path Node"); expect(system).not.toContain("CAPTION_INJECTION");
     const user = body.messages.find((message: { role: string }) => message.role === "user").content;

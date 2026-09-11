@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { publicSupabaseConfig } from "../env";
 
-type Stage = "planning" | "clarification" | "resource";
+type Stage = "planning" | "clarification" | "resource" | "translation";
 const settings = {
   planning: { enabled: "BLUEPRINT_PLANNING_ENABLED", secret: "BLUEPRINT_PLANNING_WORKER_SECRET" },
   clarification: { enabled: "BLUEPRINT_CLARIFICATION_ENABLED", secret: "BLUEPRINT_CLARIFICATION_WORKER_SECRET" },
   resource: { enabled: "BLUEPRINT_RESOURCES_ENABLED", secret: "BLUEPRINT_RESOURCE_WORKER_SECRET" },
+  translation: { enabled: "BLUEPRINT_TRANSLATION_ENABLED", secret: "BLUEPRINT_TRANSLATION_WORKER_SECRET" },
 } as const;
 
 /** Server-selected stages retain separate opt-ins and credentials. */

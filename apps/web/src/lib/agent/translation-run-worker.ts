@@ -8,16 +8,32 @@ type TranslationResult = Awaited<ReturnType<ReturnType<typeof createTranscriptTr
 type Claim = { ok: true; acquired: boolean; run: TranslationRun; observedAt: string } | Exclude<TranslationRunResponse, { ok: true }>;
 const claimSchema = z.strictObject({ acquired: z.boolean(), run: z.unknown(), observed_at: z.iso.datetime({ offset: true }) });
 const keys = z.strictObject({ runId: z.uuid(), leaseId: z.uuid() });
+type ClaimInput = { runId: string; leaseId: string; skill: NonNullable<TranslationRun["skill"]>; model: string };
+type Completion = Pick<TranslationResult, "status" | "providerMayHaveRun" | "usage"> & { segments?: { segmentIndex: number; translation: string }[] };
+type Receipt = { data: unknown; error: { code?: string; message?: string } | null };
+export type TranslationPersistence = {
+  claim(input: ClaimInput): PromiseLike<Receipt>;
+  finish(input: { runId: string; leaseId: string; result: Completion }): PromiseLike<Receipt>;
+};
 
 /** Internal service-role adapter, not a public authorization endpoint or provider dispatcher. */
 export function createTranslationRunWorker(client: SupabaseClient, ownerId: string) {
+  return createTranslationWorkerAdapter({
+    claim: input => client.rpc("claim_translation_run", { p_owner_id: ownerId, p_run_id: input.runId,
+      p_lease_id: input.leaseId, p_skill: input.skill, p_model: input.model }),
+    finish: input => client.rpc("finish_translation_run", { p_owner_id: ownerId, p_run_id: input.runId,
+      p_lease_id: input.leaseId, p_result: input.result }),
+  }, ownerId);
+}
+
+/** Both persistence transports share strict owner, source, lease receipt and output checks. */
+export function createTranslationWorkerAdapter(persistence: TranslationPersistence, ownerId: string) {
   return {
-    async claim(input: { runId: string; leaseId: string; skill: NonNullable<TranslationRun["skill"]>; model: string }): Promise<Claim> {
+    async claim(input: ClaimInput): Promise<Claim> {
       if (!z.uuid().safeParse(ownerId).success || !keys.safeParse({ runId: input.runId, leaseId: input.leaseId }).success)
         return { ok: false, code: "invalid" };
       try {
-        const { data, error } = await client.rpc("claim_translation_run", { p_owner_id: ownerId, p_run_id: input.runId,
-          p_lease_id: input.leaseId, p_skill: input.skill, p_model: input.model });
+        const { data, error } = await persistence.claim(input);
         if (error) return translationRunFailure(error);
         const receipt = claimSchema.parse(data), run = parseTranslationRun(receipt.run, ownerId, input.runId);
         if (Date.parse(receipt.observed_at) < Date.parse(run.created_at)
@@ -38,8 +54,7 @@ export function createTranslationRunWorker(client: SupabaseClient, ownerId: stri
       const completion = { status: result.status, providerMayHaveRun: result.providerMayHaveRun, usage: result.usage,
         ...(result.status === "translated" ? { segments: result.segments.map(({ segmentIndex, translation }) => ({ segmentIndex, translation })) } : {}) };
       try {
-        const { data, error } = await client.rpc("finish_translation_run", { p_owner_id: ownerId, p_run_id: input.runId,
-          p_lease_id: input.leaseId, p_result: completion });
+        const { data, error } = await persistence.finish({ runId: input.runId, leaseId: input.leaseId, result: completion });
         return error ? translationRunFailure(error) : { ok: true, run: parseTranslationRun(data, ownerId, input.runId) };
       } catch { return { ok: false, code: "unavailable" }; }
     },

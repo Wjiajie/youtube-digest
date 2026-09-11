@@ -43,7 +43,7 @@ test("actual DeepSeek SDK translates a pinned page through loopback HTTP only", 
     });
     expect(origins).toEqual(["https://api.deepseek.com"]); expect(bodies).toHaveLength(1);
     const body = JSON.parse(bodies[0]);
-    expect(body).toMatchObject({ model: "deepseek-v4-flash", response_format: { type: "json_object" }, max_tokens: 8192 });
+    expect(body).toMatchObject({ model: "deepseek-flash", response_format: { type: "json_object" }, max_tokens: 8192 });
     expect(body.tools).toBeUndefined();
     const system = body.messages.filter((message: { role: string }) => message.role === "system").map((message: { content: string }) => message.content).join("\n");
     expect(system).toContain("Translate a Caption Page"); expect(system).not.toContain("CAPTION_INJECTION");

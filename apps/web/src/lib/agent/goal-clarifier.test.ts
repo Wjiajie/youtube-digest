@@ -54,7 +54,7 @@ describe("controlled goal clarification", () => {
     expect(result.usage).toEqual({ inputTokens: 20, outputTokens: 40, totalTokens: 60 });
     expect(requests).toHaveLength(1);
     expect(requests[0].url).toBe("https://api.deepseek.com/chat/completions");
-    expect(JSON.parse(requests[0].body)).toMatchObject({ model: "deepseek-v4-flash", response_format: { type: "json_object" } });
+    expect(JSON.parse(requests[0].body)).toMatchObject({ model: "deepseek-flash", response_format: { type: "json_object" } });
   });
   it("respects a request to pause without marking an incomplete brief reviewable", async () => {
     const request = input(); request.message = "现在先暂停，我想好再来。";

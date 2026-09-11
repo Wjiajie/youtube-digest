@@ -8,6 +8,12 @@ import { createTranslationRunAccess } from "../src/lib/agent/translation-run-acc
 import { createTranslationRunWorker } from "../src/lib/agent/translation-run-worker";
 import { createTranscriptTranslator } from "../src/lib/agent/transcript-translator";
 import { createPlanningModel } from "../src/lib/agent/planning-runtime";
+import { MockLanguageModelV4 } from "ai/test";
+import { createCloudTranslationRunner } from "../src/lib/agent/cloud-translation-runner";
+import { createRemoteTranslationWorker } from "../src/lib/agent/translation-runtime";
+import { createTranslationWorker } from "../../../supabase/functions/translation-worker/handler";
+import { createClient } from "@supabase/supabase-js";
+import { localSupabaseTestConfig } from "../../../scripts/local-supabase-test-config.mjs";
 
 function provisionFixtureQuota(ownerId: string) {
   if (!/^[a-f0-9-]{36}$/.test(ownerId)) throw new Error("Invalid fixture identity");
@@ -19,6 +25,131 @@ async function fixtureSkill() {
   const instructions = await readFile(new URL("../src/lib/agent/skills/translate-transcript/v1/SKILL.md", import.meta.url), "utf8");
   return { name: "blueprint-translate-transcript" as const, version: "1.0.0" as const, instructions, sha256: createHash("sha256").update(instructions).digest("hex") };
 }
+
+test.each(["success", "finish_receipt_lost", "claim_receipt_lost"])("remote translation independently authenticates the real account over HTTP: %s", async mode => {
+  const owner = await transcriptFixture(), local = localSupabaseTestConfig();
+  const workerKey = randomUUID() + randomUUID(), bodies: string[] = [], operations: string[] = [];
+  const handler = createTranslationWorker({ url: local.API_URL, anonKey: local.PUBLISHABLE_KEY,
+    serviceRoleKey: local.SERVICE_ROLE_KEY, workerSecret: workerKey }, (url, key, options) => {
+    const client = createClient(url, key, options);
+    return { auth: client.auth, rpc: (name, args) => client.rpc(name, args) };
+  });
+  const server = createServer(async (request, response) => {
+    try {
+      let body = ""; for await (const chunk of request) body += chunk;
+      if (request.url === "/chat/completions") {
+        bodies.push(body); response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ id: "local-remote-translation", object: "chat.completion", created: 0, model: "deepseek-v4-flash",
+          choices: [{ index: 0, message: { role: "assistant", content: '{"segments":[{"segmentIndex":20,"translation":"解释你的照片选择。"}]}' }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 30, completion_tokens: 10, total_tokens: 40 } })); return;
+      }
+      if (request.url !== "/functions/v1/translation-worker") { response.writeHead(404); response.end(); return; }
+      const headers = new Headers(); for (const [key, value] of Object.entries(request.headers)) if (typeof value === "string") headers.set(key, value);
+      const result = await handler(new Request("http://127.0.0.1/functions/v1/translation-worker", { method: request.method, headers, body }));
+      const operation = JSON.parse(body).operation; operations.push(operation);
+      if (mode === `${operation}_receipt_lost` && operations.filter(value => value === operation).length === 1) {
+        response.writeHead(503); response.end("PRIVATE_TRANSPORT_FAILURE"); return;
+      }
+      response.writeHead(result.status, Object.fromEntries(result.headers)); response.end(await result.text());
+    } catch { response.writeHead(500); response.end(); }
+  });
+  try {
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address(); if (!address || typeof address === "string") throw new Error("Missing loopback address");
+    const url = `http://127.0.0.1:${address.port}`, session = await owner.client.auth.getSession();
+    if (!session.data.session) throw new Error("Missing own fixture session");
+    const configuration = { url, publishableKey: local.PUBLISHABLE_KEY, workerKey };
+    const worker = createRemoteTranslationWorker(configuration, session.data.session.access_token, owner.ownerId);
+    const model = createPlanningModel("fixture-key", (input, init) => {
+      const requested = new URL(input instanceof Request ? input.url : String(input));
+      if (requested.origin !== "https://api.deepseek.com") throw new Error("Unexpected provider origin");
+      return fetch(`${url}${requested.pathname}`, init);
+    });
+    provisionFixtureQuota(owner.ownerId);
+    const runner = createCloudTranslationRunner({ client: owner.client, actor: { userId: owner.ownerId, client: "web" }, worker, model });
+    const command = { ...owner.command, sourceRunId: await owner.acquire(), runId: randomUUID(), offset: 20, targetLanguage: "zh-Hans" };
+    const result = await runner.run(command, new AbortController().signal);
+    if (mode === "claim_receipt_lost") {
+      expect(result).toEqual({ ok: false, code: "unavailable" });
+      expect(await runner.read(command.runId)).toMatchObject({ ok: true, run: { status: "running" } });
+      expect(await runner.run(command, new AbortController().signal)).toMatchObject({ ok: true, run: { status: "running" } });
+      expect(bodies).toEqual([]); expect(operations).toEqual(["claim"]); return;
+    }
+    expect(result).toMatchObject({ ok: true, run: { status: "ready", result: { usage: { totalTokens: 40 }, segments: [{ segmentIndex: 20, translation: "解释你的照片选择。" }] } } });
+    expect(await runner.run(command, new AbortController().signal)).toEqual(result);
+    expect(bodies).toHaveLength(1);
+    expect(operations).toEqual(mode === "finish_receipt_lost" ? ["claim", "finish", "finish"] : ["claim", "finish"]);
+    expect(bodies[0]).not.toContain(owner.ownerId);
+    const invalid = createRemoteTranslationWorker({ ...configuration, workerKey: "different-valid-length-worker-credential" }, session.data.session.access_token, owner.ownerId);
+    expect(await invalid.claim({ runId: command.runId, leaseId: randomUUID(), skill: await fixtureSkill(), model: "fixture-model" })).toEqual({ ok: false, code: "forbidden" });
+  } finally {
+    server.closeAllConnections(); if (server.listening) await new Promise<void>(resolve => server.close(() => resolve()));
+    await owner.cleanup();
+  }
+});
+
+test("a real account orchestrates one translation and subsequent requests recover without inference", async () => {
+  const owner = await transcriptFixture();
+  try {
+    provisionFixtureQuota(owner.ownerId);
+    const model = new MockLanguageModelV4({ modelId: "fixture-model", doGenerate: {
+      content: [{ type: "text", text: JSON.stringify({ segments: [{ segmentIndex: 20, translation: "用自己的照片解释选择。" }] }) }],
+      finishReason: { unified: "stop", raw: undefined }, warnings: [],
+      usage: { inputTokens: { total: 20, noCache: 20, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 10, text: 10, reasoning: undefined } },
+    } });
+    const runner = createCloudTranslationRunner({ client: owner.client, actor: { userId: owner.ownerId, client: "web" },
+      worker: createTranslationRunWorker(owner.admin, owner.ownerId), model });
+    const command = { runId: randomUUID(), ...owner.command, sourceRunId: await owner.acquire(), offset: 20, targetLanguage: "zh-Hans" };
+    const result = await runner.run(command, new AbortController().signal);
+    expect(result).toMatchObject({ ok: true, run: { status: "ready", model: "fixture-model", result: { status: "translated" } } });
+    expect(await runner.run(command, new AbortController().signal)).toEqual(result);
+    expect(await runner.read(command.runId)).toEqual(result);
+    expect(model.doGenerateCalls).toHaveLength(1);
+  } finally { await owner.cleanup(); }
+});
+
+test.each(["cancel", "clear", "abort", "logout", "expiry", "run_deadline"])("an in-flight model cannot hold the caller open after %s", async action => {
+  const owner = await transcriptFixture();
+  let release!: () => void, entered!: () => void;
+  const holding = new Promise<void>(resolve => { release = resolve; }), started = new Promise<void>(resolve => { entered = resolve; });
+  let work: Promise<unknown> | undefined, timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    provisionFixtureQuota(owner.ownerId);
+    const model = new MockLanguageModelV4({ modelId: "fixture-model", doGenerate: async () => {
+      entered(); await holding;
+      return { content: [{ type: "text", text: '{"segments":[{"segmentIndex":20,"translation":"迟到译文"}]}' }], finishReason: { unified: "stop", raw: undefined }, warnings: [],
+        usage: { inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: 1, reasoning: undefined } } };
+    } });
+    // A remote receipt can leave less execution time than source retention. Keep
+    // the real DB/Auth and only compress the external clock fixture to 500 ms.
+    const service = action !== "run_deadline" ? owner.admin : createClient(owner.local.API_URL, owner.local.SERVICE_ROLE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: async (input, init) => {
+        const response = await fetch(input, init);
+        if (!String(input).endsWith("/rpc/claim_translation_run") || !response.ok) return response;
+        const receipt = await response.json();
+        receipt.run.expires_at = new Date(Date.parse(receipt.observed_at) + 500).toISOString();
+        return Response.json(receipt);
+      } },
+    });
+    const runner = createCloudTranslationRunner({ client: owner.client, actor: { userId: owner.ownerId, client: "web" },
+      worker: createTranslationRunWorker(service, owner.ownerId), model });
+    const sourceRunId = await owner.acquire(action === "expiry" ? 3 : 600), runId = randomUUID(), controller = new AbortController();
+    work = runner.run({ ...owner.command, sourceRunId, runId, offset: 20, targetLanguage: "zh-Hans" }, controller.signal);
+    await started;
+    if (action === "cancel") expect(await runner.cancel(runId)).toMatchObject({ ok: true, run: { status: "cancelled" } });
+    else if (action === "clear") expect((await owner.client.rpc("clear_resource_evidence", { p_run_id: sourceRunId })).error).toBeNull();
+    else if (action === "abort") controller.abort();
+    else if (action === "logout") expect((await owner.client.auth.signOut()).error).toBeNull();
+    const result = await Promise.race([work, new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error("Did not observe invalidation")), 5000); })]);
+    if (action === "run_deadline") expect(result).toMatchObject({ ok: true, run: { status: "interrupted", result: { status: "timed_out", providerMayHaveRun: true } } });
+    else if (action === "logout") expect(result).toMatchObject({ ok: true, run: { status: "failed", result: { status: "unavailable", providerMayHaveRun: true } } });
+    else if (action === "expiry") {
+      expect(result).toMatchObject({ ok: true, run: { status: expect.stringMatching(/cleared|failed/) } });
+      await expect.poll(() => runner.read(runId), { timeout: 2000 }).toMatchObject({ ok: true, run: { status: "cleared", result: null } });
+    } else expect(result).toMatchObject({ ok: true, run: { status: action === "clear" ? "cleared" : "cancelled" } });
+    expect(model.doGenerateCalls).toHaveLength(1);
+  } finally { clearTimeout(timer); release(); await work; await owner.cleanup(); }
+});
 
 test("real Auth persists one claimed SDK translation, recovers without execution, and clears derived content with its original", async () => {
   const owner = await transcriptFixture();

@@ -43,5 +43,5 @@ it("uses the real DeepSeek SDK with the fixed model and parses structured output
   });
   const result = await generateText({ model, prompt: "Return JSON", maxRetries: 0, output: Output.object({ schema: z.object({ title: z.string() }) }) });
   expect(result.output).toEqual({ title: "练习摄影" });
-  expect(requests).toMatchObject([{ model: "deepseek-v4-flash" }]);
+  expect(requests).toMatchObject([{ model: "deepseek-flash" }]);
 });
