@@ -108,7 +108,7 @@ test("a real account orchestrates one translation and subsequent requests recove
   } finally { await owner.cleanup(); }
 });
 
-test.each(["cancel", "clear", "abort", "logout", "expiry", "run_deadline"])("an in-flight model cannot hold the caller open after %s", async action => {
+test.each(["cancel", "clear", "abort", "logout", "expiry", "run_deadline", "source_deadline"])("an in-flight model cannot hold the caller open after %s", async action => {
   const owner = await transcriptFixture();
   let release!: () => void, entered!: () => void;
   const holding = new Promise<void>(resolve => { release = resolve; }), started = new Promise<void>(resolve => { entered = resolve; });
@@ -122,10 +122,12 @@ test.each(["cancel", "clear", "abort", "logout", "expiry", "run_deadline"])("an 
     } });
     // A remote receipt can leave less execution time than source retention. Keep
     // the real DB/Auth and only compress the external clock fixture to 500 ms.
-    const service = action !== "run_deadline" ? owner.admin : createClient(owner.local.API_URL, owner.local.SERVICE_ROLE_KEY, {
+    const service = !["run_deadline", "source_deadline"].includes(action) ? owner.admin : createClient(owner.local.API_URL, owner.local.SERVICE_ROLE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: async (input, init) => {
+        const claim = String(input).endsWith("/rpc/claim_translation_run");
+        if (claim && action === "source_deadline") await new Promise(resolve => setTimeout(resolve, 700));
         const response = await fetch(input, init);
-        if (!String(input).endsWith("/rpc/claim_translation_run") || !response.ok) return response;
+        if (!claim || !response.ok || action === "source_deadline") return response;
         const receipt = await response.json();
         receipt.run.expires_at = new Date(Date.parse(receipt.observed_at) + 500).toISOString();
         return Response.json(receipt);
@@ -133,7 +135,7 @@ test.each(["cancel", "clear", "abort", "logout", "expiry", "run_deadline"])("an 
     });
     const runner = createCloudTranslationRunner({ client: owner.client, actor: { userId: owner.ownerId, client: "web" },
       worker: createTranslationRunWorker(service, owner.ownerId), model });
-    const sourceRunId = await owner.acquire(action === "expiry" ? 3 : 600), runId = randomUUID(), controller = new AbortController();
+    const sourceRunId = await owner.acquire(["expiry", "source_deadline"].includes(action) ? 3 : 600), runId = randomUUID(), controller = new AbortController();
     work = runner.run({ ...owner.command, sourceRunId, runId, offset: 20, targetLanguage: "zh-Hans" }, controller.signal);
     await started;
     if (action === "cancel") expect(await runner.cancel(runId)).toMatchObject({ ok: true, run: { status: "cancelled" } });
@@ -142,6 +144,7 @@ test.each(["cancel", "clear", "abort", "logout", "expiry", "run_deadline"])("an 
     else if (action === "logout") expect((await owner.client.auth.signOut()).error).toBeNull();
     const result = await Promise.race([work, new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error("Did not observe invalidation")), 5000); })]);
     if (action === "run_deadline") expect(result).toMatchObject({ ok: true, run: { status: "interrupted", result: { status: "timed_out", providerMayHaveRun: true } } });
+    else if (action === "source_deadline") expect(result).toMatchObject({ ok: true, run: { status: "failed", result: { status: "expired", providerMayHaveRun: true } } });
     else if (action === "logout") expect(result).toMatchObject({ ok: true, run: { status: "failed", result: { status: "unavailable", providerMayHaveRun: true } } });
     else if (action === "expiry") {
       expect(result).toMatchObject({ ok: true, run: { status: expect.stringMatching(/cleared|failed/) } });

@@ -32,8 +32,11 @@ export function createCloudTranslationRunner(dependencies: { client: SupabaseCli
       const invalidation = new AbortController(), observation = new AbortController(), expiry = new AbortController();
       const deadline = sourceReadStartedAt + Date.parse(current.expires_at) - Date.parse(claim.observedAt);
       const remaining = deadline - performance.now();
-      if (remaining <= 0) expiry.abort();
-      const expiryTimer = remaining > 0 ? setTimeout(() => expiry.abort(), Math.min(remaining, 2_147_483_647)) : undefined;
+      // SQL caps the lease at source expiry. When those instants coincide, the
+      // translator owns the source deadline and must retain its `expired` outcome.
+      const leaseEndsFirst = Date.parse(current.expires_at) < Date.parse(current.content_expires_at);
+      if (leaseEndsFirst && remaining <= 0) expiry.abort();
+      const expiryTimer = leaseEndsFirst && remaining > 0 ? setTimeout(() => expiry.abort(), Math.min(remaining, 2_147_483_647)) : undefined;
       let stopped = false, observationFailed = false, timer: ReturnType<typeof setTimeout> | undefined;
       const observe = async () => {
         const receipt = await access.read(current.id, AbortSignal.any([observation.signal, AbortSignal.timeout(5000)]));
