@@ -3,11 +3,10 @@ import { resolveRequestActor } from "@/lib/supabase/request";
 import { readTranslationRun } from "@/lib/agent/read-translation-run";
 import { createTranslationRunAccess } from "@/lib/agent/translation-run-access";
 import { readBoundedJson } from "@/lib/http/read-bounded-json";
+import { translationReply as reply, translationFailureReply } from "../../response";
 
 export const runtime = "nodejs";
 const id = z.uuid().transform(value => value.toLowerCase());
-const reply = (body: unknown, status: number) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
-const statuses = { forbidden: 403, not_found: 404, invalid: 422, quota_exhausted: 429, busy: 409, unavailable: 503, cancelled: 409 };
 type Context = { params: Promise<{ runId: string }> };
 const cancellation = z.strictObject({ operation: z.literal("cancel"), accountId: id });
 
@@ -23,7 +22,7 @@ export async function GET(request: Request, context: Context) {
     if (!accountId.success || !runId.success) return reply({ ok: false, code: "invalid" }, 422);
     if (identity.value.actor.client !== "web" || identity.value.actor.userId !== accountId.data) return reply({ ok: false, code: "forbidden" }, 403);
     const result = await readTranslationRun(identity.value.client, identity.value.actor, runId.data, request.signal);
-    return reply(result, result.ok ? 200 : statuses[result.code]);
+    return result.ok ? reply(result, 200) : translationFailureReply(result);
   } catch { return reply({ ok: false, code: "unavailable" }, 503); }
 }
 
@@ -41,6 +40,6 @@ export async function POST(request: Request, context: Context) {
     if (!command.success || !runId.success) return reply({ ok: false, code: "invalid" }, 422);
     if (identity.value.actor.client !== "web" || identity.value.actor.userId !== command.data.accountId) return reply({ ok: false, code: "forbidden" }, 403);
     const result = await createTranslationRunAccess(identity.value.client, identity.value.actor).cancel(runId.data);
-    return result.ok ? reply({ ok: true, runId: result.run.id, status: result.run.status }, 200) : reply(result, statuses[result.code]);
+    return result.ok ? reply({ ok: true, runId: result.run.id, status: result.run.status }, 200) : translationFailureReply(result);
   } catch { return reply({ ok: false, code: "unavailable" }, 503); }
 }

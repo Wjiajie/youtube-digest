@@ -5,11 +5,11 @@ import { startTranslationRunSchema } from "@/lib/agent/translation-run-access";
 import { createCloudTranslationRunner } from "@/lib/agent/cloud-translation-runner";
 import { createRemoteTranslationWorker, translationConfiguration } from "@/lib/agent/translation-runtime";
 import { createPlanningModel } from "@/lib/agent/planning-runtime";
+import { translationReply as reply, translationFailureReply } from "../response";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
 const inputSchema = startTranslationRunSchema.extend({ accountId: z.uuid().transform(value => value.toLowerCase()) });
-const reply = (body: unknown, status: number) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 
 /** Explicit execution only; reading an existing run never comes through this route. */
 export async function POST(request: Request) {
@@ -38,7 +38,6 @@ export async function POST(request: Request) {
       model: createPlanningModel(configuration.apiKey),
     }).run(command, request.signal);
     if (result.ok) return reply({ ok: true, runId: result.run.id, status: result.run.status }, 200);
-    const statuses = { forbidden: 403, not_found: 404, invalid: 422, quota_exhausted: 429, busy: 409, unavailable: 503, cancelled: 409 };
-    return reply(result, statuses[result.code]);
+    return translationFailureReply(result);
   } catch { return reply({ ok: false, code: "unavailable" }, 503); }
 }
