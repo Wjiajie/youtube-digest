@@ -116,10 +116,9 @@ def box(name, position, size, surface, bevel=.025, bone=None):
     return result
 
 
-def arc_frame(name, center, radii, width, depth, angles, surface):
+def arc_frame(name, center, radii, width, depth, angles, surface, steps=80):
     """A solid architectural arc in the XZ plane, with a genuinely open center."""
     vertices, faces = [], []
-    steps = 80
     for step in range(steps + 1):
         angle = math.radians(angles[0] + (angles[1] - angles[0]) * step / steps)
         for radial, back in ((-1, -1), (1, -1), (1, 1), (-1, 1)):
@@ -463,14 +462,24 @@ assert hashlib.sha256(tree_path.read_bytes()).hexdigest() == "8bb157df6f49a8db04
 assert hashlib.sha256(rock_path.read_bytes()).hexdigest() == "6dd15390fd96501dcd1454765a17ba61dbbd8d47705dfe5149c8dd92b353ce25"
 stone = material(theme + " / stone", "59616A" if theme == "cyberpunk" else "777E74", .9)
 if theme == "cyberpunk":
-    graphite = material("Cyber / satin graphite", "162B38", .5, .5)
-    inset = material("Cyber / acoustic inset", "10202B", .96)
+    graphite = material("Cyber / satin graphite", "29414D", .5, .5)
+    inset = material("Cyber / acoustic inset", "223641", .96)
+    ceramic = material("Cyber / ceramic panels", "425764", .72, .18)
     plinth("Cyber / faceted work deck", (.28, -.18, -.14), 1.75, .24, graphite)
     plinth("Cyber / recessed footwell", (.28, -.5, .025), .82, .10, stone, 12)
     # One asymmetric continuous wall, not two glowing poles competing with the face.
     wall = mesh_object("Cyber / sculpted alcove", [(-1.25,1.33,.02),(1.42,1.33,.02),(1.42,1.33,1.62),
                         (.85,1.33,2.34),(-.75,1.33,2.34),(-1.25,1.33,1.8)], [(0,1,2,3,4,5)], inset)
     wall.data.materials[0].use_backface_culling = False
+    # Recessed wall bays and a physical return give the alcove depth without
+    # putting a luminous frame around the face. These details carry no progress.
+    mesh_object("Cyber / chamfered return", [(1.42,1.33,.02),(1.42,1.33,1.62),
+                (1.54,1.03,1.49),(1.54,1.03,.02)], [(0,1,2,3)], graphite)
+    box("Cyber / recessed wall bay", (.68,1.285,1.06), (.72,.04,.88), ceramic, .035)
+    for index in range(3):
+        box("Cyber / wall bay seam", (.68,1.255,.77+index*.29), (.65,.012,.009), inset, .003)
+    box("Cyber / amber service rail", (1.19,1.24,.80), (.015,.025,1.17), palette["accent"], .005)
+    box("Cyber / wall footing", (.08,1.19,.15), (2.53,.23,.21), graphite, .035)
     for index in range(7):
         x = -.92 + index * .095
         box("Cyber / fluted alcove", (x,1.28,1.08), (.025,.06,1.95), graphite, .009)
@@ -478,6 +487,7 @@ if theme == "cyberpunk":
     mesh_object("Cyber / upper diagonal trim", [(.82,1.25,2.25),(1.35,1.25,1.59),(1.33,1.25,1.56),(.80,1.25,2.22)], [(0,1,2,3)], palette["accent"])
     box("Cyber / floating worktop", (-.87,.67,.82), (.65,.62,.065), graphite, .028)
     box("Cyber / worktop support", (-1.05,.98,.43), (.09,.11,.75), graphite, .018)
+    box("Cyber / worktop edge inset", (-.87,.354,.817), (.46,.012,.014), palette["light"], .003)
     # box() bakes its position into vertices. Build this small assembly around
     # its own origin so the tilt moves the face and its details together.
     screen = box("Cyber / tilted work surface", (0,0,0), (.42,.045,.29), palette["dark"], .015)
@@ -488,11 +498,31 @@ if theme == "cyberpunk":
         detail.parent = screen
     for sign in (-1, 1):
         box("Cyber / floor guide", (.28 + sign*.75,-.65,-.008), (.013,.64,.009), palette["accent"], .003)
+        box("Cyber / deck service panel", (.28+sign*1.03,-.18,-.012), (.29,.64,.034), ceramic, .018)
+        for index in range(4):
+            box("Cyber / recessed deck vent", (.28+sign*1.03,-.39+index*.14,.007), (.20,.035,.008), inset, .003)
+    # The deck's thin segmented perimeter is geometry, not a bloom dependency.
+    for start in (15, 115, 215):
+        rim = arc_frame("Cyber / segmented deck rim", (0,0,0), (1.59,1.59), .018, .012,
+                        (start,start+56), palette["light"], steps=16)
+        rim.rotation_euler.x = math.pi/2
+        rim.location = (.28,-.18,-.012)
     arm.location = (.28, -.5, .08)
 else:
-    water = material("Eastern / still water", "44665F", .28, .12)
+    water = material("Eastern / still water", "345C58", .23, .18)
     box("Eastern / water field", (0, .2, -.16), (4.2, 3.7, .08), water, .06)
+    coping = material("Eastern / warm limestone", "C0BEA9", .92)
+    # Ground the water as a crafted basin instead of a floating green rectangle.
+    box("Eastern / front basin coping", (0,-1.70,-.125), (4.24,.09,.12), stone, .025)
+    box("Eastern / side basin coping", (2.10,.20,-.125), (.09,3.79,.12), stone, .025)
+    box("Eastern / far basin coping", (0,2.09,-.125), (4.24,.09,.12), stone, .025)
     plinth("Eastern / worn terrace", (.35, -.55, -.03), 1.14, .22, stone, 48)
+    for index in range(12):
+        # Separate radial slabs keep the top readable as masonry at panel size.
+        slab = arc_frame("Eastern / terrace radial coping", (0,0,0), (1.025,1.025), .17, .022,
+                         (index*30+.7,(index+1)*30-.7), coping, steps=8)
+        slab.rotation_euler.x = math.pi/2
+        slab.location = (.35,-.55,.087)
     plinth("Eastern / standing stone", (.35, -.6, .12), .72, .10, material("Eastern / light stone", "A1A997", .96), 12)
     for index in range(3):
         box("Eastern / stepping stone", (-.6 - .43 * index, -1.4 - .15 * index, -.06), (.39, .36, .1), stone, .055)
@@ -500,8 +530,28 @@ else:
     import_nature("Eastern / low stone bank", rock_path, .25, (1.65, 1.8, -.08), 2.1)
     import_nature("Eastern / sheltering tree", tree_path, 1.65, (-1.42, 1.90, .10), -.7)
     timber = material("Eastern / weathered gate timber", "40524A", .9)
-    arc_frame("Eastern / moon-garden opening", (.10,1.8,1.10), (1.23,1.23), .07, .12, (-65,245), timber)
-    arc_frame("Eastern / inner carved reveal", (.10,1.728,1.10), (1.17,1.17), .012, .016, (-65,245), palette["accent"])
+    arc_frame("Eastern / moon-garden opening", (.10,1.8,1.10), (1.23,1.23), .17, .26, (-65,245), timber)
+    arc_frame("Eastern / inner carved reveal", (.10,1.656,1.10), (1.16,1.16), .017, .02, (-65,245), palette["accent"])
+    arc_frame("Eastern / stone gate surround", (.10,1.84,1.10), (1.36,1.36), .09, .21, (-58,238), coping)
+    for sign in (-1,1):
+        box("Eastern / gate footing", (.10+sign*.76,1.80,.01), (.40,.44,.23), stone, .035)
+    # A low, off-axis lantern marks a place to return to, not an earned reward.
+    lantern = (1.31,.85)
+    box("Eastern / lantern plinth", (*lantern,.035), (.30,.30,.25), stone, .035)
+    paper = material("Eastern / lantern paper", "E7CBA0", .86, 0, .18)
+    box("Eastern / lantern paper chamber", (*lantern,.275), (.18,.18,.26), paper, .009)
+    for x in (-.108,.108):
+        for y in (-.108,.108):
+            box("Eastern / lantern corner", (lantern[0]+x,lantern[1]+y,.28), (.022,.022,.29), timber, .004)
+    box("Eastern / lantern cap", (*lantern,.443), (.29,.29,.055), timber, .018)
+    box("Eastern / lantern foot rim", (*lantern,.143), (.26,.26,.04), timber, .012)
+    # Sparse ripples are quiet concentric geometry rather than fake reflections.
+    ripple = material("Eastern / ripple highlight", "739487", .42)
+    for radius in (.26,.36,.49):
+        ring = arc_frame("Eastern / water ripple", (0,0,0), (radius,radius*.56), .003, .002,
+                         (8,164), ripple, steps=32)
+        ring.rotation_euler.x = math.pi/2
+        ring.location = (-.93,.38,-.118)
     # Quiet rear ridgelines are actual geometry; no billboard texture or camera-facing UI.
     for index, (height, color) in enumerate(((.66,"819084"),(.47,"A3AEA0"))):
         ridge = material("Eastern / distant ridge " + str(index), color, 1)
@@ -510,6 +560,26 @@ else:
                     (1.4,2.3+index*.35,height*.45),(2.1,2.3+index*.35,height*.65),(2.1,2.3+index*.35,-.1)],
                     [(0,1,2,3,4,5,6,7)], ridge)
     arm.location = (.35, -.6, .17)
+
+
+# Coalesce only repeated new static decorations with one material. The avatar,
+# its modifiers/weights, imported nature, and existing scene nodes are untouched.
+# This is an export-time art optimization, not a general scene optimizer.
+decoration_families = ("Cyber / wall bay seam", "Cyber / deck service panel", "Cyber / recessed deck vent", "Cyber / segmented deck rim") if theme == "cyberpunk" else (
+    "Eastern / terrace radial coping", "Eastern / gate footing", "Eastern / lantern corner", "Eastern / water ripple")
+for family in decoration_families:
+    objects = sorted((obj for obj in bpy.context.scene.objects
+                      if obj.name == family or obj.name.startswith(family + ".")), key=lambda obj: obj.name)
+    assert len(objects) > 1
+    surface = objects[0].data.materials[0]
+    assert all(obj.type == "MESH" and obj.parent is None and obj.animation_data is None
+               and not obj.modifiers and not obj.vertex_groups and not obj.data.shape_keys
+               and len(obj.data.materials) == 1 and obj.data.materials[0] == surface for obj in objects)
+    bpy.ops.object.select_all(action="DESELECT")
+    for obj in objects:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = objects[0]
+    assert bpy.ops.object.join() == {"FINISHED"}
 
 
 def light(name, kind, position, energy, color, target):
@@ -523,8 +593,8 @@ def light(name, kind, position, energy, color, target):
     return result
 
 
-light("Study / key", "SUN", (-3, -4, 5), 3.1 if theme == "eastern" else 2.6, "FFF0D3" if theme == "eastern" else "DAEAF3", (0, 0, 1))
-light("Study / edge", "SUN", (3, 1, 3), 1.0 if theme == "eastern" else 2.0, "C9DAD1" if theme == "eastern" else "E5AD79", (0, 0, 1))
+light("Study / key", "SUN", (-3, -4, 5), 3.1 if theme == "eastern" else 2.8, "FFF0D3" if theme == "eastern" else "DAEAF3", (0, 0, 1))
+light("Study / edge", "SUN", (3, 1, 3), 1.0 if theme == "eastern" else 2.1, "C9DAD1" if theme == "eastern" else "E5AD79", (0, 0, 1))
 camera_data = bpy.data.cameras.new("Study / composed camera")
 camera = bpy.data.objects.new("Study / composed camera", camera_data)
 bpy.context.collection.objects.link(camera)
@@ -539,8 +609,8 @@ bpy.context.view_layer.update()
 scene = bpy.context.scene
 scene["blueprint_study"] = theme
 scene["status"] = "internal look development; not licensed for product distribution or final art acceptance"
-scene["blueprint_lighting"] = {"version": 1, "environmentIntensity": .22 if theme == "eastern" else .16,
-    "hemisphereIntensity": .55 if theme == "eastern" else .28,
+scene["blueprint_lighting"] = {"version": 1, "environmentIntensity": .22 if theme == "eastern" else .20,
+    "hemisphereIntensity": .55 if theme == "eastern" else .38,
     "sky": "#E4E8D8" if theme == "eastern" else "#BDD9EA", "ground": "#536B60" if theme == "eastern" else "#15232F",
     "exposure": 1.08 if theme == "eastern" else 1.05}
 scene.render.resolution_x, scene.render.resolution_y = 1440, 1000
