@@ -28,7 +28,7 @@
     "test:clarification-workbench": "playwright test --config playwright.clarification.config.ts",
     "test:resource-entry": "playwright test --config playwright.resources.config.ts",
     "test:translation-entry": "playwright test --config playwright.translations.config.ts",
-    "test:planning-worker": "node --experimental-strip-types --test supabase/functions/planning-worker/handler.test.ts supabase/functions/clarification-worker/handler.test.ts supabase/functions/resource-worker/handler.test.ts supabase/functions/translation-worker/handler.test.ts",
+    "test:planning-worker": "node --experimental-strip-types --test supabase/functions/planning-worker/handler.test.ts supabase/functions/clarification-worker/handler.test.ts supabase/functions/resource-worker/handler.test.ts supabase/functions/translation-worker/handler.test.ts supabase/functions/explanation-worker/handler.test.ts",
     "check:m1-wizard": "bash -n scripts/setup-m1-cloud.sh && node scripts/check-m1-wizard.mjs",
     "supabase:start": "bash scripts/with-m1-runtime.sh npx --yes supabase@2.115.0 start",
     "supabase:reset": "bash scripts/with-m1-runtime.sh npx --yes supabase@2.115.0 db reset",

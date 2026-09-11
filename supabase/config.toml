@@ -57,3 +57,8 @@ verify_jwt = false
 # The handler independently verifies the signed JWT, current Auth identity,
 # and a distinct translation worker credential before privileged persistence.
 verify_jwt = false
+
+[functions.explanation-worker]
+# The handler independently verifies the signed JWT, current Auth identity,
+# and its distinct explanation credential before privileged claim or finish.
+verify_jwt = false
