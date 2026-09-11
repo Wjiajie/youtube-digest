@@ -4,7 +4,7 @@ import type { Actor } from "@blueprint/domain";
 import { parseTranslationRun, type TranslationRun } from "./translation-run";
 
 const id = z.uuid().transform(value => value.toLowerCase());
-const beginSchema = z.strictObject({ runId: id, bindingId: id, videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
+export const startTranslationRunSchema = z.strictObject({ runId: id, bindingId: id, videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/),
   sourceRunId: id, offset: z.int().min(0).max(19999).multipleOf(20), targetLanguage: z.literal("zh-Hans") });
 type FailureCode = "forbidden" | "not_found" | "invalid" | "quota_exhausted" | "busy" | "unavailable" | "cancelled";
 export type TranslationRunResponse = { ok: true; run: TranslationRun } | { ok: false; code: FailureCode };
@@ -37,7 +37,7 @@ export function createTranslationRunAccess(client: SupabaseClient, identity: Act
   return {
     async begin(input: unknown): Promise<TranslationRunResponse> {
       if (!allowed) return { ok: false, code: "forbidden" };
-      const parsed = beginSchema.safeParse(input);
+      const parsed = startTranslationRunSchema.safeParse(input);
       if (!parsed.success) return { ok: false, code: "invalid" };
       const result = await request("begin_translation_run", { p_request: parsed.data }, parsed.data.runId);
       if (result.ok && (result.run.binding_id !== parsed.data.bindingId || result.run.video_id !== parsed.data.videoId

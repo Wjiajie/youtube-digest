@@ -59,7 +59,7 @@
 50. [双端继续学习工作台](position-workspace.md)：Web／扩展共享来源确认、位置草稿、明确取时与冲突恢复；双主题私人历史和原视频时间链接，不自动推断进度。
     - [主动开启的播放位置同步](automatic-positions.md)：扩展可见学习面板内的定时取时与版本保护；停止、冲突和原请求恢复，不等于观看统计。
 51. [双端原始字幕阅读](learning-transcript.md)：Web 路径与扩展“理解”共用原文分页、固定来源和到期隐藏；仅读取已获取材料，不自动消费或推断进度。
-    - [双语字幕翻译与执行链](transcript-translation.md)：来源绑定、持久恢复、独立核验执行与清除联动；公共路由和双端界面尚未接通。
+    - [双语字幕翻译与执行链](transcript-translation.md)：来源绑定、持久恢复、独立核验执行及 Web 请求／恢复入口；双端界面和扩展授权尚未接通。
 
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
 
