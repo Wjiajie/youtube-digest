@@ -10,6 +10,7 @@ import { createLearningNotesTransport } from "../src/learning-notes";
 import { createLearningPositionsTransport } from "../src/learning-positions";
 import { createLearningTranscriptReader } from "../src/learning-transcript";
 import { createLearningTranslationTransport } from "../src/learning-translation";
+import { createLearningExplanationTransport } from "../src/learning-explanation";
 import { createPlayerPositionReader } from "../src/player-position";
 import { findBoundNodes, flushOutbox, type BoundNodeContext, type OutboxCommand } from "../src/runtime";
 
@@ -32,6 +33,7 @@ export default defineBackground(() => {
   const learningPositions = createLearningPositionsTransport(auth, apiBase);
   const readLearningTranscript = createLearningTranscriptReader(auth, apiBase);
   const learningTranslation = createLearningTranslationTransport(auth, apiBase);
+  const learningExplanation = createLearningExplanationTransport(auth, apiBase);
   const readPlayerPosition = createPlayerPositionReader(auth);
   void cleanupLegacyStorage();
   void auth.accessToken().then((current) => current && retryOutbox(auth, current.session.userId));
@@ -68,6 +70,8 @@ export default defineBackground(() => {
         return readLearningTranscript(message.ownerId, message.input, { expectedTabId: message.expectedTabId, nodeId: message.nodeId }, sender);
       case "LEARNING_TRANSLATION":
         return learningTranslation(message.ownerId, message.input, { expectedTabId: message.expectedTabId, nodeId: message.nodeId }, sender);
+      case "LEARNING_EXPLANATION":
+        return learningExplanation(message.ownerId, message.input, { expectedTabId: message.expectedTabId, nodeId: message.nodeId }, sender);
       case "SAVE_LEARNING_POSITION":
         return learningPositions.save(message.ownerId, message.input);
       case "SAVE_LEARNING_NOTE":

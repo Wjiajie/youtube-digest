@@ -2,6 +2,7 @@
 import { useMemo } from "react";
 import type { ApplicationResult, LearningTranscript, LearningTranscriptRequest } from "@blueprint/domain";
 import { LearningTranscriptReader, type TranslationPort } from "@blueprint/ui/learning-transcript";
+import { createWebExplanationPort } from "./web-explanation-port";
 
 /** This adapter carries only same-origin Cookie Auth, never provider or worker credentials. */
 function translationPort(accountId: string): TranslationPort {
@@ -37,5 +38,6 @@ function translationPort(accountId: string): TranslationPort {
 export function WebTranscriptReader(props: { accountId: string; bindingId: string; videoId: string;
   loadAction: (input: LearningTranscriptRequest) => Promise<ApplicationResult<LearningTranscript>> }) {
   const translation = useMemo(() => translationPort(props.accountId), [props.accountId]);
-  return <LearningTranscriptReader {...props} translation={translation} />;
+  const explanation = useMemo(() => createWebExplanationPort(props.accountId), [props.accountId]);
+  return <LearningTranscriptReader {...props} translation={translation} explanation={explanation} />;
 }

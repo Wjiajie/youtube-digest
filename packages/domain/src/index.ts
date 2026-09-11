@@ -1,5 +1,6 @@
 import { z } from "zod";
 export * from "./learning-transcript";
+export * from "./explanation-evidence";
 export * from "./blueprint-progress";
 export * from "./learning-notes";
 export * from "./learning-positions";

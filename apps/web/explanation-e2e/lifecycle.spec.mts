@@ -36,7 +36,21 @@ for (const change of ["clear", "expiry"] as const) test(`source ${change} erases
     expect(started.status()).toBe(200); expect(await started.json()).toEqual({ ok: true, runId, status: "ready" });
     const read = () => request.get(`${base}/${runId}?accountId=${owner.ownerId}`, { headers: owner.headers });
     if (change === "clear") ensure((await owner.client.rpc("clear_resource_evidence", { p_run_id: command.sourceRunId })).error);
-    await expect.poll(async () => (await (await read()).json()).run.status, { timeout: 15000 }).toBe("cleared");
+    const observations: { status: number; state: string }[] = [];
+    try {
+      await expect.poll(async () => {
+        const response = await read(), value = await response.json();
+        // A source may expire between the first run read and final source gate.
+        // Record the sanitized intermediate response; never assume every reply has a body.
+        const observation = { status: response.status(), state: value.run?.status ?? value.code ?? "missing" };
+        observations.push(observation);
+        return observation;
+      }, { timeout: 15000 }).toEqual({ status: 200, state: "cleared" });
+    } finally {
+      // Content-free diagnostics remain visible with the default list reporter too.
+      console.info("Source lifecycle HTTP observations:", JSON.stringify(observations));
+      await test.info().attach("source-lifecycle-statuses", { body: JSON.stringify(observations), contentType: "application/json" });
+    }
     const cleared = await read(); expect(cleared.status()).toBe(200);
     expect((await cleared.json()).run).toMatchObject({ runId, status: "cleared", observedAt: null, selection: null, question: null, result: null });
     const recovered = await request.post(`${base}/find`, { headers: owner.headers, data: lookup });

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Panel, Status } from "./index";
 import { parseTranslationView, translationAck, translationAttemptId, type TranscriptPage, type TranslationPort, type TranslationView } from "./translation-view";
 
-export function TranslationWorkspace({ page, port }: { page: TranscriptPage; port: TranslationPort }) {
+export function TranslationWorkspace({ page, port, chooseParagraph }: { page: TranscriptPage; port: TranslationPort; chooseParagraph?: (index: number) => void }) {
   const [run, setRun] = useState<TranslationView | null>(null);
   const [busy, setBusy] = useState(false), [failed, setFailed] = useState(false);
   const [expired, setExpired] = useState(false);
@@ -77,7 +77,8 @@ export function TranslationWorkspace({ page, port }: { page: TranscriptPage; por
     <ol className="transcript-segments transcript-bilingual" start={page.offset + 1}>{page.segments.map((segment, index) => {
       const seconds = Math.floor(segment.offsetMs / 1000), label = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
       return <li key={page.offset + index}><a href={`https://www.youtube.com/watch?v=${page.context.videoId}&t=${seconds}s`} target="_blank" rel="noopener noreferrer" aria-label={`在 YouTube 打开 ${label}`}>{label} ↗</a>
-        <div className="transcript-column"><span className="transcript-column-label">原文 · {page.language}</span><p>{segment.text}</p></div>
+        <div className="transcript-column"><span className="transcript-column-label">原文 · {page.language}</span><p data-explanation-segment={page.offset + index}>{segment.text}</p>
+          {chooseParagraph ? <Button className="transcript-select" onClick={() => chooseParagraph(index)}>选择第 {page.offset + index + 1} 段讲解</Button> : null}</div>
         <div className="transcript-column transcript-chinese" lang="zh-Hans"><span className="transcript-column-label">中文 · 辅助译文</span><p>{run?.result?.status === "translated" ? run.result.segments[index]?.translation ?? "等待译文" : "等待译文"}</p></div></li>;
     })}</ol>
   </section>;
