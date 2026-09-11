@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
-import { LearningTranscriptReader } from "@blueprint/ui/learning-transcript";
+import { WebTranscriptReader } from "./web-transcript-reader";
 import "@blueprint/ui/learning-transcript.css";
 import { resolveRequestActor } from "@/lib/supabase/request";
 import { createSupabaseBlueprintStore } from "@/lib/supabase/store";
@@ -9,7 +9,7 @@ import { AccountThemeShell } from "../../account-theme-shell";
 import { AuthUnavailable } from "../../auth-unavailable";
 import { readLearningTranscriptAction } from "../../learning-transcript-actions";
 
-export const metadata = { title: "原始字幕 · Blueprint" };
+export const metadata = { title: "字幕对照阅读 · Blueprint" };
 export default async function LearningTranscriptPage({ params }: { params: Promise<{ bindingId: string }> }) {
   const { bindingId } = await params;
   if (!z.uuid().safeParse(bindingId).success) notFound();
@@ -29,7 +29,7 @@ export default async function LearningTranscriptPage({ params }: { params: Promi
     <nav className="transcript-page-nav" aria-label="字幕阅读导航"><Link className="bp-button" href={`/paths/${selection.goal.id}`}>← 返回目标路径</Link>
       <Link className="bp-button" href="/progress/notes">私人笔记</Link>
       {selection.node.type === "learn" ? <Link className="bp-button" href={`/resources/nodes/${selection.node.id}`}>节点资源</Link> : null}</nav>
-    <LearningTranscriptReader accountId={actor.userId} bindingId={selection.binding.id} videoId={selection.binding.externalId}
+    <WebTranscriptReader accountId={actor.userId} bindingId={selection.binding.id} videoId={selection.binding.externalId}
       loadAction={readLearningTranscriptAction.bind(null, actor.userId)} />
   </main></AccountThemeShell>;
 }

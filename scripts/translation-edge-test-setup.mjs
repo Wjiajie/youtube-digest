@@ -30,10 +30,14 @@ export default async function setup() {
       try {
         const input = JSON.parse(body);
         if (input.model !== "deepseek-flash" || input.stream) return json(response, { error: "Unexpected fixture model" }, 422);
+        const prompt = JSON.parse(input.messages.findLast(message => message.role === "user").content);
+        if (!Array.isArray(prompt.segments) || ![1, 20].includes(prompt.segments.length)) return json(response, { error: "Unexpected fixture page" }, 422);
+        const segments = prompt.segments.map(({ segmentIndex }) => ({ segmentIndex,
+          translation: segmentIndex === 20 ? "用自己的照片解释你的选择。" : `第 ${segmentIndex + 1} 段练习：观察光线的方向与强度，比较不同曝光下的画面，并用自己的话记录选择的理由。这是本地固定译文，用于验证阅读布局。` }));
         calls.push({ path: "/chat/completions", method: "POST" });
         if (mode === "hold") { pending.add(response); response.once("close", () => pending.delete(response)); return; }
         return json(response, { id: "local-translation-fixture", object: "chat.completion", created: 0, model: input.model,
-          choices: [{ index: 0, message: { role: "assistant", content: JSON.stringify({ segments: [{ segmentIndex: 20, translation: "用自己的照片解释你的选择。" }] }) }, finish_reason: "stop" }],
+          choices: [{ index: 0, message: { role: "assistant", content: JSON.stringify({ segments }) }, finish_reason: "stop" }],
           usage: { prompt_tokens: 31, completion_tokens: 12, total_tokens: 43 } });
       } catch { return json(response, { error: "Invalid fixture request" }, 422); }
     });

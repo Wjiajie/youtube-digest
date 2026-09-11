@@ -23,10 +23,101 @@ async function account() {
   execFileSync("docker", ["exec", "-i", "supabase_db_blueprint-local", "psql", "-X", "-qAt", "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1"], {
     input: `insert into private.translation_run_quotas(owner_id,remaining) values('${owner.ownerId}',2);`, stdio: ["pipe", "pipe", "pipe"],
   });
-  return { ...owner, headers: { cookie: cookies.map(({ name, value }) => `${name}=${value}`).join("; "), origin } };
+  return { ...owner, cookies, headers: { cookie: cookies.map(({ name, value }) => `${name}=${value}`).join("; "), origin } };
 }
 test.beforeEach(async ({ request }) => { expect((await request.post(`${provider}/fixture/reset`)).ok()).toBe(true); });
 test.afterEach(async () => { await Promise.all(accounts.splice(0).map(owner => owner.cleanup())); });
+
+test("finds only the signed-in owner's latest exact-page run without generation", async ({ request }) => {
+  const owner = await account(), sourceRunId = await owner.acquire();
+  const context = { ...owner.command, sourceRunId, offset: "20", targetLanguage: "zh-Hans" };
+  const url = `${origin}/api/translations/runs?${new URLSearchParams({ accountId: owner.ownerId, ...context })}`;
+  const initial = await request.get(url, { headers: owner.headers });
+  expect(initial.status()).toBe(200); expect(await initial.json()).toEqual({ ok: true, run: null });
+  expect(initial.headers()["cache-control"]).toBe("private, no-store");
+  const runId = randomUUID();
+  expect((await owner.client.rpc("begin_translation_run", { p_request: { ...context, offset: 20, runId } })).error).toBeNull();
+  const recovered = await request.get(url, { headers: owner.headers });
+  expect(recovered.status()).toBe(200); expect((await recovered.json()).run).toMatchObject({ runId, status: "queued", observedAt: null, result: null });
+  expect((await request.get(url)).status()).toBe(401);
+  expect((await request.get(`${url}&offset=20`, { headers: owner.headers })).status()).toBe(422);
+  expect((await request.get(`${url}&unexpected=true`, { headers: owner.headers })).status()).toBe(422);
+  const other = await account();
+  expect((await request.get(url, { headers: other.headers })).status()).toBe(403);
+  const ownUrl = url.replace(owner.ownerId, other.ownerId);
+  expect(await (await request.get(ownUrl, { headers: other.headers })).json()).toEqual({ ok: true, run: null });
+  expect(await (await request.get(`${provider}/fixture/calls`)).json()).toEqual([]);
+});
+
+test("the signed-in reader translates explicitly and restores the page from cloud history after reload", async ({ page, request }) => {
+  test.skip(disabled);
+  const owner = await account(); await owner.acquire();
+  await page.context().addCookies(owner.cookies.map(cookie => ({ ...cookie, url: origin })));
+  await page.goto(`/learn/${owner.bindingId}`);
+  await page.getByRole("button", { name: "读取原始字幕", exact: true }).click();
+  await page.getByRole("button", { name: "下一页", exact: true }).click();
+  await expect(page.getByRole("button", { name: "翻译当前页", exact: true })).toBeEnabled();
+  expect(await (await request.get(`${provider}/fixture/calls`)).json()).toEqual([]);
+  await page.getByRole("button", { name: "翻译当前页", exact: true }).click();
+  await expect(page.locator(".transcript-chinese p")).toHaveText("用自己的照片解释你的选择。");
+  await page.reload(); await page.getByRole("button", { name: "读取原始字幕", exact: true }).click();
+  await page.getByRole("button", { name: "下一页", exact: true }).click();
+  await expect(page.locator(".transcript-chinese p")).toHaveText("用自己的照片解释你的选择。");
+  expect(await (await request.get(`${provider}/fixture/calls`)).json()).toEqual([{ path: "/chat/completions", method: "POST" }]);
+});
+
+test("reload before a start receipt exists reuses the same attempt instead of a second generation", async ({ page, request }) => {
+  test.skip(disabled);
+  const owner = await account(); await owner.acquire();
+  await page.context().addCookies(owner.cookies.map(cookie => ({ ...cookie, url: origin })));
+  const ids: string[] = [];
+  await page.route(`${origin}/api/translations/runs`, async route => {
+    if (route.request().method() !== "POST") return route.continue();
+    ids.push(route.request().postDataJSON().runId);
+    if (ids.length === 1) return route.abort("connectionfailed");
+    return route.continue();
+  });
+  await page.goto(`/learn/${owner.bindingId}`); await page.getByRole("button", { name: "读取原始字幕", exact: true }).click();
+  await page.getByRole("button", { name: "翻译当前页", exact: true }).click();
+  await expect(page.getByText(/结果尚未确认/)).toBeVisible();
+  await page.reload(); await page.getByRole("button", { name: "读取原始字幕", exact: true }).click();
+  await page.getByRole("button", { name: "翻译当前页", exact: true }).click();
+  await expect(page.getByRole("button", { name: "译文已就绪", exact: true })).toBeVisible();
+  expect(ids).toHaveLength(2); expect(ids[1]).toBe(ids[0]);
+  expect(await (await request.get(`${provider}/fixture/calls`)).json()).toEqual([{ path: "/chat/completions", method: "POST" }]);
+});
+
+test("twenty paired paragraphs remain readable in both themes at desktop and 320px", async ({ page, request }, info) => {
+  test.skip(disabled);
+  const owner = await account(); await owner.acquire();
+  await page.context().addCookies(owner.cookies.map(cookie => ({ ...cookie, url: origin })));
+  await page.goto(`/learn/${owner.bindingId}`); await page.getByRole("button", { name: "读取原始字幕", exact: true }).click();
+  await page.getByRole("button", { name: "翻译当前页", exact: true }).click();
+  await expect(page.getByRole("button", { name: "译文已就绪", exact: true })).toBeVisible();
+  await expect(page.locator(".transcript-chinese p")).toHaveCount(20);
+  const first = page.locator(".transcript-bilingual li").first();
+  for (const theme of ["cyberpunk", "eastern"]) {
+    await page.getByRole("combobox", { name: "界面主题", exact: true }).selectOption(theme);
+    for (const width of [1280, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      const columns = await first.locator(".transcript-column").evaluateAll(elements => elements.map(element => {
+        const rect = element.getBoundingClientRect(); return { x: rect.x, y: rect.y, height: rect.height };
+      }));
+      if (width > 700) { expect(columns[1].x).toBeGreaterThan(columns[0].x); expect(Math.abs(columns[1].y - columns[0].y)).toBeLessThan(1); }
+      else expect(columns[1].y).toBeGreaterThanOrEqual(columns[0].y + columns[0].height);
+      await first.scrollIntoViewIfNeeded(); await page.screenshot({ path: info.outputPath(`${theme}-${width}.png`) });
+      await page.keyboard.press("Tab"); await first.locator("a").focus();
+      expect(await first.locator("a").evaluate(element => getComputedStyle(element).outlineStyle)).not.toBe("none");
+      expect(await page.locator(".translation-tools button").evaluateAll(elements => elements.every(element => element.getBoundingClientRect().height >= 44))).toBe(true);
+    }
+  }
+  await page.emulateMedia({ forcedColors: "active" });
+  await expect(first.locator("a")).toBeVisible();
+  expect(await (await request.get(`${provider}/fixture/calls`)).json()).toEqual([{ path: "/chat/completions", method: "POST" }]);
+  expect(await page.evaluate(() => Object.values(localStorage).some(value => value.includes("这是本地固定译文")))).toBe(false);
+});
 
 test("a real Cookie starts a source-bound translation through production Next and actual Edge", async ({ request }) => {
   test.skip(disabled);
