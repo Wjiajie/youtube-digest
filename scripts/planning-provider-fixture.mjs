@@ -9,7 +9,7 @@ globalThis.fetch = async (input, init) => {
   if (url.href !== "https://api.deepseek.com/chat/completions" || new Headers(init?.headers).get("authorization") !== "Bearer planning-fixture-key")
     throw new Error("Unrecognized planning provider request");
   const request = JSON.parse(init.body);
-  if (request.model !== "deepseek-v4-flash" || request.stream) throw new Error("Unexpected planning model request");
+  if (request.model !== "deepseek-flash" || request.stream) throw new Error("Unexpected planning model request");
   await new Promise((resolve, reject) => {
     const signal = init?.signal;
     if (signal?.aborted) { reject(signal.reason); return; }
@@ -17,7 +17,7 @@ globalThis.fetch = async (input, init) => {
     function abort() { clearTimeout(timer); reject(signal.reason); }
     signal?.addEventListener("abort", abort, { once: true });
   });
-  return Response.json({ id: "planning-offline-fixture", object: "chat.completion", created: 1, model: "deepseek-v4-flash",
+  return Response.json({ id: "planning-offline-fixture", object: "chat.completion", created: 1, model: "deepseek-flash",
     choices: [{ index: 0, message: { role: "assistant", content: JSON.stringify({ title: "我的摄影练习路径", description: "拍摄与评估",
       assumptions: ["能在周末练习"], stages: [{ title: "拍摄作品", nodes: [{ key: "shoot", type: "practice", title: "完成六张照片",
         description: "围绕同一主题拍摄", estimatedMinutes: 60, completionCriteria: "选出六张并记录取舍", week: 1, dependsOn: [] }] }] }) }, finish_reason: "stop" }],

@@ -29,7 +29,7 @@ export default async function setup() {
       request.on("end", () => {
         try {
           const input = JSON.parse(body);
-          if (input.model !== "deepseek-v4-flash" || input.stream) return json(response, { error: "wrong model" }, 422);
+          if (input.model !== "deepseek-flash" || input.stream) return json(response, { error: "wrong model" }, 422);
           const answer = { summary: "曝光基础可支持当前练习，仍需用户审阅。", assessments: [{ videoId, role: "recommended", relevance: "字幕比较曝光参数。",
             levelFit: "基础内容，完整难度未知。", languageFit: "实际英语字幕，存在回退。", timeFit: "五分钟观看，拍摄另需时间。", freshness: "基础概念不按热度排序。",
             limitations: ["片段不能证明完整教学质量。"], evidence: [{ segmentIndex: 0, quote: "Compare aperture and shutter speed." }] }] };

@@ -10,7 +10,7 @@ globalThis.fetch = async (input, init) => {
     throw new Error("Unrecognized clarification provider request");
   }
   const request = JSON.parse(init.body);
-  if (request.model !== "deepseek-v4-flash" || request.stream) throw new Error("Unexpected clarification model request");
+  if (request.model !== "deepseek-flash" || request.stream) throw new Error("Unexpected clarification model request");
   const prompt = request.messages.find(message => message.role === "user");
   const document = JSON.parse(prompt.content);
   const answer = "我想制作摄影作品。我会用相机。每周180分钟。成功依据是六张照片与取舍记录。";
@@ -36,7 +36,7 @@ globalThis.fetch = async (input, init) => {
     question: null, concerns: [], pause: null,
   };
   return Response.json({
-    id: "clarification-offline-fixture", object: "chat.completion", created: 1, model: "deepseek-v4-flash",
+    id: "clarification-offline-fixture", object: "chat.completion", created: 1, model: "deepseek-flash",
     choices: [{ index: 0, message: { role: "assistant", content: JSON.stringify(suggestion) }, finish_reason: "stop" }],
     usage: { prompt_tokens: 20, completion_tokens: 40, total_tokens: 60 },
   });
