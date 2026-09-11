@@ -10,6 +10,14 @@ export type TranslationPort = {
   cancel(runId: string, signal: AbortSignal): Promise<unknown>;
 };
 const instant = z.iso.datetime({ offset: true });
+const id = z.uuid().transform(value => value.toLowerCase());
+const commandContext = z.strictObject({ bindingId: id, videoId: z.string().regex(/^[A-Za-z0-9_-]{11}$/), sourceRunId: id,
+  offset: z.int().min(0).max(19999).multipleOf(20), targetLanguage: z.literal("zh-Hans") });
+/** Closed runtime message vocabulary; it cannot carry source bodies, URLs or arbitrary RPCs. */
+export const translationCommand = z.discriminatedUnion("operation", [
+  z.strictObject({ operation: z.literal("find"), context: commandContext }),
+  z.strictObject({ operation: z.enum(["start", "read", "cancel"]), context: commandContext, runId: id }),
+]);
 const count = z.int().nonnegative().nullable();
 const usage = z.strictObject({ inputTokens: count, outputTokens: count, totalTokens: count }).nullable();
 const outcome = z.discriminatedUnion("status", [
@@ -19,12 +27,12 @@ const outcome = z.discriminatedUnion("status", [
 ]);
 const status = z.enum(["queued", "running", "ready", "failed", "cancelled", "interrupted", "cleared"]);
 export const translationAck = z.strictObject({ ok: z.literal(true), runId: z.uuid(), status });
-const response = z.strictObject({ ok: z.literal(true), run: z.strictObject({
+export const translationResponse = z.strictObject({ ok: z.literal(true), run: z.strictObject({
   runId: z.uuid(), accountId: z.uuid(), status,
   context: z.strictObject({ bindingId: z.uuid(), videoId: z.string(), sourceRunId: z.uuid(), offset: z.int().nonnegative() }),
   targetLanguage: z.literal("zh-Hans"), contentExpiresAt: instant, observedAt: instant.nullable(), result: outcome.nullable(),
 }).nullable() });
-export type TranslationView = NonNullable<z.infer<typeof response>["run"]>;
+export type TranslationView = NonNullable<z.infer<typeof translationResponse>["run"]>;
 
 /** A versioned, name-based UUIDv8 attempt key. Same page + same confirmed predecessor
  * survives remount/reload before begin is visible in SQL; identity is not authorization.
@@ -42,7 +50,7 @@ export async function translationAttemptId(page: TranscriptPage, predecessor: st
 
 /** Only the minimal public projection is accepted; persistence receipts never belong in the browser. */
 export function parseTranslationView(input: unknown, page: TranscriptPage, runId?: string): TranslationView | null {
-  const run = response.parse(input).run;
+  const run = translationResponse.parse(input).run;
   if (!run) { if (runId) throw new Error("Missing translation"); return null; }
   if (run.accountId !== page.ownerId || runId && run.runId !== runId || run.context.bindingId !== page.context.bindingId
     || run.context.videoId !== page.context.videoId || run.context.sourceRunId !== page.sourceRunId || run.context.offset !== page.offset

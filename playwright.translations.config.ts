@@ -14,7 +14,7 @@ export default defineConfig({
     command: "npm run build:web && npm run start --workspace @blueprint/web -- --port 3200",
     url: "http://127.0.0.1:3200/login", reuseExistingServer: false, timeout: 120_000,
     env: { NEXT_PUBLIC_SUPABASE_URL: local.API_URL, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: local.PUBLISHABLE_KEY,
-      NEXT_PUBLIC_EXTENSION_OAUTH_CLIENT_ID: "translation-local-test-extension", BLUEPRINT_TRANSLATION_ENABLED: disabled ? "false" : "true",
+      NEXT_PUBLIC_EXTENSION_OAUTH_CLIENT_ID: process.env.BLUEPRINT_TRANSLATION_TEST_EXTENSION_CLIENT_ID ?? "translation-local-test-extension", BLUEPRINT_TRANSLATION_ENABLED: disabled ? "false" : "true",
       BLUEPRINT_TRANSLATION_WORKER_SECRET: disabled ? "" : workerKey, DEEPSEEK_API_KEY: disabled ? "" : "translation-fixture-model-key",
       NODE_OPTIONS: `--import=${new URL("./scripts/translation-provider-fixture.mjs", import.meta.url).href}` },
   },

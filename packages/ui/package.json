@@ -17,6 +17,7 @@
     "./learning-positions": "./src/learning-positions.tsx",
     "./learning-positions.css": "./src/learning-positions.css",
     "./learning-transcript": "./src/learning-transcript.tsx",
+    "./translation-view": "./src/translation-view.ts",
     "./learning-transcript.css": "./src/learning-transcript.css",
     ".": "./src/index.tsx"
   },

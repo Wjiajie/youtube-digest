@@ -7,12 +7,15 @@ afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 it.each(["/api/planning/runs", "/api/clarification/turns", "/api/resources/runs", "/api/v1/learning-notes",
   "/api/translations/runs", "/api/translations/runs/a6000000-0000-4000-8000-000000000001",
+  "/api/v1/translations/runs", "/api/v1/translations/runs/a6000000-0000-4000-8000-000000000001",
   "/api/translations/runs/A6000000-0000-4000-8000-000000000001"])("lets the independently authenticated %s handler own its upload deadline", path => {
   for (const suffix of ["", "/", "?probe=1"]) expect(unstable_doesMiddlewareMatch({ config, url: `https://blueprint.example${path}${suffix}` })).toBe(false);
 });
 it.each(["/api/planning/runs/history", "/api/planning/runs-extra", "/api/clarification/turns/history", "/api/clarification/turns-extra",
   "/api/resources/runs/history", "/api/resources/runs-extra", "/api/v1/learning-notes/history", "/api/v1/learning-notes-extra",
   "/api/translations/runs/history", "/api/translations/runs-extra", "/api/translations/runs/a6000000-0000-4000-8000-000000000001/history",
+  "/api/v1/translations/runs/history", "/api/v1/translations/runs-extra", "/api/v1/translations/runs/a6000000-0000-4000-8000-000000000001/history",
+  "/api/v1/translations/runs/not-a-uuid",
   "/api/translations/runs/not-a-uuid"])("keeps the upload exception from widening to %s", path => {
   expect(unstable_doesMiddlewareMatch({ config, url: `https://blueprint.example${path}` })).toBe(true);
 });

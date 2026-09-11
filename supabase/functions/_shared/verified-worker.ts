@@ -72,6 +72,8 @@ export function createVerifiedWorker<Name extends string>(env: Environment, crea
   bodyLimit: number;
   errorPrefix: string;
   safeErrors: Record<string, string[]>;
+  /** Absent by default: only a worker with an explicit trusted opt-in can accept OAuth. */
+  allowedOAuthClientId?: string;
   decodeOperation(payload: unknown): { name: Name; args: RecordValue } | null;
 }) {
   const failure = (status: number, code = "22023", message = `${policy.errorPrefix}_INVALID`) => reply(null, { code, message }, status);
@@ -101,9 +103,12 @@ export function createVerifiedWorker<Name extends string>(env: Environment, crea
         return failure(401, "42501", `${policy.errorPrefix}_FORBIDDEN`);
       }
       const claims = verified.data?.claims, user = current.data.user;
+      const oauthAllowed = !claims || !Object.hasOwn(claims, "client_id") ||
+        (typeof policy.allowedOAuthClientId === "string" && policy.allowedOAuthClientId.length > 0
+          && policy.allowedOAuthClientId.trim() === policy.allowedOAuthClientId && claims.client_id === policy.allowedOAuthClientId);
       if (!claims || !user || !uuid(claims.sub) || claims.sub !== user.id
         || claims.role !== "authenticated" || user.role !== "authenticated" || claims.is_anonymous !== false || user.is_anonymous !== false
-        || Object.hasOwn(claims, "client_id") || !uuid(claims.session_id) || !integer(claims.exp, 1) || claims.exp <= Date.now() / 1000) {
+        || !oauthAllowed || !uuid(claims.session_id) || !integer(claims.exp, 1) || claims.exp <= Date.now() / 1000) {
         return failure(401, "42501", `${policy.errorPrefix}_FORBIDDEN`);
       }
       // getClaims verifies the signature; getUser rechecks Auth. This does not introduce

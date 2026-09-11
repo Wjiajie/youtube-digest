@@ -26,6 +26,7 @@ test("built MV3 reads only the selected video's original captions and discards l
       if (request.headers().authorization !== `Bearer fixture-${owner}`) return route.fulfill({ status: 401, json: { code: "unauthenticated" } });
       if (url.pathname === "/api/v1/blueprint") return route.fulfill({ json: snapshot });
       if (url.pathname === "/api/v1/account-preferences") return route.fulfill({ json: { theme: { id: theme, version: 1 }, revision: 1 } });
+      if (url.pathname === "/api/v1/translations/runs" && request.method() === "GET") return route.fulfill({ json: { ok: true, run: null } });
       if (url.pathname === "/api/v1/learning-transcript") {
         requests.push(url);
         expect(url.searchParams.get("bindingId")).toBe(binding); expect(url.searchParams.get("videoId")).toBe(videoId);
@@ -43,9 +44,10 @@ test("built MV3 reads only the selected video's original captions and discards l
     await panel.getByRole("tab", { name: "理解", exact: true }).click(); expect(requests).toHaveLength(0);
     await panel.getByRole("button", { name: "读取原始字幕", exact: true }).click(); await expect(panel.locator(".transcript-segments li")).toHaveCount(20);
     await panel.getByRole("button", { name: "下一页", exact: true }).click(); await expect(panel.getByText("最后一段：先观察，再调整。", { exact: true })).toBeVisible();
+    await expect(panel.getByRole("button", { name: "翻译当前页", exact: true })).toBeEnabled();
     expect(requests[1]?.searchParams.get("sourceRunId")).toBe(source);
     await panel.getByRole("tab", { name: "记录", exact: true }).click(); await panel.getByRole("tab", { name: "理解", exact: true }).click();
-    await expect(panel.getByText("最后一段：先观察，再调整。", { exact: true })).toBeVisible(); expect(requests).toHaveLength(2);
+    await expect(panel.getByText("最后一段：先观察，再调整。", { exact: true })).toBeVisible(); expect(requests).toHaveLength(4);
     for (const next of ["cyberpunk", "eastern"]) {
       theme = next; await panel.evaluate(() => window.dispatchEvent(new Event("focus")));
       await expect(panel.locator("[data-bp-theme]")).toHaveAttribute("data-bp-theme", next);

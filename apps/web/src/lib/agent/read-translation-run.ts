@@ -11,7 +11,7 @@ export async function readTranslationRun(client: SupabaseClient, actor: Actor, r
   const context = { bindingId: run.binding_id, videoId: run.video_id, sourceRunId: run.source_run_id, offset: run.page_offset };
   let observedAt: string | null = null;
   if (run.status === "ready") {
-    const source = await readLearningTranscript(client, actor, context);
+    const source = await readLearningTranscript(client, actor, context, signal);
     if (!source.ok || source.value.status !== "ready" || !run.input_page) return { ok: false as const, code: "unavailable" as const };
     const page = source.value, frozen = run.input_page;
     if (page.context.nodeId !== run.node_id || page.language !== frozen.language || page.totalSegments !== frozen.totalSegments

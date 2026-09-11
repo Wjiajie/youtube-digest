@@ -22,11 +22,12 @@ function result(value: unknown): boolean {
   return true;
 }
 
-export function createTranslationWorker(env: Environment, createClient: ClientFactory<TranslationRpc>, forbiddenSecrets: readonly string[] = []) {
+export function createTranslationWorker(env: Environment & { extensionClientId?: string }, createClient: ClientFactory<TranslationRpc>, forbiddenSecrets: readonly string[] = []) {
   const reused = forbiddenSecrets.some(value => value.trim().length > 0 && value.trim() === env.workerSecret);
   return createVerifiedWorker({ ...env, workerSecret: reused ? "" : env.workerSecret }, createClient, {
     bodyLimit: 2 * 1024 * 1024,
     errorPrefix: "TRANSLATION",
+    allowedOAuthClientId: env.extensionClientId,
     safeErrors: {
       "42501": ["TRANSLATION_FORBIDDEN", "TRANSLATION_LEASE_INVALID"],
       P0002: ["TRANSLATION_NOT_FOUND"],

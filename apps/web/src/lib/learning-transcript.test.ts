@@ -18,3 +18,12 @@ test("reads a narrow transcript RPC with caller credentials and verifies the ret
   expect(await readLearningTranscript(client, { userId: owner, client: "web" }, { ...input, offset: 20 })).toEqual({ ok: false, code: "invalid" });
   expect(requests).toHaveLength(2);
 });
+
+test("an aborted source read cannot return caption material", async () => {
+  const controller = new AbortController(); controller.abort();
+  const client = createClient("https://supabase.example.test", "publishable-test", { auth: { persistSession: false, autoRefreshToken: false }, global: {
+    fetch: async (_url, init) => { init?.signal?.throwIfAborted(); return Response.json(value); },
+  } });
+  expect(await readLearningTranscript(client, { userId: owner, client: "extension" }, input, controller.signal))
+    .toEqual({ ok: false, code: "unavailable" });
+});

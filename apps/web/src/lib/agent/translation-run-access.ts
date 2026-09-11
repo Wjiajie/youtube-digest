@@ -20,7 +20,8 @@ export function translationRunFailure(error: { code?: string; message?: string }
 /** Caller-scoped persistence only. No execution credentials, model calls or implicit generation. */
 export function createTranslationRunAccess(client: SupabaseClient, identity: Actor) {
   const actor = { ...identity };
-  const allowed = actor.client === "web" && id.safeParse(actor.userId).success;
+  // Authentication and exact OAuth-client authorization are enforced at HTTP and RPC boundaries.
+  const allowed = (actor.client === "web" || actor.client === "extension") && id.safeParse(actor.userId).success;
   async function request(name: string, args: Record<string, unknown>, runId: string, signal?: AbortSignal): Promise<TranslationRunResponse> {
     try {
       const query = client.rpc(name, args);
@@ -46,6 +47,6 @@ export function createTranslationRunAccess(client: SupabaseClient, identity: Act
       return result;
     },
     read: (runId: string, signal?: AbortSignal) => command("read_translation_run", runId, signal),
-    cancel: (runId: string) => command("cancel_translation_run", runId),
+    cancel: (runId: string, signal?: AbortSignal) => command("cancel_translation_run", runId, signal),
   };
 }

@@ -7,6 +7,7 @@ Deno.serve(createTranslationWorker({
   anonKey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
   serviceRoleKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   workerSecret: Deno.env.get("BLUEPRINT_TRANSLATION_WORKER_SECRET") ?? "",
+  extensionClientId: Deno.env.get("BLUEPRINT_EXTENSION_OAUTH_CLIENT_ID"),
 }, (url, key, options) => {
   const client = createClient(url, key, options);
   return { auth: client.auth, rpc: (name, args) => client.rpc(name, args) };

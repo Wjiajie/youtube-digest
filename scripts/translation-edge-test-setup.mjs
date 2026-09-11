@@ -9,9 +9,11 @@ export default async function setup() {
   if (originalServices.some(name => name.includes("edge_runtime"))) throw new Error("Existing Edge runtime must not be replaced");
   const workerKey = process.env.BLUEPRINT_TRANSLATION_TEST_WORKER_SECRET;
   if (!workerKey || !/^[a-f0-9]{64}$/.test(workerKey)) throw new Error("Missing isolated translation credential");
+  const extensionClientId = process.env.BLUEPRINT_TRANSLATION_TEST_EXTENSION_CLIENT_ID;
+  if (extensionClientId && !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(extensionClientId)) throw new Error("Invalid isolated OAuth client ID");
   const directory = await mkdtemp(new URL("../.goal-loop/translation-http-", import.meta.url).pathname);
   const envFile = `${directory}/worker.env`;
-  await writeFile(envFile, `BLUEPRINT_TRANSLATION_WORKER_SECRET=${workerKey}\n`, { mode: 0o600 });
+  await writeFile(envFile, `BLUEPRINT_TRANSLATION_WORKER_SECRET=${workerKey}\n${extensionClientId ? `BLUEPRINT_EXTENSION_OAUTH_CLIENT_ID=${extensionClientId}\n` : ""}`, { mode: 0o600 });
   const child = spawn(process.env.BLUEPRINT_SUPABASE_BIN ?? "supabase", ["functions", "serve", "--env-file", envFile], { stdio: ["ignore", "pipe", "pipe"] });
   let ready = false, spawnError = false, mode = "ready";
   const exited = new Promise(resolve => child.once("exit", resolve));

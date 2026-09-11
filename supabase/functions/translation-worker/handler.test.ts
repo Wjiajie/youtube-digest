@@ -26,7 +26,7 @@ void sdkFactory;
 
 function fixture(options: {
   claims?: Record<string, unknown>; user?: Record<string, unknown>; claimsError?: unknown; userError?: unknown;
-  rpcError?: unknown; rpcThrows?: boolean; forbidden?: string[]; configuration?: Partial<typeof env>;
+  rpcError?: unknown; rpcThrows?: boolean; forbidden?: string[]; configuration?: Partial<typeof env> & { extensionClientId?: string };
 } = {}) {
   const keys: string[] = [], tokens: string[] = [], calls: { name: string; args: Record<string, unknown> }[] = [];
   const handler = createTranslationWorker({ ...env, ...options.configuration }, (_url, key) => {
@@ -58,6 +58,32 @@ test("finish forwards the narrow translated page unchanged without source text o
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { data: receipt, error: null });
   assert.deepEqual(f.calls, [{ name: "finish_translation_run", args: { p_run_id: runId, p_lease_id: leaseId, p_result: translated, p_owner_id: owner } }]);
+});
+
+test("only the explicitly configured translation OAuth client may claim or finish with both verified credentials", async () => {
+  const extensionClientId = "11000000-0000-4000-8000-000000000001";
+  for (const command of [claim, finish]) {
+    const allowed = fixture({ claims: { client_id: extensionClientId }, configuration: { extensionClientId } });
+    assert.equal((await allowed.handler(request(command))).status, 200);
+    assert.equal(allowed.calls.length, 1);
+    assert.equal(allowed.calls[0].args.p_owner_id, owner);
+    for (const client_id of [null, "", "other-client", [extensionClientId], { id: extensionClientId }]) {
+      const denied = fixture({ claims: { client_id }, configuration: { extensionClientId } });
+      assert.equal((await denied.handler(request(command))).status, 401);
+      assert.deepEqual(denied.calls, []);
+    }
+    for (const configured of [undefined, "", " ", ` ${extensionClientId}`, `${extensionClientId} `]) {
+      const denied = fixture({ claims: { client_id: extensionClientId }, configuration: { extensionClientId: configured } });
+      assert.equal((await denied.handler(request(command))).status, 401);
+      assert.deepEqual(denied.calls, []);
+    }
+    const noSecret = fixture({ claims: { client_id: extensionClientId }, configuration: { extensionClientId } });
+    assert.equal((await noSecret.handler(request(command, { "x-blueprint-worker-secret": "" }))).status, 403);
+    assert.deepEqual(noSecret.keys, []);
+    const anonymous = fixture({ claims: { client_id: extensionClientId, is_anonymous: true }, configuration: { extensionClientId } });
+    assert.equal((await anonymous.handler(request(command))).status, 401);
+    assert.deepEqual(anonymous.calls, []);
+  }
 });
 
 test("finish accepts every documented terminal outcome and preserves provider uncertainty", async () => {
