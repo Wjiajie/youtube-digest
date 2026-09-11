@@ -24,7 +24,7 @@ npm run supabase:test
 
 复制两个应用各自的 `.env.example` 为 `.env.local`，把 `supabase start` 输出的 URL 和 Publishable Key 写入本地文件。管理员密钥只存在于 Supabase 托管的 Edge Function 环境，不进入 Web 或扩展环境文件。
 
-规划入口默认关闭。未来受控开启时，`DEEPSEEK_API_KEY` 仅配置在 Web 服务端；另生成至少 32 字符的随机 `BLUEPRINT_PLANNING_WORKER_SECRET`，仅在 Web 服务端与 `planning-worker` Edge 环境共享，不能使用 Supabase API 管理员密钥代替。Edge 的管理员密钥由 Supabase 环境提供，只允许领取／保存当前用户运行，不开放通用数据库写接口。该函数在处理器内自行验证用户 JWT 与独立凭据，`verify_jwt=false` 不表示公开访问。部署函数与启用真实费用仍是后续验收动作，本地测试不会替你开启。
+规划入口默认关闭。未来受控开启时，`DEEPSEEK_API_KEY` 仅配置在 Web 服务端；另生成至少 32 字符的随机 `BLUEPRINT_PLANNING_WORKER_SECRET`，仅在 Web 服务端与 `planning-worker` Edge 环境共享，不能使用 Supabase API 管理员密钥代替。Edge 的管理员密钥由 Supabase 环境提供，只允许领取／保存当前用户运行，不开放通用数据库写接口。该函数在处理器内自行验证用户 JWT 与独立凭据，`verify_jwt=false` 不表示公开访问。函数已按下方 F1 记录部署，凭据配置与真实执行仍待验收；本地测试不会替你开启。
 
 `npm run test:planning-generation` 自动启动本地 Edge 运行时及生产 Web 构建，用真实本地 Auth／数据库与仅测试进程的外部模型响应验证；`scripts/planning-worker.fixture.env` 是公开的本地夹具，绝不能部署到托管环境。测试结束只关闭该次启动的进程，删除该次生成的测试账号，不重置数据库。
 
@@ -100,6 +100,8 @@ vercel deploy --prebuilt --prod --skip-domain
 
 ### 2026-09-11 F1 核查与候选
 
+本节保留后台服务发布前的核查范围；最新 Worker 状态以下方“F1 后台服务发布”为准。
+
 - Supabase 项目健康；实际托管仍为 7 条迁移、本地 26 条，相差 19 条；托管仅 `prepare-invited-login` 一个 Edge Function。规划、澄清、资源、翻译、讲解 Worker 均未部署。
 - 已有两个 Auth 用户；指定自测账号存在且邀请已使用。未发送新邮件、读取目标正文或重置数据。
 - Vercel 插件列出项目为空，但外置盘现有 CLI 登录配置可以访问原项目；不是项目被删除，不需要新建。生产配置目前仅三个公开 Supabase／OAuth 变量，尚无 Agent 启用和提供方／Worker 配置。
@@ -110,6 +112,26 @@ vercel deploy --prebuilt --prod --skip-domain
 - 扩展已按正式 Web／Supabase 地址重建并通过安全检查，Manifest SHA-256 为 `7408b80980dc5ff5675eae804846308408688f1b026bf4ae7173333cec5f321b`；没有在用户浏览器中加载或重载。默认本地构建会重新生成 localhost 产物，安装前须核对三项 HTTPS 主机。
 
 未完成：19 条增量迁移的协调发布、Worker／额度／提供方配置、真实账号与扩展升级、完整 F1–F4 连续旅程。托管部分旧迁移与本地同名但时间戳不同，必须核对名称与内容，不直接按版本号重放全部迁移。本批没有迁移、模型调用、付费升级或主域名切换；候选可构建不代表已通过登录后业务验收。
+
+### 2026-09-11 F1 后台服务发布
+
+源码固定点 `f8456b6`。五个现有 Worker 已通过 Supabase 插件部署，重新列举均为 `ACTIVE`、版本 1；原邀请函数仍为版本 1。没有修改应用源码或上传测试夹具、环境文件。
+
+| Worker | Supabase 部署包 SHA-256 |
+| --- | --- |
+| planning-worker | `c5275a5415678a5bce2189532813e1fbd7bc504d7e374313ed2ff52763ecb191` |
+| clarification-worker | `5ceb11a414e827ca9280f0e99956b98d565135e120c9694dad58517da533b168` |
+| resource-worker | `b1f0fc1d82fd6db8a3745e1eca2c35d1ac6dff09b331652935adfb9be9c29240` |
+| translation-worker | `c5ec6294984f67fed3df76cf14c417157294591dade5da95bb8dcd207bb7f3b7` |
+| explanation-worker | `739fb5a5d8a0f4307d520d7fe2006be04a1940a538d3daac1b18c767f4d5e878` |
+
+本批重新通过 108 项 Worker 测试；五个真实托管入口共 15 项 HTTP 检查通过：GET 为 405、非 JSON POST 为 415、无配置的 JSON POST 为 503／对应 `*_WORKER_UNAVAILABLE`；响应均为 `no-store`，无浏览器 CORS 许可。**这些证据只证明部署可启动、当前拒绝执行，不证明已配置身份核验、数据库操作或真实 Agent 流程。** 未发起带真实身份的执行或调用提供方。
+
+`verify_jwt=false` 与现有本地配置一致：处理器自己校验独立 Worker 凭据、签名 JWT 与当前 Auth 用户，再构造管理员客户端；操作和 owner 不能由客户端任意指定。翻译／讲解允许通过核验的 Web 会话；OAuth 会话则仅允许显式配置的扩展 client。凭据未配置时在 Auth／RPC 前返回 503。部署与环境配置分别依据 [Supabase 发布文档](https://supabase.com/docs/guides/functions/deploy)及[环境变量文档](https://supabase.com/docs/guides/functions/secrets)，不能把平台 `ACTIVE` 当作业务启用。
+
+19 条增量 SQL 已完成两段独立静态审查（11 + 8 条），但**尚未应用到托管库**；重新列举仍为 7 条。升级约束：旧 v1 提案写入会被新版本拒绝，必须协调主站切换；保留已有历史，不能重写旧提案；所有资源生命周期迁移落地且配置明确保留策略后才能开启资源流程。新额度表默认无额度，只为自测账号配置有限次数。审查没有发现顶层业务数据删除，但不代替真实升级、权限与数据保留验证。
+
+下一步：配置两端一致的独立 Worker 凭据与必要服务端变量，协调数据库／主站／扩展升级，再跑 F1–F4。Supabase 插件可部署函数但未暴露 secret 设置能力，当前 CLI 未登录，不能据此绕过凭据校验。ego-browser 空间 8 本批只读清点仍为 `agentDelegatedToUser`，已请求用户交回控制权；未自行接管、另建空间或发送邮件。主站别名、数据库、账号额度与原有业务数据本批未修改，未产生模型调用或购买升级。
 
 ## 6. 密钥边界
 
