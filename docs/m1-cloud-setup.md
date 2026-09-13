@@ -135,8 +135,24 @@ vercel deploy --prebuilt --prod --skip-domain
 
 ## 6. 密钥边界
 
+### 2026-09-13 F1 服务端凭据配置
+
+源码固定点 `aaf7888`。空间 8 的实际所有权已恢复为 `agent`，因此复用原空间继续；没有调用强制接管，也没有新建空间。Supabase 后台现有登录有效，通过已登录的 Secrets 表单完成配置，无需新建 Personal Access Token。
+
+- 规划、澄清、资源、翻译、讲解各生成独立的 32 字节随机凭据，以 64 字符十六进制表示；仅在配置进程内生成和传递，没有写入本地文件、提交或输出值。
+- Vercel 逐项通过 stdin 写入，重列确认五项均为 `Secret`／`Hidden`，范围只有 `Production`；不覆盖原有三个公开配置，不配置 Preview／Development。
+- Supabase 逐项保存相同值，读取界面显示的 SHA-256 摘要，与同次内存生成值的摘要比较，五项全部一致。没有读取管理员密钥，也没有用模型 Key 充当 Worker 凭据。
+- Supabase 新增 `BLUEPRINT_EXTENSION_OAUTH_CLIENT_ID`，值来自数据库现有配置；保存摘要核对通过，本地 Vercel 生产配置的公开 client 值也与数据库一致。没有注册新 OAuth 客户端或扩张授权范围。
+- 五个真实 Worker 各检查 GET、非 JSON POST、无凭据 JSON POST，共 15 项断言通过：分别为 405、415、403／对应 `*_FORBIDDEN`，均 `no-store` 且无 CORS 许可。与 9 月 11 日的 503 相比，这证明当前 Worker 配置检查已通过、未授权请求被拒绝；**不证明真实用户 JWT、RPC、模型执行或完整双端旅程已通过。**
+
+首次从浏览器任务进程调用 Vercel 时，其 PATH 找不到 Node；该次未写入任何端配置。改用已核实的 Node 绝对路径后成功，没有重复覆盖或为此要求用户操作。原 CLI 登录缺失不再阻塞本次 Secrets 配置。
+
+配置遵循 [Supabase 环境变量](https://supabase.com/docs/guides/functions/secrets)和 [Vercel 敏感环境变量](https://vercel.com/docs/environment-variables/sensitive-environment-variables)的管理边界。**Vercel 环境变量变更仍需新部署接收，既有 Web 候选并未因此自动升级。** 本批未部署新 Web、切换主域名、应用迁移、增加账号额度、发送邮件或调用模型；托管重新列举仍为 7 条迁移。提供方 Key 和启用开关仍待配置，资源保留策略、账号额度、19 条增量迁移与 Web／扩展的协调切换及 F1–F4 实际旅程继续待办。不要再把已解除的浏览器交接状态作为阻塞原因。
+
+### 配置边界
+
 - 浏览器可见：Supabase Publishable Key、OAuth Public Client ID、Sentry DSN。
 - 仅 Supabase Edge Function：平台自动注入的 Supabase Service Role。
 - 仅 Web 构建服务端：Sentry 上传令牌（如启用）。
-- 早期 M1 仅使用公开配置；当前 F1–F4 将接入服务端 DeepSeek、YouTube Data API、Supadata 及独立 Worker 凭据，但本批尚未配置或启用。提供方 Key 不得进入 `NEXT_PUBLIC_*`、`WXT_PUBLIC_*` 或客户端包；新增费用仍遵守用户预算与审批边界。
+- 早期 M1 仅使用公开配置；当前 F1–F4 已配置独立 Worker 凭据，服务端 DeepSeek、YouTube Data API、Supadata 和功能开关尚未配置或启用。提供方 Key 不得进入 `NEXT_PUBLIC_*`、`WXT_PUBLIC_*` 或客户端包；新增费用仍遵守用户预算与审批边界。
 - `.env.m1-cloud.local` 只保存 Project Ref、受邀自测邮箱和最终验收状态；Supabase Personal Access Token 与数据库密码只存在于向导进程内。
