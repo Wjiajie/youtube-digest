@@ -149,6 +149,33 @@ vercel deploy --prebuilt --prod --skip-domain
 
 配置遵循 [Supabase 环境变量](https://supabase.com/docs/guides/functions/secrets)和 [Vercel 敏感环境变量](https://vercel.com/docs/environment-variables/sensitive-environment-variables)的管理边界。**Vercel 环境变量变更仍需新部署接收，既有 Web 候选并未因此自动升级。** 本批未部署新 Web、切换主域名、应用迁移、增加账号额度、发送邮件或调用模型；托管重新列举仍为 7 条迁移。提供方 Key 和启用开关仍待配置，资源保留策略、账号额度、19 条增量迁移与 Web／扩展的协调切换及 F1–F4 实际旅程继续待办。不要再把已解除的浏览器交接状态作为阻塞原因。
 
+### 2026-09-13 F1 数据库与主站协调升级
+
+源码固定点 `bb83b08`。本批没有修改应用或迁移源码，按既有审查顺序发布，并保留账号、历史提案与学习数据。
+
+**迁移基线与执行：**
+
+- 云端原七条中，后六条保存的 SQL 正文 MD5 与本地完全一致。第一条仅缺少后来加入的邀请消耗更新；第二条已补齐，实际 `handle_new_user` 函数也包含该逻辑，因此不重放旧迁移。
+- 升级前两个账号、一个已应用的 v1 历史提案、零待确认提案；资源运行／采用表尚不存在，没有需回填期限的旧资源运行。对 13 张原有公共业务表保存行数与内容摘要，不输出私人正文。
+- 本地 `npm run test:db-contract` 通过已有账号、数据升级、提案确认、幂等、隔离与 OAuth 限制检查。随后通过插件逐条应用 19 条增量，从 `node_planning_metadata` 到 `explanation_runs`，全部成功。
+- 托管总计 26 条；新增版本范围 `20260913150752`—`20260913150822`，顺序和每条 SQL 正文摘要均与本地相符。**远端版本时间戳与本地不同，不能按版本号再次直接 push 全部迁移。**
+- 切换主站前，13 张原有表的行数与既有字段摘要逐项一致，包括蓝图版本、正式路径、原资源绑定、历史提案／修订、会话与产品事件；节点比较排除新增的 `estimated_minutes`、`completion_criteria`，另核实旧节点分别保持 `null`／空字符串。账号数仍为 2，没有改写历史提案或自动增加蓝图版本。
+
+**发布与实际页面：**
+
+- 使用生产配置构建，通过 `prepare:vercel-output` 移除 10 个本地环境文件映射，再预构建上传；新候选为 [blueprint-m1-getvzgilx](https://blueprint-m1-getvzgilx-norlymangune65-4981.vercel.app)，部署 ID `dpl_GWtq1CLnn6o82yu13j1qgWuoVvTU`，状态 `READY`，目标 `production`，框架 Next.js。
+- 候选 10 项未登录入口检查通过后执行迁移；数据比对通过后执行 promote。再次列举别名，确认 [主域名](https://blueprint-m1.vercel.app) 与自动项目别名均指向新部署；主域名同样 10 项入口检查通过。
+- 原浏览器登录会话可读取新版首页与正式目标路径，旧节点未填写的投入／完成依据明确显示“待明确”；没有被伪造为新规划。首页使用现有静态身份回退，不称为正式 3D 已完成。
+- 实际已安装扩展重载后恢复原账号，显示新增的学习／理解／记录工作台与同一个原测试节点；仍为固定 ID、3.0.0，未扩张权限。安装前磁盘 Manifest SHA-256 为 `7408b80980dc5ff5675eae804846308408688f1b026bf4ae7173333cec5f321b`，HTTPS hosts 仍仅 YouTube、Web 和同一 Supabase 项目。**此次是独立扩展页面的启动检查，不代替真实 YouTube 页面、原生 Side Panel 生命周期或学习写回验收。**
+
+**权限与观测：**
+
+- 实际查询所有公共表均启用 RLS；12 个 Worker 领取／完成 RPC 均禁止 anon／authenticated，仅授予 service_role。私有写核心和旧写函数不允许客户端执行；有身份与版本核验的 guard 保留 authenticated 调用权。
+- Supabase 安全顾问没有 ERROR；20 项 INFO 为私有内部表启用 RLS 但无客户端策略，另有 1 项 WARN 为泄露密码保护未启用，保留告警而不自行升级套餐。不把顾问无 ERROR 当作完整安全证明。
+- 对新部署执行 `logs --level error --since 20m --limit 20 --json`，命令成功且无返回日志条目；这只覆盖当次窗口与可查询日志，不证明未来无错。Drains 本批未核实，端到端监控仍有待验收。
+
+下一步：配置提供方与账号有限额度、明确资源保留策略及维护，再通过真实 Agent 和真实 YouTube 学习写回完成 F2–F4；F1 的跨账号隔离／撤销授权仍需新版联合验证。本批未开启模型或资源调用开关、未消费提供方额度、未发送邮件、未新建测试账号或提交学习成果；只完成数据库、主站与扩展版本接通，不能把原测试视频当作推荐质量证明。
+
 ### 配置边界
 
 - 浏览器可见：Supabase Publishable Key、OAuth Public Client ID、Sentry DSN。
