@@ -212,10 +212,31 @@ vercel deploy --prebuilt --prod --skip-domain
 
 下一步：接通真实视频检索／采用与必要内容策略、维护，再验证真实 YouTube 上已安装扩展的学习记录写回。已知语义质量与瞬时 503 保留在待办，不用继续美术制作替代 F2–F4 验收。
 
+### 2026-09-14 F2 视频服务凭据与免费连通性
+
+固定点 `70be736`。本批接续原 ego-browser 任务空间 8，配置服务端凭据并检查真实公开元数据；**没有发布新版 Web、开启资源执行或完成视频采用，不代表完整 F2–F4 通过**。
+
+- Supadata 既有账号确认是 Free 套餐，本周期上限 100 credits、已用 1、额外 credits 为 0，页面显示 2026-09-22 重置；自动充值不可用且未开启。这个已用 credit 不是本批字幕调用的证据，本批没有请求 Supadata 内容 API。复用既有 API Key，仅通过内存和 CLI 标准输入保存为 Vercel `SUPADATA_API_KEY`、Production Secret；没有新建 Key、购买或升级。
+- Google Cloud 新建独立项目 `blueprint-m1-20260914`，启用 `youtube.googleapis.com`，详情页确认 `Enabled`。创建唯一 Key `Blueprint M1 YouTube Server`（凭据 ID `8017427f-1a6d-4551-bcca-88ffa46e9805`），重新打开详情确认 API 限制仅为 YouTube Data API v3。应用来源限制为 None：当前没有配置固定服务端出口 IP，不将它描述为 IP 受限 Key，也不使用针对浏览器的 Referer 限制替代服务端限制。
+- 新项目默认关联了已有结算账号。核实精确项目后，**仅解除新建 Blueprint 项目的结算关联**；管理页面确认其他两个原关联项目仍在，Blueprint 页面明确显示没有关联结算账号。没有关闭结算账号、调整其他项目、创建付费计算／存储资源或购买套餐。不能用费用页面的延迟统计声称已经取得最终账单。
+- `YOUTUBE_API_KEY` 同样经内存和标准输入保存为 Vercel Production Secret；没有写入环境文件、命令参数或客户端。两项新 Key 都还需要下一次部署才能进入线上运行环境；资源、采用、翻译和讲解开关仍未启用，生产版本仍为上节的 `dpl_CSLNAUcA8nKnGcoc7XBYrKJgyAMP`。
+- 控制台显示 Search Queries per day 为 100、Queries per day 为 10,000；未调高配额、未设置自动补充。用量页面当时显示 0，但存在统计延迟，不能据此抹除下面的实际请求。配额以项目控制台为准，不沿用旧的单次搜索 100 units 假设；当前官方说明见 [YouTube Data API Overview](https://developers.google.com/youtube/v3/getting-started)。
+
+**真实检查与限制：**
+
+1. 共发出 2 次 `search.list` 和 1 次 `videos.list`，均返回 200，没有自动重试或写入应用资源表。其中解除结算关联后的搜索与详情各 1 次均成功，证明当前公开元数据调用不依赖该结算关联；不是未来可用性承诺。
+2. 首次中文查询包含 Google Sheets、冻结标题行和日期格式，三个候选中混入 Excel 与不相关教程；改用英文查询后，三个候选集中在冻结行，官方详情均标示 `caption=false`。**查询的相关性、节点覆盖和字幕可用性仍须验证**；这两次手工配置检查不等于应用候选匹配或 Agent 推荐通过。没有下载字幕、发送候选内容给模型、绑定视频或声称已学习。
+3. 4 个资源配置／提供方／发现相关测试文件共 78 项通过。对 742 个 Git 跟踪文件和所选 Web／扩展客户端产物检查新 YouTube Key，命中 0；检查范围不包含供应商后台、操作系统或平台日志。没有重跑未改变的全量构建与云端账号旅程。
+4. 浏览器普通加载失败通过一次页面 Retry 恢复；页面存在同名隐藏按钮，最初点击没有启用 API，改为核实可见控件后成功。两次浏览器接管均按技能暂停，收到用户明确“继续”才恢复；目前已恢复 Agent 控制，不再等待旧确认。
+
+收口：120 个本地文档链接目标存在，`git diff --check` 通过。两位非作者分别复核 Standards 与 Spec，各 0 项确认问题；只复核文档差异和本批所列证据，不声称独立重做云端或浏览器验证。
+
+下一步仍是主流程：核清真实字幕的使用范围，设置有依据的内容期限与维护，再发布受控资源入口，完成真实视频采用和扩展学习写回。已有 [内容使用核查](resource-retention-research.md) 中的未知项不因免费额度或 Key 可调用而变为已授权；不先打开开关再补策略，不自动续补模型额度，也不回到商业 3D 精修。
+
 ### 配置边界
 
 - 浏览器可见：Supabase Publishable Key、OAuth Public Client ID、Sentry DSN。
 - 仅 Supabase Edge Function：平台自动注入的 Supabase Service Role。
 - 仅 Web 构建服务端：Sentry 上传令牌（如启用）。
-- 早期 M1 仅使用公开配置；当前 F1–F4 已配置独立 Worker 凭据与仅 Web 服务端使用的 DeepSeek Key，并为自测开启澄清／规划。YouTube Data API、Supadata 和资源／翻译／讲解开关仍未配置或启用。提供方 Key 不得进入 `NEXT_PUBLIC_*`、`WXT_PUBLIC_*` 或客户端包；新增费用仍遵守用户预算与审批边界。
+- 早期 M1 仅使用公开配置；当前 F1–F4 已配置独立 Worker 凭据与仅 Web 服务端使用的 DeepSeek Key，并为自测开启澄清／规划。YouTube Data API 与 Supadata Key 已保存为 Production Secret，尚未随新部署进入运行环境；资源／采用／翻译／讲解开关仍未启用。提供方 Key 不得进入 `NEXT_PUBLIC_*`、`WXT_PUBLIC_*` 或客户端包；新增费用仍遵守用户预算与审批边界。
 - `.env.m1-cloud.local` 只保存 Project Ref、受邀自测邮箱和最终验收状态；Supabase Personal Access Token 与数据库密码只存在于向导进程内。
