@@ -1,4 +1,4 @@
-﻿# AI 3D 虚拟形象生成流水线技术可行性（Meshy 主源核查）
+# AI 3D 虚拟形象生成流水线技术可行性（Meshy 主源核查）
 
 核查日期：2026-09-19。范围：Meshy API 官方文档（docs.meshy.ai/en）、Meshy 官网条款与定价页、官方 MCP Server 仓库源码。方法：通过本地代理匿名 HTTP GET 抓取官方页面正文与 JSON-LD 结构化数据，仅读取文档页、条款页、定价页与官方 GitHub 源码，**未注册账号、未获取 API Key、未实际调用任何付费接口、未下载任何模型**。因此本文所有“能力”结论来自官方文字描述，**不是实测结果**；凡官方文字未写明者一律进入文末“未核实”清单，不做推测。
 
@@ -370,4 +370,40 @@
 - **4. Meshy 生成 3D ＋ 绑定 ＋ 动画 —— 有条件可行。** [Rigging](https://docs.meshy.ai/en/api/rigging) 只对**标准双足人形**可靠，要求贴图、清晰肢体、面部朝 +Z、≤300,000 面；[Animation](https://docs.meshy.ai/en/api/animation) 提供 678 条预设动作（Webapp 称 500+）以及文本生成动作。最关键的注意事项：**完全不存在面部／blendshape／口型动画**（[Rigging 指南](https://docs.meshy.ai/en/webapp/guides/3d-model/rigging) 与 [Animate 指南](https://docs.meshy.ai/en/webapp/guides/animate) 都要求“要表情就去 Blender/Maya 手工做”）——如果 Blueprint 首页人物需要眨眼或对话口型，本流水线**必须外挂一层自定义表情方案**，否则只能做身体待机动画。
 - **5. GLB 存入 Supabase —— 有条件可行。** 下载格式齐全（GLB 内嵌贴图，[Export & File Formats](https://docs.meshy.ai/en/webapp/guides/platform/export-formats)），但 **API 产物对非 Enterprise 只保留 3 天**（[Asset Retention](https://docs.meshy.ai/en/api/asset-retention)、[ToS §2.5](https://www.meshy.ai/terms-of-use)），下载链接是**带 Expires 的签名 URL**。最关键的注意事项：**必须把“下载并转存 Supabase”做成任务成功后同一请求链内的强一致步骤（含重试与幂等），并且绝不能把 Meshy 的签名 URL 当长期地址存库**；同时注意 API 任务不出现在 Webapp 的 My Assets 中，任务 ID 需自行持久化。
 - **6. three.js 首页展示 —— 可行（技术成熟度最高的一步）。** GLB 是官方推荐的 Web 展示格式（[Export & File Formats](https://docs.meshy.ai/en/webapp/guides/platform/export-formats)），带蒙皮的 *_withSkin.glb 已内含动画，可被 three.js AnimationMixer 直接播放。最关键的注意事项：**没有官方文件体积数据（未核实），而 polycount 可到 30 万面、贴图可到 8k，按默认参数直出很可能撑爆首屏预算**；应在生成时就锁定 model_type: smart-topology（5 credits、面数 100–15,000）或 target_polycount 低档 + texture_resolution: 2k，再配合 CDN 压缩（Draco/Meshopt）后实测首屏时间。
+
+## 决策记录
+
+### D1（2026-09-19）输入不得包含可识别个人身份信息 —— 已确认
+
+用户确认采用保守路线：**不向 Meshy 传输可识别的个人身份信息（PII）**。
+
+- 用户原图只在本次请求的内存中存在；经**去身份化风格化**后才出边界，不落盘、不入库、不进日志、不发往第三方。
+- 存储桶只放**生成的 GLB**；禁止把用户原始照片放进任何桶。
+- 「长得像我」的相似度还原**不在本方案内**。若将来要启用，必须先取得 Meshy 书面 Order/DPA，并同时重谈 **3 天保留**与**训练用途**条款。
+- 依据：Terms of Use 第 2.2 条（禁止在 Customer Input 中放入 PII）、第 2.9 条与官网 FAQ 关于训练用途**相互矛盾**（按更保守口径执行）；见本文上文的许可核查。
+- 边界：去身份化属 **P2 输入准备模块**，其验收不在 P1 数据层范围内；P1 只承载生成物与权限。
+
+### D2（2026-09-19）pgTAP 验证改由 CI 执行 —— 已确认
+
+本机 Docker daemon 未运行，且 bash 不可用（仅 WSL 垫片，其发行版 VHDX 报 ERROR_PATH_NOT_FOUND），因此 supabase:test 无法在本机执行。两个 pgTAP 文件改由 .github/workflows/ci.yml 的 supabase 步骤执行（ubuntu-latest 自带 Docker：supabase start → db reset → test db）。
+
+**因此：P1 在 CI 通过之前不得标记为「已验证」。**
+
+### D3（2026-09-19）Meshy 凭据与用量边界
+
+- **需要 Pro 及以上套餐**才能创建 API Key（官方 MCP Server README：requires Pro plan or above）。免费层**无法**调用 API。
+- Key 在 meshy.ai/settings/api 创建，形如 msy_ 前缀。
+- **凭据只放服务端**：Vercel Production Secret，或本地 .env.local。**不得**进入 NEXT_PUBLIC_* 、WXT_PUBLIC_* 、客户端产物或仓库；也不要在对话里粘贴。
+- **单次完整化身流水线约 46–55 credits**（image-to-image 3–12 ＋ image-to-3d 20–35 ＋ rig 5 ＋ animate 3）。Pro 的 1000 credits/月约合 **18–21 次**。
+- 上线前必须实现**每账号配额 + 限流**，否则单个用户可烧穿额度。
+
+### P0 当前状态
+
+| 前置 | 状态 |
+| --- | --- |
+| 合规门（D1） | 已关闭 |
+| 验证路径（D2） | 已确定，待 CI 结果 |
+| Meshy Pro API Key | 待用户提供（只放 Secret，勿粘贴到对话） |
+| 绑骨 spike（image-to-3d → rigging → animations） | 待执行；这是方案最大的未知量 |
+
 
