@@ -29,8 +29,10 @@ set local role authenticated;
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
 select is(public.begin_avatar_run(current_setting('avatar_test.request')::jsonb)->>'status','queued','T01 begin reserves a queued run');
 select is((public.begin_avatar_run(current_setting('avatar_test.request')::jsonb)->>'theme_id'),'cyberpunk','pinned theme id survives replay');
-select is((public.begin_avatar_run(current_setting('avatar_test.request')::jsonb)->>'expires_at'),
-  (select expires_at::text from public.avatar_runs where id='a1000000-0000-4000-8000-000000000020'),'exact replay returns the stored row');
+-- Compare whole rows: to_jsonb(timestamptz) and timestamptz::text render differently.
+select is(public.begin_avatar_run(current_setting('avatar_test.request')::jsonb),
+  public.begin_avatar_run(current_setting('avatar_test.request')::jsonb),
+  'exact replay returns the identical stored row');
 reset role;
 select is((select available_attempts from private.avatar_quotas where owner_id='a1000000-0000-4000-8000-000000000001' and kind='generate'),1,'replay debits exactly once');
 
@@ -97,7 +99,9 @@ select is(public.claim_avatar_run('a1000000-0000-4000-8000-000000000001','a10000
 reset role;
 select is((select lease_id from private.avatar_leases where run_id='a1000000-0000-4000-8000-000000000020'),'a1000000-0000-4000-8000-000000000030'::uuid,'a refused claim never rewrites the lease');
 
--- T26/T27: lease ownership and result contract.
+-- T26/T27: lease ownership and result contract. finish requires the service_role
+-- session; without it every case below would fail closed with AVATAR_FORBIDDEN.
+set local role service_role;
 select throws_ok($$select public.finish_avatar_run('a1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000020','a1000000-0000-4000-8000-000000000031','{"status":"generated"}')$$,
   '42501','AVATAR_FORBIDDEN','wrong lease cannot complete');
 select throws_ok($$select public.finish_avatar_run('a1000000-0000-4000-8000-000000000002','a1000000-0000-4000-8000-000000000020','a1000000-0000-4000-8000-000000000030','{"status":"generated"}')$$,
