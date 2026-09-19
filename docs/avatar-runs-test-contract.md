@@ -4,7 +4,7 @@
 > 冻结范围：**AI 化身（AI avatar）能力的数据层 P1** —— 无供应商调用、无路由、无 UI。
 > 契约一旦冻结，实现者与测试作者不得为获得 Green 而修改本文件中的任何期望值；如需变更，必须由原独立角色复核后再改。
 >
-> 版本：**v2（2026-09-19 修订）**。v2 相对 v1 的改动与理由见文末附录 B. 修订记录。
+> 版本：**v3（2026-09-19 修订）**。v3 修正了 §7.4/§7.6 中与真实平台不符的行为断言，并新增"断言作者权限约束"；v2 与 v3 的改动与理由见文末附录 B. 修订记录。
 
 ---
 
@@ -271,6 +271,8 @@
 
 以下每一条都必须有自动化断言，且**两侧各覆盖一次**；"覆盖"的含义按断言类型定（v2 明确）：**结构型**（`has_table_privilege`/`has_function_privilege`/`pg_policy`/`prosecdef`）由 PGlite 契约断言，**行为型**（真实 `42501`、行不可见、RPC 拒绝）由 pgTAP 断言。括号内为镜像依据；P 侧必需清单见 §8.4 第 1 点。
 
+**断言作者权限约束（v3 新增；首次真实执行踩坑）**：`service_role` 对 `public.avatar_runs` 与 `private.avatar_leases` **没有任何表权限**（I16、I18、§6.1），`authenticated`/`anon` 对两张 private 表同样没有。因此 pgTAP 在 `service_role` 会话里**只能调用 `claim`/`finish` 这两个 RPC**；要在 `service_role` 会话期间核对 run/lease 的行内容（`status`、`lease_id`、`completion_digest` 等），必须 `reset role`（回到迁移属主身份）之后再 `select`。唯一例外是 `private.avatar_quotas`：`service_role` 有 `SELECT`，可在该会话内直接读（`authenticated` 仍不可）。违反这条会让测试**在第一个表读取处整体中止**，其后的断言一条都不会执行（CI run 35430798428）。
+
 ### 6.1 表权限
 
 | 断言 | 期望 | 依据 |
@@ -364,12 +366,12 @@
 - **结构断言的 SQL 形态固定为**（`polroles = array[0::oid]` 即 PUBLIC；`storage.objects` 是平台所有的表，因此**只断言我们这条策略的存在与客户端写策略的缺失，不断言整表策略唯一**）：
   `select count(*) from pg_policy where polrelid='storage.objects'::regclass and polcmd in ('a','w','d') and (polroles = array[0::oid] or polroles && array[(select oid from pg_roles where rolname='authenticated'),(select oid from pg_roles where rolname='anon')]::oid[])` = `0`。
 - 同时断言 `storage.objects` 的 `relrowsecurity = true`。
-- **行为断言必须按三种 DML 的真实语义分别写（v2 修正）**：RLS 开启且无写策略时三者结果**不同**，不得一律期待 `42501`：
-  1. `INSERT` → **抛 `42501`**（`new row violates row-level security policy`），用 `throws_ok(..., '42501', null, …)`；
-  2. `UPDATE` → **静默 0 行**（不是错误）：`with changed as (update storage.objects set name = … returning 1) select is((select count(*)::int from changed),0,…)`；
-  3. `DELETE` → **静默 0 行**：`with deleted as (delete from storage.objects … returning 1) select is((select count(*)::int from deleted),0,…)`；
-  4. 三者之后必须补一条"fixture 对象行数未变"的断言，证明被拒的写没有副作用。
-  v1 曾把三者都写成"被拒绝（`42501`）"，该写法对 `UPDATE`/`DELETE` 是错的（verifier 实测，见附录 B）。
+- **行为断言（v3 按真实栈修正；v1、v2 的写法都不可执行）**：Supabase 在 `storage.objects` 上自带保护，客户端写路径的实测行为是：
+  1. `INSERT` → **抛 `42501`**（`new row violates row-level security policy`）：`throws_ok(…, '42501', null, …)`。**必需证据**。
+  2. `DELETE` → **不得作为行为断言**。真实栈（本地 Supabase；CI run 35430798428）直接抛平台守卫 `ERROR: Direct deletion from storage tables is not allowed. Use the Storage API instead.`：错误发生在 RLS 判定之前，既不是 `42501`，也不是"0 行"。v2 的"静默 0 行"写法因此不可执行。
+  3. `UPDATE` → 实测**返回 0 行且不报错**，但它依赖平台的策略/守卫现状，**不作为必需证据**：可作为附加观察写成 `with changed as (update storage.objects set name = … returning 1) select is((select count(*)::int from changed),0,…)`；平台若改为直接拒绝则允许删除该条，但**不得**改写为 `42501`。
+- **因此写路径的必需证据收敛为三项**：(a) 上一段的结构断言（覆盖 `public`/`authenticated`/`anon`）；(b) `INSERT` 的 `42501`；(c) 写探测之后 **fixture 对象行数未变**。**不得**把 `DELETE` 放进必需集合；如需探测 `DELETE`，只能用消息断言 `throws_ok(…, null, 'Direct deletion from storage tables is not allowed. Use the Storage API instead.', …)`，**不得**依赖其 SQLSTATE，且该断言随时可因平台变化删除。
+- 演进记录：v1 把三种 DML 一律写成"被拒绝（`42501`）"；v2 改成"`INSERT`→`42501`、`UPDATE`/`DELETE`→静默 0 行"，两者都与真实栈不符。v3 以上述必需集合为准（依据 CI run 35430798428 日志）。
 
 ### 7.5 合规约束
 
@@ -388,7 +390,7 @@
      - `has_table_privilege('authenticated','storage.objects','SELECT')`（若本地栈未授予该权限，则 RLS 实测探针无法执行；此时 owner-only 读只能退化为策略形状断言，且必须在测试输出中显式报告"环境阻塞"，而不是改写成通过）；
    - 断言桶行：`select public, file_size_limit, allowed_mime_types from storage.buckets where id='avatar-models'` = `(false, 10485760, {model/gltf-binary})`；
    - 断言策略存在与形状（§7.3、§7.4）；
-   - 以 `set local role authenticated` + `set_config('request.jwt.claims', …)` 实测：owner 能 `select` 自己路径下的对象；另一个 uid 的行数为 0；带 `client_id` 的会话行数为 0；匿名会话行数为 0；写路径按 §7.4 的三种真实语义**分别**断言（`INSERT` → `42501`；`UPDATE`/`DELETE` → 静默 0 行），并补 fixture 未变断言；"无写策略"的 `pg_policy` 断言必须覆盖 PUBLIC 与 `anon`/`authenticated` 重叠两种角色形态。
+   - 以 `set local role authenticated` + `set_config('request.jwt.claims', …)` 实测：owner 能 `select` 自己路径下的对象；另一个 uid 的行数为 0；带 `client_id` 的会话行数为 0；匿名会话行数为 0；写路径按 §7.4 的**必需集合**断言（结构断言 + `INSERT` → `42501` + fixture 未变），**不得**把 `DELETE`（平台删除守卫先抛错）或 `UPDATE`（依赖平台策略现状）放进必需集合；"无写策略"的 `pg_policy` 断言必须覆盖 PUBLIC 与 `anon`/`authenticated` 重叠两种角色形态。
    - 生命周期：文件以 `begin; … rollback;` 包裹（与 `supabase/tests/resource_runs.test.sql:1,131` 相同），不得在本地栈留下对象行。
 3. **PGlite 契约里不要写 storage 断言**。需要在 PGlite 也验证 storage 时，最小的 harness 改动（**本契约不自行实施，需协调者授权**）是在 `scripts/test-m1-migration.mjs` 的初始 `db.exec()`（`:24-39`）内追加：
    `create schema storage;`
@@ -497,6 +499,8 @@
      | 其它行（T08、T11–T14、T17、T20、T21、T24–T30、T34–T36、T47） | 不要求 P 侧复刻；最终判据在 T | 见 §8 位置标记 |
    - 若还想在 PGlite 做 storage 断言，最小改动是 §7.6 第 3 点的 storage stub（需授权）。
 2. **pgTAP（`npm run supabase:test`）**：单会话单事务，能访问真实 ACL/RLS 与 storage schema；**不能**验证两个真实连接的交错并发。
+   - **断言作者权限约束（v3）**：`service_role` 无 `public.avatar_runs`/`private.avatar_leases` 表权限，核对这两张表的行必须 `reset role`；仅 `private.avatar_quotas` 可在 `service_role` 会话内直接 `SELECT`（详见 §6 前言）。
+   - **平台自带保护（v3）**：Supabase 在 `storage.objects` 上拦截直接 `DELETE`（`Direct deletion from storage tables is not allowed. Use the Storage API instead.`），故客户端写路径的必需证据是"结构断言 + `INSERT` 的 `42501` + fixture 未变"（详见 §7.4）。
    - 真并发的最小补充（不在本契约的必测清单内，除非协调者要求）：新增 `scripts/test-avatar-local.mjs`，镜像 `scripts/test-blueprint-snapshot-local.mjs:1-15` 的做法（`docker exec supabase_db_blueprint-local psql` 开两个连接 + gate 观测），对同一 owner 并发调用 `public.begin_avatar_run` 与 `public.claim_avatar_run`，断言"至多一个活动 run、额度恰好扣 1、至多一个 lease"。
    - 备选（同样需授权）：新增 `apps/web/agent-integration/avatar-runs.spec.ts`，用两个 Supabase client + `Promise.all` 直接调 RPC（写法镜像 `apps/web/agent-integration/resource-runs.spec.ts:639-646` 与 `planning-runs.spec.ts:210`），由 `npm run test:agent-runs` 执行。
 3. **本契约的并发验收口径**：P1 的 REQUIRED 证据是数据库层与入口层证据（T22、T23、T04，以及 T22 的"不扣额度"）；真并发属于**显式记录的缺口**，在 P2（worker/路由批次）补齐。
@@ -596,6 +600,33 @@
 9. **T40/T41 之外的回归证据**：T40（既有 pgTAP 套件 0 失败）需要在本地栈实跑一次并留证；T41 需按 §8 的新形式补断言。
 10. **真并发**（P2）：按 §8.4 第 3 点的口径，仍是显式缺口。
 
-### B.4 本次修订未改动的部分
+### B.4 v2 未改动的部分（实现核对无偏差）
 
 v1 的其余冻结值经实现核对**无偏差**，v2 不再改动：`runId` + 三参数（`kind`/`theme_id`/`theme_version`）幂等判据与顺序（重放判定先于主题冲突判定）；lease 校验先于结果校验；`completion_digest` 精确重放；`expires_at` 无 `> created_at` 约束（保证过期可构造）；storage 守卫 `to_regclass('storage.objects') is null … return`；桶 `avatar-models` / 10 MiB / 单一 MIME / 路径第一段 owner 判据；`queued` 600s 与 `running` 1800s；五对 definer/invoker 姿态与两套命名空间的 ACL。
+
+---
+
+### B.5 v3（2026-09-19；CI run 35430798428 首次真实执行）
+
+| 位置 | 改动 | 理由 |
+| --- | --- | --- |
+| §7.4 | 删除"`UPDATE`/`DELETE` 静默 0 行"的行为断言；写路径必需证据收敛为三项（结构断言 + `INSERT` 的 `42501` + fixture 未变）；`DELETE` 只允许消息断言且**非必需** | 平台在 `storage.objects` 上自带删除守卫，`DELETE` 先抛平台错误，RLS 判定根本不会发生 |
+| §7.6 | 同步写路径必需集合 | 与 §7.4 一致 |
+| §6 前言 | 新增**断言作者权限约束**：`service_role` 对 `public.avatar_runs`/`private.avatar_leases` 无表权限，核对这两张表的行必须 `reset role`；仅 `private.avatar_quotas` 例外 | 首次真实执行在 `service_role` 会话里直接读表，导致文件在第 9 个断言处整体中止，其后 21 个断言从未执行 |
+| §8.4 第 2 点 | 上述两条约束的摘要 | 让断言作者在选位置时即看到 |
+
+#### B.5.1 v3 起以实测为准的平台事实
+
+| 事实 | 实测结果（本地 Supabase 栈，CI run 35430798428） |
+| --- | --- |
+| `storage.objects` 直接 `DELETE` | 抛 `ERROR: Direct deletion from storage tables is not allowed. Use the Storage API instead.`（平台守卫先于 RLS；既不是 `42501`，也不是 0 行） |
+| `storage.objects` 直接 `UPDATE` | 0 行、不报错（依赖平台现状，不作为必需证据） |
+| `storage.objects` 无 WITH CHECK 策略时的 `INSERT` | `42501`（row-level security） |
+| `service_role` 对 `public.avatar_runs`/`private.avatar_leases` | 无任何表权限 → 核对行必须 `reset role` |
+| `service_role` 对 `private.avatar_quotas` | 有 `SELECT`，可直接读 |
+| 其余行为 | 首次执行确认通过：RLS 拒绝、单飞唯一索引、租约不可改写、额度扣减与退款、过期清扫、`stale`、失败字面量被接受与未知字面量被拒 |
+
+#### B.5.2 说明
+
+- B.3 是 v2 时点的缺口快照；v3 只作废 v2 §7.4/§7.6 的写路径写法并新增断言作者约束，B.3 的其余条目仍待收口，本轮未逐条核对。
+- 本轮同样只改本文件；迁移、两个 pgTAP 文件与 `scripts/test-m1-migration.mjs` 由实现批次维护。
