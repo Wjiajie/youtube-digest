@@ -87,9 +87,15 @@ reset role;
 -- T03/T04: claim is single, lease is immutable.
 set local role service_role;
 select is(public.claim_avatar_run('a1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000020','a1000000-0000-4000-8000-000000000030')->'acquired','true'::jsonb,'first claim acquires execution');
+-- service_role deliberately holds no privilege on avatar_runs or avatar_leases, so state
+-- is inspected as the migration owner between role switches.
+reset role;
 select is((select status from public.avatar_runs where id='a1000000-0000-4000-8000-000000000020'),'running','claim moves the run to running');
-select is(public.claim_avatar_run('a1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000020','a1000000-0000-4000-8000-000000000031')->'acquired','false'::jsonb,'second claim is refused');
 select is((select lease_id from private.avatar_leases where run_id='a1000000-0000-4000-8000-000000000020'),'a1000000-0000-4000-8000-000000000030'::uuid,'existing lease is never rewritten');
+set local role service_role;
+select is(public.claim_avatar_run('a1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000020','a1000000-0000-4000-8000-000000000031')->'acquired','false'::jsonb,'second claim is refused');
+reset role;
+select is((select lease_id from private.avatar_leases where run_id='a1000000-0000-4000-8000-000000000020'),'a1000000-0000-4000-8000-000000000030'::uuid,'a refused claim never rewrites the lease');
 
 -- T26/T27: lease ownership and result contract.
 select throws_ok($$select public.finish_avatar_run('a1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000020','a1000000-0000-4000-8000-000000000031','{"status":"generated"}')$$,

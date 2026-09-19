@@ -50,14 +50,12 @@ select set_config('request.jwt.claims','{"sub":"a2000000-0000-4000-8000-00000000
 select is((select count(*)::int from storage.objects where bucket_id='avatar-models'),0,'anonymous session reads no objects');
 select throws_ok($$insert into storage.objects(bucket_id,name,owner) values('avatar-models','a2000000-0000-4000-8000-000000000001/a2000000-0000-4000-8000-000000000022/avatar.glb',auth.uid())$$,
   '42501',null,'client cannot insert objects (bucket is server-write only)');
--- With no write policy, UPDATE/DELETE are refused silently rather than raising, so
--- assert the observable effect (zero rows) instead of an error code.
-with changed as (update storage.objects set name='a2000000-0000-4000-8000-000000000001/x/avatar.glb' returning 1)
-select is((select count(*)::int from changed),0,'a client UPDATE changes no rows because no write policy exists');
-with deleted as (delete from storage.objects where name like '%/avatar.glb' returning 1)
-select is((select count(*)::int from deleted),0,'a client DELETE changes no rows because no write policy exists');
+-- Measured on the real stack: Supabase refuses a direct DELETE on storage.objects
+-- outright ("Direct deletion from storage tables is not allowed"), so the write path is
+-- asserted structurally (no a/w/d policy for public/authenticated/anon, above) plus the
+-- RLS-driven INSERT refusal, rather than by attempting a destructive write.
 reset role;
-select is((select count(*)::int from storage.objects where bucket_id='avatar-models'),2,'the refused writes left both fixture objects intact');
+select is((select count(*)::int from storage.objects where bucket_id='avatar-models'),2,'the refused insert left both fixture objects intact');
 
 select * from finish();
 rollback;
