@@ -56,6 +56,7 @@ try {
   ]);
   // Upgrade already-created accounts with every subsequent migration. The test
   // deliberately does not recreate their data after adding new schema fields.
+  let avatarMigrationSeen = false;
   const migrationDirectory = new URL("../supabase/migrations/", import.meta.url);
   for (const file of (await readdir(migrationDirectory)).filter((name) => name.endsWith(".sql")).sort()) {
     if (file === "202608260001_m1_cloud_slice.sql") continue;
@@ -69,6 +70,8 @@ try {
     const clearingUpgrade = file.endsWith("_resource_evidence_clearing.sql") ? await seedResourceClearingUpgrade() : null;
     const positionsUpgrade = file.endsWith("_learning_positions.sql") ? await captureResourceUpgrade() : null;
     const expiryUpgrade = file.endsWith("_resource_evidence_expiry.sql") ? await captureResourceUpgrade() : null;
+    const avatarUpgrade = file.endsWith("_avatar_runs.sql") ? await captureResourceUpgrade() : null;
+    if (avatarUpgrade) avatarMigrationSeen = true;
     const migration = await readFile(new URL(file, migrationDirectory), "utf8");
     await db.exec(migration.replaceAll("extensions.citext", "text"));
     if (legacy) await verifyLegacyPlanningUpgrade(legacy);
@@ -81,7 +84,16 @@ try {
     if (clearingUpgrade) await verifyResourceClearingUpgrade(clearingUpgrade);
     if (positionsUpgrade) await verifyLearningPositionsUpgrade(positionsUpgrade);
     if (expiryUpgrade) await verifyResourceExpiryUpgrade(expiryUpgrade);
+    if (avatarUpgrade) await verifyAvatarUpgrade(avatarUpgrade);
   }
+  // Fail closed: the avatar data layer contract is meaningless if its migration is absent.
+  assert.ok(avatarMigrationSeen, "avatar_runs migration must be applied by the ordered migration sweep");
+  await verifyAvatarLifecycle();
+  await verifyAvatarOutcomes();
+  await verifyAvatarDbGuards();
+  await verifyAvatarExpiry();
+  await verifyAvatarAccessGuards();
+  console.log("Avatar contract passed: single-flight, debit-once, failure completion, lease fencing and the storage guard.");
   const returningInvite = await db.query(
     "select public.is_email_invited('owner@example.com') as allowed, used_by from private.invite_allowlist where email = 'owner@example.com'",
   );
@@ -598,6 +610,424 @@ async function verifyResourceUpgrade(before) {
   assert.deepEqual(acl, { anon_begin: false, user_claim: false, admin_direct_write: false, user_lease: false, quota_delete: false },
     "resource migration retains narrow explicit execution and quota privileges");
 }
+
+async function verifyAvatarUpgrade(before) {
+  await db.exec("reset role");
+  for (const [table, rows] of Object.entries(before)) {
+    const [schema, name] = table.split(".");
+    assert.deepEqual((await db.query(`select coalesce(jsonb_agg(to_jsonb(t) order by to_jsonb(t)::text),'[]'::jsonb) as rows from "${schema}"."${name}" t`)).rows[0].rows,
+      rows, `avatar migration preserves exact existing ${table} rows`);
+  }
+  for (const table of ["public.avatar_runs", "private.avatar_quotas", "private.avatar_leases"]) {
+    assert.equal((await db.query(`select count(*)::int as count from ${table}`)).rows[0].count, 0,
+      "avatar upgrade fabricates neither generation history nor free allowance");
+  }
+  const shape = (await db.query(`select
+    (select count(*)::int from pg_policy where polrelid='public.avatar_runs'::regclass) as run_policies,
+    (select count(*)::int from pg_policy where polrelid in ('private.avatar_quotas'::regclass,'private.avatar_leases'::regclass)) as private_policies,
+    (select relrowsecurity from pg_class where oid='public.avatar_runs'::regclass) as run_rls,
+    (select relrowsecurity from pg_class where oid='private.avatar_quotas'::regclass) as quota_rls,
+    (select relrowsecurity from pg_class where oid='private.avatar_leases'::regclass) as lease_rls,
+    (select count(*)::int from pg_index where indrelid='public.avatar_runs'::regclass and indisunique and indpred is not null) as partial_unique`)).rows[0];
+  assert.deepEqual(shape, { run_policies: 1, private_policies: 0, run_rls: true, quota_rls: true, lease_rls: true, partial_unique: 1 },
+    "avatar runs expose exactly one owner read policy, no private policy leak and one partial unique single-flight index");
+
+  const acl = (await db.query(`select
+    has_table_privilege('authenticated','public.avatar_runs','SELECT') as user_select,
+    has_table_privilege('authenticated','public.avatar_runs','INSERT') as user_insert,
+    has_table_privilege('authenticated','public.avatar_runs','UPDATE') as user_update,
+    has_table_privilege('authenticated','public.avatar_runs','DELETE') as user_delete,
+    has_table_privilege('service_role','public.avatar_runs','UPDATE') as admin_direct_write,
+    has_table_privilege('anon','public.avatar_runs','SELECT') as anon_select,
+    has_table_privilege('authenticated','private.avatar_quotas','SELECT') as user_quota_read,
+    has_table_privilege('authenticated','private.avatar_leases','SELECT') as user_lease,
+    has_table_privilege('service_role','private.avatar_quotas','SELECT') as admin_quota_read,
+    has_table_privilege('service_role','private.avatar_quotas','DELETE') as quota_delete,
+    has_table_privilege('service_role','private.avatar_quotas','TRUNCATE') as quota_truncate,
+    has_table_privilege('service_role','private.avatar_leases','SELECT') as admin_lease_read,
+    has_function_privilege('anon','public.begin_avatar_run(jsonb)','EXECUTE') as anon_begin,
+    has_function_privilege('authenticated','public.begin_avatar_run(jsonb)','EXECUTE') as user_begin,
+    has_function_privilege('authenticated','public.claim_avatar_run(uuid,uuid,uuid)','EXECUTE') as user_claim,
+    has_function_privilege('service_role','public.claim_avatar_run(uuid,uuid,uuid)','EXECUTE') as admin_claim,
+    has_function_privilege('service_role','public.finish_avatar_run(uuid,uuid,uuid,jsonb)','EXECUTE') as admin_finish,
+    has_function_privilege('authenticated','public.finish_avatar_run(uuid,uuid,uuid,jsonb)','EXECUTE') as user_finish`)).rows[0];
+  assert.deepEqual(acl, {
+    user_select: true, user_insert: false, user_update: false, user_delete: false,
+    admin_direct_write: false, anon_select: false,
+    user_quota_read: false, user_lease: false,
+    admin_quota_read: true, quota_delete: false, quota_truncate: false, admin_lease_read: false,
+    anon_begin: false, user_begin: true, user_claim: false, admin_claim: true, admin_finish: true, user_finish: false,
+  }, "avatar migration retains narrow explicit table and execution privileges");
+
+  const functions = (await db.query(`select
+    has_function_privilege('authenticated','private.begin_avatar_run(jsonb)','EXECUTE') as pv_user_begin,
+    has_function_privilege('service_role','private.begin_avatar_run(jsonb)','EXECUTE') as pv_admin_begin,
+    has_function_privilege('anon','private.begin_avatar_run(jsonb)','EXECUTE') as pv_anon_begin,
+    has_function_privilege('authenticated','private.read_avatar_run(uuid)','EXECUTE') as pv_user_read,
+    has_function_privilege('authenticated','private.cancel_avatar_run(uuid)','EXECUTE') as pv_user_cancel,
+    has_function_privilege('authenticated','private.claim_avatar_run(uuid,uuid,uuid)','EXECUTE') as pv_user_claim,
+    has_function_privilege('service_role','private.claim_avatar_run(uuid,uuid,uuid)','EXECUTE') as pv_admin_claim,
+    has_function_privilege('authenticated','private.finish_avatar_run(uuid,uuid,uuid,jsonb)','EXECUTE') as pv_user_finish,
+    has_function_privilege('service_role','private.finish_avatar_run(uuid,uuid,uuid,jsonb)','EXECUTE') as pv_admin_finish,
+    has_function_privilege('authenticated','public.read_avatar_run(uuid)','EXECUTE') as pub_user_read,
+    has_function_privilege('authenticated','public.cancel_avatar_run(uuid)','EXECUTE') as pub_user_cancel,
+    has_function_privilege('service_role','public.read_avatar_run(uuid)','EXECUTE') as pub_admin_read,
+    has_function_privilege('service_role','public.begin_avatar_run(jsonb)','EXECUTE') as pub_admin_begin,
+    has_function_privilege('authenticated','public.claim_avatar_run(uuid,uuid,uuid)','EXECUTE') as pub_user_claim,
+    has_function_privilege('authenticated','private.avatar_web_actor()','EXECUTE') as pv_user_actor,
+    has_function_privilege('service_role','private.avatar_expire_runs(uuid)','EXECUTE') as pv_admin_expire,
+    has_function_privilege('service_role','private.avatar_request_valid(jsonb)','EXECUTE') as pv_admin_req,
+    has_function_privilege('service_role','private.avatar_result_valid(public.avatar_runs,jsonb)','EXECUTE') as pv_admin_res,
+    (select count(*)::int from pg_policy where polrelid='public.avatar_runs'::regclass and polname='avatar_web_owner_read'
+      and polcmd='r' and polroles=array[(select oid from pg_roles where rolname='authenticated')]
+      and pg_get_expr(polqual,polrelid) ilike '%owner_id%'
+      and pg_get_expr(polqual,polrelid) ilike '%is_extension_client%'
+      and pg_get_expr(polqual,polrelid) ilike '%is_anonymous%') as owner_policy_shape,
+    (select count(*)::int from pg_index where indrelid='public.avatar_runs'::regclass and indisunique and indpred is not null) as partial_unique
+    `)).rows[0];
+  assert.deepEqual(functions, {
+    pv_user_begin: true, pv_admin_begin: false, pv_anon_begin: false,
+    pv_user_read: true, pv_user_cancel: true,
+    pv_user_claim: false, pv_admin_claim: true, pv_user_finish: false, pv_admin_finish: true,
+    pub_user_read: true, pub_user_cancel: true, pub_admin_read: false, pub_admin_begin: false, pub_user_claim: false,
+    pv_user_actor: false, pv_admin_expire: false, pv_admin_req: false, pv_admin_res: false,
+    owner_policy_shape: 1, partial_unique: 1,
+  }, "avatar migration asserts the §6.3 execution matrix on both namespaces and the §6.2 owner policy shape");
+
+  const definers = (await db.query(`select
+    (select prosecdef from pg_proc where oid='private.begin_avatar_run(jsonb)'::regprocedure) as pb,
+    (select prosecdef from pg_proc where oid='public.begin_avatar_run(jsonb)'::regprocedure) as ub,
+    (select prosecdef from pg_proc where oid='private.read_avatar_run(uuid)'::regprocedure) as pr,
+    (select prosecdef from pg_proc where oid='public.read_avatar_run(uuid)'::regprocedure) as ur,
+    (select prosecdef from pg_proc where oid='private.cancel_avatar_run(uuid)'::regprocedure) as pc,
+    (select prosecdef from pg_proc where oid='public.cancel_avatar_run(uuid)'::regprocedure) as uc,
+    (select prosecdef from pg_proc where oid='private.claim_avatar_run(uuid,uuid,uuid)'::regprocedure) as pl,
+    (select prosecdef from pg_proc where oid='public.claim_avatar_run(uuid,uuid,uuid)'::regprocedure) as ul,
+    (select prosecdef from pg_proc where oid='private.finish_avatar_run(uuid,uuid,uuid,jsonb)'::regprocedure) as pf,
+    (select prosecdef from pg_proc where oid='public.finish_avatar_run(uuid,uuid,uuid,jsonb)'::regprocedure) as uf`)).rows[0];
+  assert.deepEqual(definers, { pb: true, ub: false, pr: true, ur: false, pc: true, uc: false, pl: true, ul: false, pf: true, uf: false },
+    "all five avatar entrypoints keep the private-definer / public-invoker split");
+}
+
+// Behavioural probe for the parts a migration-time snapshot cannot reach: the real
+// run lifecycle over the real functions, including a legitimate provider failure.
+async function verifyAvatarLifecycle() {
+  await db.exec("reset role");
+  const owner = "aa000000-0000-4000-8000-000000000001";
+  const other = "aa000000-0000-4000-8000-000000000002";
+  const runId = "aa000000-0000-4000-8000-000000000020";
+  const secondRun = "aa000000-0000-4000-8000-000000000021";
+  const lease = "aa000000-0000-4000-8000-000000000030";
+  const request = { runId, kind: "generate", themeId: "cyberpunk", themeVersion: 1 };
+  await db.query("insert into auth.users(id,email) values($1,'avatar-owner@example.test'),($2,'avatar-other@example.test')", [owner, other]);
+  await db.query("insert into private.avatar_quotas(owner_id,kind,available_attempts) values($1,'generate',2)", [owner]);
+
+  // An account with no quota row gets no implicit free call, and a rejected begin is inert.
+  await becomeUser(other);
+  await assert.rejects(() => db.query("select public.begin_avatar_run($1::jsonb)", [JSON.stringify(request)]),
+    /AVATAR_QUOTA_EXHAUSTED/, "an account without a quota row cannot start a run");
+  await db.exec("reset role");
+  assert.equal((await db.query("select count(*)::int as count from public.avatar_runs where owner_id=$1", [other])).rows[0].count, 0,
+    "a quota-rejected begin leaves no run and no allowance row");
+
+  // Reserve once, then replay: same row, one debit.
+  await becomeUser(owner);
+  const first = (await db.query("select public.begin_avatar_run($1::jsonb) as run", [JSON.stringify(request)])).rows[0].run;
+  assert.equal(first.status, "queued", "begin reserves a queued run");
+  const replay = (await db.query("select public.begin_avatar_run($1::jsonb) as run", [JSON.stringify(request)])).rows[0].run;
+  assert.deepEqual(replay, first, "an exact replay returns the stored run");
+  await db.exec("reset role");
+  assert.equal((await db.query("select available_attempts from private.avatar_quotas where owner_id=$1 and kind='generate'", [owner])).rows[0].available_attempts, 1,
+    "an exact replay debits exactly once");
+
+  // A second distinct run is refused while one is active, without debiting.
+  await becomeUser(owner);
+  await assert.rejects(() => db.query("select public.begin_avatar_run($1::jsonb)", [JSON.stringify({ ...request, runId: secondRun })]),
+    /AVATAR_BUSY/, "a second active run is refused");
+  await db.exec("reset role");
+  assert.equal((await db.query("select available_attempts from private.avatar_quotas where owner_id=$1 and kind='generate'", [owner])).rows[0].available_attempts, 1,
+    "the busy rejection debits nothing");
+
+  // Claim, then record a legitimate provider failure.
+  await db.exec("set role service_role");
+  assert.equal((await db.query("select public.claim_avatar_run($1,$2,$3) as claim", [owner, runId, lease])).rows[0].claim.acquired, true,
+    "the first claim acquires execution");
+  assert.equal((await db.query("select public.claim_avatar_run($1,$2,$3) as claim", [owner, runId, lease])).rows[0].claim.acquired, false,
+    "a second claim is refused");
+  const failed = (await db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb) as run",
+    [owner, runId, lease, JSON.stringify({ status: "unavailable" })])).rows[0].run;
+  assert.equal(failed.status, "failed", "a valid failure receipt completes the run as failed");
+  assert.deepEqual(failed.result, { status: "unavailable" }, "the failure result is persisted verbatim");
+  await db.exec("reset role");
+  assert.ok((await db.query("select completion_digest from private.avatar_leases where run_id=$1", [runId])).rows[0].completion_digest,
+    "the failure receipt is fingerprinted on the lease");
+  await db.exec("set role service_role");
+  await assert.rejects(() => db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb)",
+    [owner, runId, lease, JSON.stringify({ status: "unavailable", bytes: 1 })]),
+    /AVATAR_COMPLETION_REUSED/, "the same lease cannot complete twice with a different result");
+  const identical = (await db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb) as run",
+    [owner, runId, lease, JSON.stringify({ status: "unavailable" })])).rows[0].run;
+  assert.equal(identical.status, "failed", "an exact completion replay returns the identical row");
+  await db.exec("reset role");
+  assert.equal((await db.query("select status from public.avatar_runs where id=$1", [runId])).rows[0].status, "failed",
+    "a refused completion never overwrites the recorded failure");
+
+  // An unknown failure literal is still rejected, and the run keeps its execution right.
+  await becomeUser(owner);
+  await db.query("select public.begin_avatar_run($1::jsonb)", [JSON.stringify({ ...request, runId: secondRun })]);
+  await db.exec("reset role");
+  await db.exec("set role service_role");
+  await db.query("select public.claim_avatar_run($1,$2,$3)", [owner, secondRun, lease]);
+  await assert.rejects(() => db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb)",
+    [owner, secondRun, lease, JSON.stringify({ status: "bogus" })]),
+    /AVATAR_INVALID_RESULT/, "an unknown failure literal is rejected");
+  await assert.rejects(() => db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb)",
+    [owner, secondRun, lease, JSON.stringify({ status: "generated", objectPath: owner + "/" + secondRun + "/avatar.glb", mimeType: "model/gltf-binary", bytes: 0, sha256: "a".repeat(64) })]),
+    /AVATAR_INVALID_RESULT/, "a zero-byte success receipt is rejected");
+  await db.exec("reset role");
+  assert.equal((await db.query("select completion_digest from private.avatar_leases where run_id=$1", [secondRun])).rows[0].completion_digest, null,
+    "a rejected result leaves no completion digest and keeps the execution right");
+  assert.equal((await db.query("select status from public.avatar_runs where id=$1", [secondRun])).rows[0].status, "running",
+    "a rejected result leaves the run running for the true outcome");
+  await db.exec("set role service_role");
+  const recovered = (await db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb) as run",
+    [owner, secondRun, lease, JSON.stringify({ status: "rate_limited" })])).rows[0].run;
+  assert.equal(recovered.status, "failed", "a rejected result leaves the run claimable for the true outcome");
+  await db.exec("reset role");
+
+  // Cancelling a queued run refunds exactly once.
+  await db.query("insert into private.avatar_quotas(owner_id,kind,available_attempts) values($1,'generate',1) on conflict (owner_id,kind) do update set available_attempts=1", [owner]);
+  await becomeUser(owner);
+  await db.query("select public.begin_avatar_run($1::jsonb)", [JSON.stringify({ ...request, runId: "aa000000-0000-4000-8000-000000000022" })]);
+  await db.query("select public.cancel_avatar_run($1)", ["aa000000-0000-4000-8000-000000000022"]);
+  await db.query("select public.cancel_avatar_run($1)", ["aa000000-0000-4000-8000-000000000022"]);
+  await db.exec("reset role");
+  assert.equal((await db.query("select available_attempts from private.avatar_quotas where owner_id=$1 and kind='generate'", [owner])).rows[0].available_attempts, 1,
+    "a repeated cancel refunds exactly once");
+
+  // Cross-account isolation and cascade deletion.
+  await becomeUser(other);
+  assert.equal((await db.query("select count(*)::int as count from public.avatar_runs")).rows[0].count, 0, "another account sees no avatar runs");
+  await db.exec("reset role");
+  await db.query("delete from auth.users where id=$1", [owner]);
+  const cascade = (await db.query(`select
+    (select count(*)::int from public.avatar_runs where owner_id=$1) as runs,
+    (select count(*)::int from private.avatar_quotas where owner_id=$1) as quotas,
+    (select count(*)::int from private.avatar_leases l where not exists(select 1 from public.avatar_runs r where r.id=l.run_id)) as orphan_leases`, [owner])).rows[0];
+  assert.deepEqual(cascade, { runs: 0, quotas: 0, orphan_leases: 0 }, "deleting the account cascades to runs, quotas and leases");
+}
+
+// T44/T46/T47: every failure literal is accepted, the byte bound is two-sided, and
+// theme drift is the reachable trigger for the stale terminal state.
+async function verifyAvatarOutcomes() {
+  await db.exec("reset role");
+  const owner = "ac000000-0000-4000-8000-000000000001";
+  await db.query("insert into auth.users(id,email) values($1,'avatar-outcomes@example.test')", [owner]);
+  await db.query("insert into private.avatar_quotas(owner_id,kind,available_attempts) values($1,'generate',12)", [owner]);
+  const request = (suffix) => ({ runId: "ac000000-0000-4000-8000-0000000000" + suffix, kind: "generate", themeId: "cyberpunk", themeVersion: 1 });
+  const success = (runId, bytes) => JSON.stringify({ status: "generated", objectPath: owner + "/" + runId + "/avatar.glb",
+    mimeType: "model/gltf-binary", bytes, sha256: "a".repeat(64) });
+  async function reserve(runId) {
+    await becomeUser(owner);
+    await db.query("select public.begin_avatar_run($1::jsonb)", [JSON.stringify({ runId, kind: "generate", themeId: "cyberpunk", themeVersion: 1 })]);
+    await db.exec("reset role");
+  }
+  async function lease(runId, leaseId) {
+    await db.exec("set role service_role");
+    await db.query("select public.claim_avatar_run($1,$2,$3)", [owner, runId, leaseId]);
+    await db.exec("reset role");
+  }
+
+  const literals = ["invalid_input", "not_applicable", "unavailable", "rate_limited", "cancelled", "timed_out", "not_found", "invalid_output"];
+  for (const [index, literal] of literals.entries()) {
+    const runId = "ac000000-0000-4000-8000-0000000000" + String(20 + index);
+    const leaseId = "ac000000-0000-4000-8000-0000000001" + String(index).padStart(2, "0");
+    await reserve(runId);
+    await lease(runId, leaseId);
+    await db.exec("set role service_role");
+    const done = (await db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb) as run", [owner, runId, leaseId, JSON.stringify({ status: literal })])).rows[0].run;
+    await db.exec("reset role");
+    assert.equal(done.status, literal === "cancelled" ? "cancelled" : "failed", "failure literal " + literal + " completes the run");
+    assert.deepEqual(done.result, { status: literal }, "failure literal " + literal + " is persisted verbatim");
+  }
+
+  const boundRun = "ac000000-0000-4000-8000-000000000041";
+  const boundLease = "ac000000-0000-4000-8000-000000000141";
+  await reserve(boundRun);
+  await lease(boundRun, boundLease);
+  await db.exec("set role service_role");
+  await assert.rejects(() => db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb)", [owner, boundRun, boundLease, success(boundRun, 10485761)]),
+    /AVATAR_INVALID_RESULT/, "one byte over the cap is rejected");
+  const atCap = (await db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb) as run", [owner, boundRun, boundLease, success(boundRun, 10485760)])).rows[0].run;
+  await db.exec("reset role");
+  assert.equal(atCap.status, "ready", "the exact byte cap is accepted");
+
+  const staleRun = "ac000000-0000-4000-8000-000000000042";
+  const staleLease = "ac000000-0000-4000-8000-000000000142";
+  await reserve(staleRun);
+  await lease(staleRun, staleLease);
+  await db.query("update public.profiles set theme_version=2 where id=$1", [owner]);
+  await db.exec("set role service_role");
+  const stale = (await db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb) as run", [owner, staleRun, staleLease, success(staleRun, 1024)])).rows[0].run;
+  await db.exec("reset role");
+  assert.equal(stale.status, "stale", "a run completing after theme drift is stale, not ready");
+
+  await db.query("update public.profiles set theme_version=1 where id=$1", [owner]);
+  const readyRun = "ac000000-0000-4000-8000-000000000043";
+  const readyLease = "ac000000-0000-4000-8000-000000000143";
+  await reserve(readyRun);
+  await lease(readyRun, readyLease);
+  await db.exec("set role service_role");
+  const ready = (await db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb) as run", [owner, readyRun, readyLease, success(readyRun, 1024)])).rows[0].run;
+  await db.exec("reset role");
+  assert.equal(ready.status, "ready", "an unchanged theme completes as ready");
+  await db.query("update public.profiles set theme_version=2 where id=$1", [owner]);
+  await becomeUser(owner);
+  const flipped = (await db.query("select public.read_avatar_run($1) as run", [readyRun])).rows[0].run;
+  await db.exec("reset role");
+  assert.equal(flipped.status, "stale", "the expiry sweep flips a ready run to stale after theme drift");
+}
+
+// T15/T16/T23: the guards that must hold in the database itself.
+async function verifyAvatarDbGuards() {
+  await db.exec("reset role");
+  const owner = "ad000000-0000-4000-8000-000000000001";
+  await db.query("insert into auth.users(id,email) values($1,'avatar-guards@example.test')", [owner]);
+  await db.query("insert into private.avatar_quotas(owner_id,kind,available_attempts) values($1,'generate',4)", [owner]);
+  const runId = "ad000000-0000-4000-8000-000000000020";
+  const base = { runId, kind: "generate", themeId: "cyberpunk", themeVersion: 1 };
+
+  // T15: the status vocabulary is closed at the database level. Assert on the real
+  // message text: assert.rejects matches the message, not the SQLSTATE.
+  await assert.rejects(() => db.query("insert into public.avatar_runs(id,owner_id,kind,theme_id,theme_version,status,expires_at) values($1,$2,'generate','cyberpunk',1,'unknown',clock_timestamp()+interval '600 seconds')",
+    ["ad000000-0000-4000-8000-000000000099", owner]),
+    /violates check constraint/, "an unknown status is refused by the check constraint");
+  assert.equal((await db.query("select count(*)::int as count from public.avatar_runs where owner_id=$1", [owner])).rows[0].count, 0,
+    "the refused status insert leaves no row");
+
+  // T16: five malformed requests, none of which may create a row or debit.
+  await becomeUser(owner);
+  const invalid = [
+    { ...base, kind: "mesh" },
+    { ...base, themeId: "Neon" },
+    { ...base, themeVersion: 0 },
+    { ...base, extra: 1 },
+    (() => { const { themeVersion, ...rest } = base; return rest; })(),
+  ];
+  for (const payload of invalid) {
+    await assert.rejects(() => db.query("select public.begin_avatar_run($1::jsonb)", [JSON.stringify(payload)]),
+      /AVATAR_INVALID/, "malformed request refused: " + JSON.stringify(payload));
+  }
+  await db.exec("reset role");
+  assert.equal((await db.query("select count(*)::int as count from public.avatar_runs where owner_id=$1", [owner])).rows[0].count, 0,
+    "every malformed request is inert");
+  assert.equal((await db.query("select available_attempts from private.avatar_quotas where owner_id=$1", [owner])).rows[0].available_attempts, 4,
+    "malformed requests debit nothing");
+
+  // T23: the partial unique index arbitrates single-flight, not application code.
+  await becomeUser(owner);
+  await db.query("select public.begin_avatar_run($1::jsonb)", [JSON.stringify(base)]);
+  await db.exec("reset role");
+  await assert.rejects(() => db.query("insert into public.avatar_runs(id,owner_id,kind,theme_id,theme_version,status,expires_at) values($1,$2,'generate','cyberpunk',1,'queued',clock_timestamp()+interval '600 seconds')",
+    ["ad000000-0000-4000-8000-000000000021", owner]),
+    /duplicate key/, "a second active run is refused by the partial unique index");
+}
+
+// T31/T32/T33: expiry refunds only an unclaimed run, and a late receipt never revives.
+async function verifyAvatarExpiry() {
+  await db.exec("reset role");
+  const owner = "ae000000-0000-4000-8000-000000000001";
+  await db.query("insert into auth.users(id,email) values($1,'avatar-expiry@example.test')", [owner]);
+  await db.query("insert into private.avatar_quotas(owner_id,kind,available_attempts) values($1,'generate',3)", [owner]);
+  const queuedRun = "ae000000-0000-4000-8000-000000000020";
+  const claimedRun = "ae000000-0000-4000-8000-000000000021";
+  const claimedLease = "ae000000-0000-4000-8000-000000000030";
+  async function reserve(runId) {
+    await becomeUser(owner);
+    await db.query("select public.begin_avatar_run($1::jsonb)", [JSON.stringify({ runId, kind: "generate", themeId: "cyberpunk", themeVersion: 1 })]);
+    await db.exec("reset role");
+  }
+  const quota = async () => (await db.query("select available_attempts from private.avatar_quotas where owner_id=$1", [owner])).rows[0].available_attempts;
+
+  // T31: an expired queued run is cancelled and refunded exactly once.
+  await reserve(queuedRun);
+  await db.query("update public.avatar_runs set expires_at=clock_timestamp()-interval '1 second' where id=$1", [queuedRun]);
+  await becomeUser(owner);
+  const first = (await db.query("select public.read_avatar_run($1) as run", [queuedRun])).rows[0].run;
+  const second = (await db.query("select public.read_avatar_run($1) as run", [queuedRun])).rows[0].run;
+  await db.exec("reset role");
+  assert.equal(first.status, "cancelled", "an expired queued run becomes cancelled");
+  assert.deepEqual(second.result, { status: "cancelled" }, "the cancelled result is stable across repeated reads");
+  assert.equal(await quota(), 3, "an expired queued run is refunded exactly once");
+
+  // T32: an expired claimed run is interrupted and never refunded.
+  await reserve(claimedRun);
+  await db.exec("set role service_role");
+  await db.query("select public.claim_avatar_run($1,$2,$3)", [owner, claimedRun, claimedLease]);
+  await db.exec("reset role");
+  await db.query("update public.avatar_runs set expires_at=clock_timestamp()-interval '1 second' where id=$1", [claimedRun]);
+  await becomeUser(owner);
+  const interrupted = (await db.query("select public.read_avatar_run($1) as run", [claimedRun])).rows[0].run;
+  await db.exec("reset role");
+  assert.equal(interrupted.status, "interrupted", "an expired claimed run is interrupted");
+  assert.deepEqual(interrupted.result, { status: "timed_out" }, "claimed expiry records a timeout");
+  assert.equal(await quota(), 2, "claimed expiry refunds nothing");
+
+  // T33: a late success receipt is fingerprinted but never revives the run.
+  await db.exec("set role service_role");
+  const late = (await db.query("select public.finish_avatar_run($1,$2,$3,$4::jsonb) as run", [owner, claimedRun, claimedLease,
+    JSON.stringify({ status: "generated", objectPath: owner + "/" + claimedRun + "/avatar.glb", mimeType: "model/gltf-binary", bytes: 2048, sha256: "b".repeat(64) })])).rows[0].run;
+  await db.exec("reset role");
+  assert.equal(late.status, "interrupted", "a late success receipt does not revive the run");
+  assert.ok((await db.query("select completion_digest from private.avatar_leases where run_id=$1", [claimedRun])).rows[0].completion_digest,
+    "the late receipt is still fingerprinted on the lease");
+  assert.equal((await db.query("select lease_id from private.avatar_leases where run_id=$1", [claimedRun])).rows[0].lease_id, claimedLease,
+    "expiry never deletes or rewrites the lease");
+}
+
+// §6.4 + runtime T18: the tenant boundary is behavioural, not just introspective.
+async function verifyAvatarAccessGuards() {
+  await db.exec("reset role");
+  const owner = "af000000-0000-4000-8000-000000000001";
+  const other = "af000000-0000-4000-8000-000000000002";
+  const runId = "af000000-0000-4000-8000-000000000020";
+  await db.query("insert into auth.users(id,email) values($1,'avatar-access@example.test'),($2,'avatar-outsider@example.test')", [owner, other]);
+  await db.query("insert into private.avatar_quotas(owner_id,kind,available_attempts) values($1,'generate',1)", [owner]);
+  await becomeUser(owner);
+  await db.query("select public.begin_avatar_run($1::jsonb)", [JSON.stringify({ runId, kind: "generate", themeId: "cyberpunk", themeVersion: 1 })]);
+  await db.exec("reset role");
+
+  async function asCaller(userId, claims) {
+    await db.exec("set role authenticated");
+    await db.query("select set_config('request.jwt.claim.sub',$1,false)", [userId]);
+    await db.query("select set_config('request.jwt.claims',$1,false)", [JSON.stringify(claims)]);
+  }
+
+  await asCaller(owner, { sub: owner, role: "authenticated", client_id: "extension" });
+  assert.equal((await db.query("select count(*)::int as count from public.avatar_runs")).rows[0].count, 0, "an extension client reads no avatar runs");
+  await assert.rejects(() => db.query("select public.read_avatar_run($1)", [runId]), /AVATAR_FORBIDDEN/, "an extension client cannot read its own run");
+
+  await asCaller(owner, { sub: owner, role: "authenticated", is_anonymous: true });
+  assert.equal((await db.query("select count(*)::int as count from public.avatar_runs")).rows[0].count, 0, "an anonymous session reads no avatar runs");
+  await assert.rejects(() => db.query("select public.read_avatar_run($1)", [runId]), /AVATAR_FORBIDDEN/, "an anonymous session is refused");
+
+  await db.exec("set role authenticated");
+  await db.query("select set_config('request.jwt.claim.sub','',false)");
+  await db.query("select set_config('request.jwt.claims','{}',false)");
+  await assert.rejects(() => db.query("select public.read_avatar_run($1)", [runId]), /AVATAR_FORBIDDEN/, "an unauthenticated caller is refused");
+
+  await asCaller(other, { sub: other, role: "authenticated" });
+  assert.equal((await db.query("select count(*)::int as count from public.avatar_runs")).rows[0].count, 0, "another account reads no avatar runs");
+  await assert.rejects(() => db.query("select public.read_avatar_run($1)", [runId]), /AVATAR_NOT_FOUND/, "another account cannot read the run");
+  await assert.rejects(() => db.query("insert into public.avatar_runs(id,owner_id,kind,theme_id,theme_version,status,expires_at) values('af000000-0000-4000-8000-000000000021',$1,'generate','cyberpunk',1,'queued',clock_timestamp()+interval '600 seconds')", [other]),
+    /permission denied/, "a client cannot insert avatar runs directly");
+  await assert.rejects(() => db.query("update public.avatar_runs set result='{}'"), /permission denied/, "a client cannot write avatar results");
+  await assert.rejects(() => db.query("delete from public.avatar_runs"), /permission denied/, "a client cannot delete avatar runs");
+  await db.exec("reset role");
+  assert.equal((await db.query("select count(*)::int as count from public.avatar_runs where owner_id=$1", [owner])).rows[0].count, 1,
+    "no refused client write changed the stored run");
+}
+
 
 async function seedAdoptionUpgrade() {
   await db.exec("reset role");
