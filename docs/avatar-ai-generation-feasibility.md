@@ -389,6 +389,10 @@
 
 **因此：P1 在 CI 通过之前不得标记为「已验证」。**
 
+**2026-09-19 已通过：** CI run [35431428082](https://github.com/Wjiajie/youtube-digest/actions/runs/35431428082) 全绿（job 5m22s）。日志证据：`supabase/tests/database/avatar_runs.test.sql ... ok`、`supabase/tests/database/avatar_storage.test.sql ... ok`、`All tests successful.`、`Result: PASS`。两个 pgTAP 文件**首次在真实 Supabase 栈上执行并通过**，P1 数据层据此通过执行验证。
+
+代价与收获：这条路径连续三轮才收敛 —— ① WXT 生成物缺陷让 CI 从未成功过；② 断言在无权限角色下整体中止（30 条里只有 9 条执行）；③ 我自己的 `reset role` 修复造成角色泄漏，使一条断言**假通过**、另三条拿到错误码。三轮全部靠真实执行暴露，静态审查与内存推断都没发现。
+
 ### D3（2026-09-19）Meshy 凭据与用量边界
 
 - **需要 Pro 及以上套餐**才能创建 API Key（官方 MCP Server README：requires Pro plan or above）。免费层**无法**调用 API。
@@ -402,7 +406,8 @@
 | 前置 | 状态 |
 | --- | --- |
 | 合规门（D1） | 已关闭 |
-| 验证路径（D2） | 已确定，待 CI 结果 |
+| 验证路径（D2） | 已完成：CI run 35431428082 全绿，pgTAP 首次执行通过 |
+| P1 数据层 | 已通过执行验证（离线 PGlite 契约 + 真实栈 pgTAP 均绿） |
 | Meshy Pro API Key | 待用户提供（只放 Secret，勿粘贴到对话） |
 | 绑骨 spike（image-to-3d → rigging → animations） | 待执行；这是方案最大的未知量 |
 
