@@ -1,0 +1,343 @@
+[
+  {
+    "file": "AvatarSample_A.vrm",
+    "bytes": 15097732,
+    "sha256": "82754e287e0b26b5d7a1fd223ed0fd5debcabed81f36549fb2c16b201f3e5ca9",
+    "meta": {
+      "version": "1.0",
+      "author": "VRoid Project",
+      "contactInformation": "https://www.pixiv.net/support.php?mode=select_vroid",
+      "reference": "",
+      "title": "AvatarSample_A",
+      "texture": 27,
+      "allowedUserName": "Everyone",
+      "violentUssageName": "Allow",
+      "sexualUssageName": "Allow",
+      "commercialUssageName": "Allow",
+      "otherPermissionUrl": "https://hub.vroid.com/license?allowed_to_use_user=everyone&characterization_allowed_user=everyone&corporate_commercial_use=allow&credit=unnecessary&modification=allow&personal_commercial_use=profit&redistribution=allow&sexual_expression=allow&version=1&violent_expression=allow",
+      "licenseName": "Other",
+      "otherLicenseUrl": "https://hub.vroid.com/license?allowed_to_use_user=everyone&characterization_allowed_user=everyone&corporate_commercial_use=allow&credit=unnecessary&modification=allow&personal_commercial_use=profit&redistribution=allow&sexual_expression=allow&version=1&violent_expression=allow"
+    },
+    "humanoidBones": 54,
+    "expressionBindings": [
+      {
+        "name": "neutral",
+        "binds": 1
+      },
+      {
+        "name": "a",
+        "binds": 1
+      },
+      {
+        "name": "i",
+        "binds": 1
+      },
+      {
+        "name": "u",
+        "binds": 1
+      },
+      {
+        "name": "e",
+        "binds": 1
+      },
+      {
+        "name": "o",
+        "binds": 1
+      },
+      {
+        "name": "blink",
+        "binds": 1
+      },
+      {
+        "name": "blink_l",
+        "binds": 1
+      },
+      {
+        "name": "blink_r",
+        "binds": 1
+      },
+      {
+        "name": "angry",
+        "binds": 1
+      },
+      {
+        "name": "fun",
+        "binds": 1
+      },
+      {
+        "name": "joy",
+        "binds": 1
+      },
+      {
+        "name": "sorrow",
+        "binds": 1
+      },
+      {
+        "name": "unknown",
+        "binds": 1
+      },
+      {
+        "name": "unknown",
+        "binds": 2
+      }
+    ],
+    "springGroups": 10,
+    "animations": [],
+    "triangles": 24890,
+    "materials": 17,
+    "source": {
+      "download": "https://raw.githubusercontent.com/tegnike/aituber-kit/91890921e8624001ce1d04a0f59759e1ab5ee334/public/vrm/AvatarSample_A.vrm",
+      "terms": "https://vroid.pixiv.help/hc/en-us/articles/4402394424089"
+    }
+  },
+  {
+    "file": "Eugenia.vrm",
+    "bytes": 8117705,
+    "sha256": "48fbb80dfd25e488371f85175ac5ea1821785f710355a7cc82f4ae273cd4c150",
+    "meta": {
+      "title": "Eugenia",
+      "version": "1.1",
+      "author": "[VIPEDeployer / 0xded150f6c599b08950919cfb0b97516b6235a36b]",
+      "contactInformation": "opensourceavatars.com",
+      "reference": "opensourceavatars.com",
+      "allowedUserName": "Everyone",
+      "violentUssageName": "Allow",
+      "sexualUssageName": "Allow",
+      "commercialUssageName": "Allow",
+      "licenseType": 0,
+      "licenseName": "CC0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "allowExcessivelyViolent": true,
+      "allowExcessivelySexual": true,
+      "allowPoliticalOrReligiousUsage": true,
+      "allowAntisocialOrHateUsage": true,
+      "allowCommercialUse": true,
+      "creditNotation": "UNNECESSARY",
+      "allowRedistribution": true,
+      "modification": "ALLOW",
+      "otherLicenseUrl": "ipfs://QmWGArUV3LWycV3PYYV9ySQfzB8pYYM6rZYVeUK4vXRHoZ"
+    },
+    "humanoidBones": 52,
+    "expressionBindings": [
+      {
+        "name": "neutral",
+        "binds": 0
+      },
+      {
+        "name": "a",
+        "binds": 1
+      },
+      {
+        "name": "i",
+        "binds": 1
+      },
+      {
+        "name": "u",
+        "binds": 1
+      },
+      {
+        "name": "e",
+        "binds": 1
+      },
+      {
+        "name": "o",
+        "binds": 1
+      },
+      {
+        "name": "blink",
+        "binds": 2
+      },
+      {
+        "name": "joy",
+        "binds": 1
+      },
+      {
+        "name": "angry",
+        "binds": 1
+      },
+      {
+        "name": "sorrow",
+        "binds": 1
+      },
+      {
+        "name": "fun",
+        "binds": 1
+      },
+      {
+        "name": "lookup",
+        "binds": 0
+      },
+      {
+        "name": "lookdown",
+        "binds": 0
+      },
+      {
+        "name": "lookleft",
+        "binds": 0
+      },
+      {
+        "name": "lookright",
+        "binds": 0
+      },
+      {
+        "name": "blink_l",
+        "binds": 1
+      },
+      {
+        "name": "blink_r",
+        "binds": 1
+      }
+    ],
+    "springGroups": 1,
+    "animations": [],
+    "triangles": 10200,
+    "materials": 2,
+    "source": {
+      "download": "https://arweave.net/saOexMViu7mqSeaXfQzNIPrKWQ0nqkSf-FpOQjZfBcU",
+      "registry": "https://github.com/ToxSam/open-source-avatars/blob/main/data/avatars/100avatars-r3.json"
+    }
+  },
+  {
+    "file": "idle_loop.vrma",
+    "bytes": 157664,
+    "sha256": "ace95ba6dcc0bdf2ed1081c002332b4184441117c8d543b6f642b3d2c5cf99be",
+    "expressionBindings": [],
+    "springGroups": 0,
+    "animations": [
+      {
+        "channels": 28,
+        "duration": 10.375082969665527
+      }
+    ],
+    "triangles": 0,
+    "source": {
+      "download": "https://raw.githubusercontent.com/pixiv/ChatVRM/b542aa00e19dccf9fc48ba340cf7eee011d2329a/public/idle_loop.vrma",
+      "terms": "https://github.com/pixiv/ChatVRM/blob/b542aa00e19dccf9fc48ba340cf7eee011d2329a/LICENSE"
+    }
+  },
+  {
+    "file": "Juanita.vrm",
+    "bytes": 6097529,
+    "sha256": "95d9f7cbf72ee5d46d15f932c8ee5d1986d70242589ad2efadfe81a2089da98f",
+    "meta": {
+      "title": "Juanita",
+      "version": "1.1",
+      "author": "0xded150f6c599b08950919cfb0b97516b6235a36b",
+      "contactInformation": "opensourceavatars.com",
+      "reference": "opensourceavatars.com",
+      "allowedUserName": "Everyone",
+      "violentUssageName": "Allow",
+      "sexualUssageName": "Allow",
+      "commercialUssageName": "Allow",
+      "licenseType": 0,
+      "licenseName": "CC0",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "allowExcessivelyViolent": true,
+      "allowExcessivelySexual": true,
+      "allowPoliticalOrReligiousUsage": true,
+      "allowAntisocialOrHateUsage": true,
+      "allowCommercialUse": true,
+      "creditNotation": "UNNECESSARY",
+      "allowRedistribution": true,
+      "modification": "ALLOW",
+      "otherLicenseUrl": "ipfs://QmPkw1EAVVBgTiA5TK7DnzcrxD3muDbndeT8xiSfzoQa56"
+    },
+    "humanoidBones": 30,
+    "expressionBindings": [
+      {
+        "name": "neutral",
+        "binds": 0
+      },
+      {
+        "name": "a",
+        "binds": 1
+      },
+      {
+        "name": "i",
+        "binds": 1
+      },
+      {
+        "name": "u",
+        "binds": 1
+      },
+      {
+        "name": "e",
+        "binds": 1
+      },
+      {
+        "name": "o",
+        "binds": 1
+      },
+      {
+        "name": "blink",
+        "binds": 2
+      },
+      {
+        "name": "joy",
+        "binds": 1
+      },
+      {
+        "name": "angry",
+        "binds": 1
+      },
+      {
+        "name": "sorrow",
+        "binds": 1
+      },
+      {
+        "name": "fun",
+        "binds": 1
+      },
+      {
+        "name": "lookup",
+        "binds": 0
+      },
+      {
+        "name": "lookdown",
+        "binds": 0
+      },
+      {
+        "name": "lookleft",
+        "binds": 0
+      },
+      {
+        "name": "lookright",
+        "binds": 0
+      },
+      {
+        "name": "blink_l",
+        "binds": 1
+      },
+      {
+        "name": "blink_r",
+        "binds": 1
+      }
+    ],
+    "springGroups": 1,
+    "animations": [],
+    "triangles": 13504,
+    "materials": 1,
+    "source": {
+      "download": "https://arweave.net/nyMyZZx5lN2DXsmBgbGQSnt3PuXYN7AAjz9QJrjitLo",
+      "registry": "https://github.com/ToxSam/open-source-avatars/blob/main/data/avatars/100avatars-r3.json"
+    }
+  },
+  {
+    "file": "test.vrma",
+    "bytes": 11548,
+    "sha256": "38d0fd12d61e896f1a970b5e358ebb41a96c8d5ee8e284496ea18f0ba1f04e7b",
+    "expressionBindings": [],
+    "springGroups": 0,
+    "animations": [
+      {
+        "channels": 3,
+        "duration": 3
+      }
+    ],
+    "triangles": 0,
+    "source": {
+      "download": "https://raw.githubusercontent.com/pixiv/three-vrm/68c7d6b1f73b79568f81139be62831968bff7876/packages/three-vrm-animation/examples/models/test.vrma",
+      "terms": "https://github.com/pixiv/three-vrm/blob/68c7d6b1f73b79568f81139be62831968bff7876/LICENSE"
+    }
+  }
+]

@@ -1,0 +1,109 @@
+{
+  "date": "2026-10-18",
+  "discovery": {
+    "tool": "Exa Search",
+    "resultCount": 30,
+    "queries": 5,
+    "angles": [
+      "free expressive full-body avatars",
+      "reusable full-body VRMA motions",
+      "AIRI and AITuberKit source reuse"
+    ]
+  },
+  "repositories": [
+    {
+      "repo": "tegnike/aituber-kit",
+      "sha": "91890921e8624001ce1d04a0f59759e1ab5ee334",
+      "url": "https://github.com/tegnike/aituber-kit",
+      "files": [
+        "LICENSE",
+        "docs/license-faq_en.md",
+        "docs/license.md",
+        "docs/license_en.md",
+        "package.json",
+        "src/components/vrmViewer.tsx",
+        "src/features/chat/openAIAudioChat.ts",
+        "src/features/chat/speechPipeline/speechDispatcher.ts",
+        "src/features/chat/speechPipeline/speechSegmenter.ts",
+        "src/features/chat/speechPipeline/types.ts",
+        "src/features/emoteController/autoBlink.ts",
+        "src/features/emoteController/autoLookAt.ts",
+        "src/features/emoteController/emoteConstants.ts",
+        "src/features/emoteController/emoteController.ts",
+        "src/features/emoteController/expressionController.ts",
+        "src/features/lipSync/lipSync.ts",
+        "src/features/messages/speakQueue.ts",
+        "src/features/vrmViewer/model.ts",
+        "src/features/vrmViewer/viewer.ts"
+      ]
+    },
+    {
+      "repo": "moeru-ai/airi",
+      "sha": "59db7905a4ffb61755890ba3ea9f09c4888c9d47",
+      "url": "https://github.com/moeru-ai/airi",
+      "files": [
+        "LICENSE",
+        "packages/pipelines-audio/package.json",
+        "packages/pipelines-audio/src/index.ts",
+        "packages/pipelines-audio/src/speech-pipeline.ts",
+        "packages/pipelines-audio/src/processors/tts-chunker.ts",
+        "packages/pipelines-audio/src/managers/playback-manager.ts",
+        "packages/pipelines-audio/src/types.ts",
+        "packages/pipelines-audio/src/playback.ts",
+        "packages/stage-ui-three/package.json",
+        "packages/stage-ui-three/src/components/Model/VRMModel.vue",
+        "packages/stage-ui-three/src/composables/vrm/core.ts",
+        "packages/stage-ui-three/src/composables/vrm/expression.ts",
+        "packages/stage-ui-three/src/composables/vrm/animation.ts",
+        "packages/stage-ui-three/src/composables/vrm/lip-sync.ts",
+        "packages/stage-ui/src/libs/speech/streaming-pipeline.ts",
+        "packages/stage-ui/src/libs/speech/streaming-session.ts",
+        "packages/stage-layouts/src/composables/use-chat-interruption.ts",
+        "packages/stage-ui/src/stores/display-models.ts",
+        "packages/model-driver-lipsync/README.md",
+        "packages/model-driver-lipsync/package.json",
+        "packages/model-driver-lipsync/src/runtime/wlipsync/index.ts",
+        "packages/model-driver-lipsync/src/shared/wlipsync/index.ts",
+        "packages/model-driver-lipsync/src/shared/wlipsync/vowel-driver.ts",
+        "packages/model-driver-lipsync/src/shared/wlipsync/vowel-driver.test.ts",
+        "packages/pipelines-audio/README.md"
+      ]
+    },
+    {
+      "repo": "pixiv/ChatVRM",
+      "sha": "b542aa00e19dccf9fc48ba340cf7eee011d2329a",
+      "files": [
+        "LICENSE",
+        "README.md",
+        "public/idle_loop.vrma"
+      ]
+    },
+    {
+      "repo": "pixiv/three-vrm",
+      "sha": "68c7d6b1f73b79568f81139be62831968bff7876",
+      "files": [
+        "LICENSE",
+        "packages/three-vrm-animation/examples/models/test.vrma"
+      ]
+    }
+  ],
+  "assetSources": [
+    {
+      "name": "AvatarSample A",
+      "url": "https://vroid.pixiv.help/hc/en-us/articles/4402394424089"
+    },
+    {
+      "name": "100Avatars CC0 release",
+      "url": "https://github.com/PolygonalMind/100Avatars/releases"
+    },
+    {
+      "name": "Juanita and Eugenia file registry",
+      "url": "https://github.com/ToxSam/open-source-avatars/blob/main/data/avatars/100avatars-r3.json"
+    },
+    {
+      "name": "VRoid seven animations",
+      "url": "https://booth.pm/en/items/5512385"
+    }
+  ],
+  "scope": "Source inspection, offline asset inspection and isolated local rendering; no paid inference, voice provider request, deployment, or product API change."
+}

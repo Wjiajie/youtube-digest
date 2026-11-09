@@ -1,0 +1,13 @@
+{
+  "source": "moeru-ai/airi",
+  "sha": "59db7905a4ffb61755890ba3ea9f09c4888c9d47",
+  "file": "packages/model-driver-lipsync/src/shared/wlipsync/vowel-driver.ts",
+  "command": "node .goal-loop/research/voice-first-companion-2026-10-18/probe-airi-lipsync.mjs",
+  "checks": [
+    "two strongest vowels and S-to-I mapping",
+    "silence decay",
+    "reset"
+  ],
+  "passed": true,
+  "scope": "Original pure TypeScript function running in Node; no Vue, AudioContext, actual speech or whole-package integration"
+}

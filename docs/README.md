@@ -2,6 +2,19 @@
 
 本目录同时记录当前 `3.0.0` M1 源码和后续产品方向。旧 `2.0.0` 本地原型已经固化到 Git 标签，不再作为当前安装或架构说明。
 
+## 当前重点：首页 VRM 虚拟管家
+
+首页以全身 VRM 管家为中心，语音为主、文字为辅，辅助用户提出、执行和记录目标。管家负责调度各类模块；以后的“用户形象”模块可独立选型（例如 2.5D 分层），不影响管家的 VRM 链路。
+
+- [Shayna 管家 MVP](shayna-companion-mvp.md)：本地首页接入、私有资源配置、实时语音网关、确认闭环与实际验收边界。
+- [管家上下文压缩与本地记忆](companion-memory.md)：SDK／双链路、滚动摘要、语音安全续接与记忆组件取舍。
+- [对话驱动的角色能力](companion-avatar-capabilities.md)：与模型无关的表情／动作／服装／头发能力目录与校验协议。
+- [全身 VRM、语音优先管家与 AIRI / AITuberKit 复用评估](research/fullbody-voice-companion-2026-10-18/README.md)：已确认的 MVP 愿景与可复用模块。
+- 化身格式与生成调研：[VRM 格式与同类对比](research/avatar-formats-2026-10-18/README.md)、[照片 → VRM](research/photo-to-vrm-2026-10-18/README.md)、[参考图 → VRM 流水线](reference-image-to-vrm-pipeline.md)、[照片 → 风格化化身方案](research/avatar-pipeline-2026-10-18/README.md)、[VRM 技术地图与 P0 spike](research/vrm-3d-avatar-2026-10-18/README.md)。
+- 角色生成数据层：[Meshy 生成可行性](avatar-ai-generation-feasibility.md)、[avatar_runs 验收契约](avatar-runs-test-contract.md)。
+
+已停止的武侠 3D 角色制作支线与被替代的方案草稿见[归档索引](archive/README.md)。
+
 ## 阅读顺序
 
 1. [产品理念](product-vision.md)：产品要解决的问题、用户价值和边界。
@@ -27,7 +40,7 @@
 20. [可跳过的公开示例](public-preview.md)：双主题虚构示例、登录入口分流及演示／私人数据隔离；不调用 Agent 或导入虚构成果。
 21. [双主题环境构图试验](environment-study.md)：四件真实自然素材的本地组合、实际 WebGL／降级证据及不予正式采用的美术判断；内部工具不对生产公开。
 22. [免费人物候选跟进](avatar-candidate-followup.md)：已核实的 A2 单体／源工程入口、动画分支和许可错配；Universal 免费层与付费源工程边界。
-23. [双主题人物与场景制作](dual-theme-character-study.md)：v15 动作修复与腰口诊断、未采用的 v16 腰带试验；内部样片不等于正式美术通过。
+23. [双主题人物与场景制作](dual-theme-character-study.md)：v15 动作修复与腰口诊断、未采用的 v16 腰带试验；内部样片不等于正式美术通过。后续武侠 3D 角色制作支线已停止，记录见[归档索引](archive/README.md)。
 24. [受控路径规划运行切片](agent-path-planning.md)：确认定义到审阅草案的内部 SDK 运行器、版本化 Skill、预算／依赖及取消保护；不代表真实模型质量验收。
 25. [路径规划的云端运行记录](agent-planning-runs.md)：本地已实现账号隔离、唯一执行权、次数保护、取消与过期结果恢复；生成入口、付费模型及托管发布仍待完成。
 26. [规划记录与草案阅读](agent-planning-review.md)：本地双主题记录列表、草案阅读、当前状态核对与取消。
@@ -62,7 +75,21 @@
     - [双语字幕翻译与执行链](transcript-translation.md)：来源绑定、持久恢复、独立核验执行、精确扩展授权及双主题双端阅读；本地已接通，托管与完整质量仍待验收。
     - [来源绑定的选文讲解](selection-explanation.md)：双端共享双主题选文／提问、有限原文证据、材料不足与明确恢复；内存草稿、云运行、取消／清除及关闭开关体验已本地验证，原生侧栏与托管联合验收待完成。
 
+52. [照片 → 可动风格化化身方案调研](research/avatar-pipeline-2026-10-18/README.md)：2.5D 分层、VRM、照片→3D 动漫、单图高斯头与写实路线的开源项目、showcase、许可与分阶段落地建议；仅调研，不代表已选型或已实现。
+53. [VRM 3D 化身：AITuberKit 拆解与 2026 技术地图](research/vrm-3d-avatar-2026-10-18/README.md)：开源许可、viewer/口型/表情/动作的实现细节、Blueprint 落地架构，以及 Kimodo/ARDY/GestureLSM/EchoAvatar/Audio2Face-3D 等最新论文与代码；仅调研，不含产品实现。
+    - [VRM P0 spike](research/vrm-3d-avatar-2026-10-18/p0-spike.md)：/scenes/avatar 已跑通 VRM 1.0 加载、程序化待机、眨眼、呼吸、看镜头与音量口型；sample 只用于验证，headed 实测 120 fps。
+
+54. [VRM 是标准吗？格式原理、资源购买与同类格式对比](research/avatar-formats-2026-10-18/README.md)：VRM 的标准化地位（基于 glTF 2.0、VRM Consortium、Khronos 协作、尚未 ISO）、文件结构与扩展、购买渠道与许可陷阱，以及 glTF/FBX/USD/USDZ/MMD/Live2D/Inochi2D/HAnim/SMPL-X/MetaHuman 的优劣势。
+
+55. [照片 → VRM：VRoid/pixiv 关系、AI Agent 工作流与开源项目对比](research/photo-to-vrm-2026-10-18/README.md)：VRoid Hub 与 pixiv 的归属、照片→VRM 的商业/开源方案、Agent 管线的边界，以及 AITuberKit/AIRI/Open-LLM-VTuber/Amica/ChatdollKit/OpenAvatarChat 的对比；结论：开源无端到端，AITuberKit 只是运行时。
+
+56. [参考图 → VRM：可行性评估与后续执行方案](reference-image-to-vrm-pipeline.md)：拆解“参考图→T-pose→Tripo P2.0→SkinTokens→VRM→Warudo”帖子链路，区分可验证的官方能力与演示省略；结论是半自动离线流水线可行、一键产品不成立，推荐授权 VRM 底模 + 生成外观，并给出 Avatar Lab 分阶段计划与门禁。
+
+57. [全身 VRM、语音优先管家与 AIRI / AITuberKit 复用评估](research/fullbody-voice-companion-2026-10-18/README.md)：记录本轮确认的 MVP 愿景、两个项目固定源码版本的组件边界、三个免费全身角色与通用待机动作的实际加载/表情/动画采样。语音与目标闭环是核心；独立样片不等于正式首页或真实语音已交付。
+
 可编辑的目标流程图见 [Web 与扩展 UI/UX 线框图](blueprint-ui-ux-flow.excalidraw)。架构决策见 [ADR](adr/)。
+
+公开场景 `/scenes/wuxia` 采用 [武侠 2.5D 分层场景 V2](wuxia-living-portrait.md)：完整山水、透明人物、空船与独立船头合成，支持视差、呼吸、衣发惯性及失败回退。它不再挂载于首页，保留为基于图片的 2.5D 参考实现。
 
 ## 一句话定义
 
