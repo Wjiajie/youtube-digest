@@ -1,0 +1,237 @@
+.avatar-spike {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  color: #f2f0e9;
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(73, 92, 138, 0.38), transparent 58%),
+    radial-gradient(ellipse at 18% 82%, rgba(55, 96, 92, 0.22), transparent 55%),
+    linear-gradient(155deg, #0b0f16 0%, #10131c 45%, #090b11 100%);
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.avatar-spike::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse at 50% 55%, black 10%, transparent 78%);
+  pointer-events: none;
+}
+
+.avatar-spike__veil {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 62%, rgba(7, 9, 14, 0) 30%, rgba(7, 9, 14, 0.55) 100%),
+    linear-gradient(180deg, rgba(7, 9, 14, 0.35), transparent 22%, transparent 72%, rgba(7, 9, 14, 0.72));
+  pointer-events: none;
+  z-index: 1;
+}
+
+.avatar-spike__canvas {
+  position: absolute !important;
+  inset: 0;
+  z-index: 0;
+}
+
+.avatar-spike__header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 32px;
+}
+
+.avatar-spike__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  color: rgba(242, 240, 233, 0.72);
+}
+
+.avatar-spike__seal {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(232, 199, 138, 0.55);
+  border-radius: 50%;
+  color: #e8c78a;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.avatar-spike__back {
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: rgba(242, 240, 233, 0.78);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  background: rgba(12, 16, 24, 0.72);
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.avatar-spike__back:hover {
+  border-color: rgba(232, 199, 138, 0.6);
+  color: #f7f3e8;
+}
+
+.avatar-spike__intro {
+  position: absolute;
+  left: clamp(24px, 6vw, 96px);
+  bottom: clamp(140px, 22vh, 220px);
+  z-index: 3;
+  max-width: 330px;
+  pointer-events: none;
+}
+
+.avatar-spike__eyebrow {
+  margin: 0 0 12px;
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: rgba(232, 199, 138, 0.82);
+}
+
+.avatar-spike__intro h1 {
+  margin: 0;
+  font-family: "Songti SC", "Noto Serif SC", "SimSun", serif;
+  font-size: clamp(30px, 4vw, 46px);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.18;
+  text-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+}
+
+.avatar-spike__lede {
+  margin: 14px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(242, 240, 233, 0.68);
+}
+
+.avatar-spike__note {
+  margin: 10px 0 0;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: rgba(242, 240, 233, 0.38);
+}
+
+.avatar-spike__controls {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(28px, 5vh, 56px);
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(10, 13, 20, 0.86);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  transform: translateX(-50%);
+}
+
+.avatar-spike__button {
+  height: 38px;
+  padding: 0 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(242, 240, 233, 0.86);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
+}
+
+.avatar-spike__button:hover:not(:disabled) {
+  border-color: rgba(232, 199, 138, 0.55);
+  background: rgba(232, 199, 138, 0.08);
+  color: #fbf7ee;
+}
+
+.avatar-spike__button:focus-visible {
+  outline: 2px solid rgba(232, 199, 138, 0.8);
+  outline-offset: 3px;
+}
+
+.avatar-spike__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.avatar-spike__button--primary {
+  border-color: rgba(232, 199, 138, 0.5);
+  background: linear-gradient(180deg, rgba(232, 199, 138, 0.22), rgba(232, 199, 138, 0.1));
+  color: #f8efd9;
+}
+
+.avatar-spike__status {
+  padding: 0 8px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: rgba(242, 240, 233, 0.5);
+  white-space: nowrap;
+}
+
+.avatar-spike-loading {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  background: #0b0f16;
+  color: rgba(242, 240, 233, 0.7);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+
+@media (max-width: 760px) {
+  .avatar-spike__header {
+    padding: 16px 18px;
+  }
+
+  .avatar-spike__intro {
+    left: 20px;
+    right: 20px;
+    bottom: 148px;
+    max-width: none;
+  }
+
+  .avatar-spike__intro h1 {
+    font-size: 28px;
+  }
+
+  .avatar-spike__controls {
+    width: calc(100% - 32px);
+    justify-content: center;
+    flex-wrap: wrap;
+    border-radius: 22px;
+    padding: 8px;
+  }
+
+  .avatar-spike__status {
+    width: 100%;
+    text-align: center;
+    padding: 2px 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .avatar-spike__veil {
+    background: linear-gradient(180deg, rgba(7, 9, 14, 0.42), rgba(7, 9, 14, 0.8));
+  }
+}

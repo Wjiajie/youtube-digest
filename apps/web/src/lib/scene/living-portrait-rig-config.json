@@ -1,0 +1,15 @@
+{
+  "asset": "character-native-v2.png",
+  "placement": { "scale": 0.94, "x": 40, "y": 50 },
+  "head": { "x": 746, "y": 240 },
+  "chest": { "x": 742, "y": 335, "rx": 130, "ry": 103 },
+  "shoulder": { "x": 744, "y": 278, "rx": 163, "ry": 60 },
+  "chains": [
+    { "name": "hair-back", "radius": 28, "stiffness": 24, "points": [[670,190],[620,270],[565,345],[520,415],[500,455]] },
+    { "name": "hair-front", "radius": 18, "stiffness": 26, "points": [[659,242],[642,300],[623,365],[615,420]] },
+    { "name": "sleeve-edge", "radius": 28, "stiffness": 32, "points": [[545,500],[540,555],[520,610],[480,650]] },
+    { "name": "front-hem", "radius": 35, "stiffness": 40, "points": [[670,635],[615,735],[565,810],[435,840]] },
+    { "name": "right-hem", "radius": 30, "stiffness": 38, "points": [[980,675],[1055,770],[1125,820],[1180,840]] },
+    { "name": "sword-tassel", "radius": 17, "stiffness": 30, "points": [[515,510],[514,560],[510,610],[505,655]] }
+  ]
+}

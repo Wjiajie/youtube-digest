@@ -1,0 +1,109 @@
+{
+  "version": "wuxia-living-v2",
+  "sourceSize": [
+    1670,
+    941
+  ],
+  "assets": [
+    {
+      "file": "character.png",
+      "source": "art/dual-theme/eastern/production/living-portrait-v2/character-native-v2.png",
+      "bytes": 853009,
+      "sha256": "f52952c606ee2395e82e6a56a4bb21207ac37e1a4504ff80c0f00ee9afd30815",
+      "width": 1670,
+      "height": 941,
+      "alpha": {
+        "transparent": 1203839,
+        "translucent": 43942,
+        "opaqueAtLeast250": 323689
+      },
+      "provenance": "Built-in imagegen; reference-guided independent character with native alpha; calm hair revision"
+    },
+    {
+      "file": "boat.png",
+      "source": "art/dual-theme/eastern/production/living-portrait-v2/boat-native-v1.png",
+      "bytes": 978615,
+      "sha256": "fd3eda400bd5019b76700061a6056f521e1ca556be37a1e33311349ab6224b27",
+      "width": 1670,
+      "height": 942,
+      "alpha": {
+        "transparent": 1052354,
+        "translucent": 22984,
+        "opaqueAtLeast250": 497802
+      },
+      "provenance": "Built-in imagegen; empty boat with reconstructed interior and native alpha"
+    },
+    {
+      "file": "bow.png",
+      "source": "art/dual-theme/eastern/production/living-portrait-v2/bow-native-v1.png",
+      "bytes": 330784,
+      "sha256": "35d851d5c45dc7e9cb8f3e2a6e419375061f16368f7e9d6872303445402eebe8",
+      "width": 1670,
+      "height": 942,
+      "alpha": {
+        "transparent": 1388625,
+        "translucent": 11699,
+        "opaqueAtLeast250": 172816
+      },
+      "provenance": "Built-in imagegen; independently authored near bow and upright post with native alpha"
+    },
+    {
+      "file": "environment.png",
+      "source": "art/dual-theme/eastern/references/r06-environment-clean-v1.png",
+      "bytes": 2146896,
+      "sha256": "ef9fa8ab798e5725416b485ffcc5bc84302cf90ab6bef6f3158c47501349add8",
+      "width": 1672,
+      "height": 941,
+      "provenance": "Existing independent user-provided environment; no person or boat"
+    },
+    {
+      "file": "reference.png",
+      "source": "art/dual-theme/eastern/concepts/wuxia-lake-master-v2.png",
+      "bytes": 1967692,
+      "sha256": "5a67bf0963500ee30a75030533573b2204f71647a2c59a97a7546d9ad6239dc0",
+      "width": 1670,
+      "height": 941,
+      "provenance": "Original user artwork, comparison only; never sampled by dynamic layers"
+    },
+    {
+      "file": "poster.png",
+      "source": "art/dual-theme/eastern/production/living-portrait-v2/poster-v2.png",
+      "bytes": 3403079,
+      "sha256": "ca64e9bbead2b47a7dffbd3342af642ee15787ff33e867f23dcd2c3a6ae6f9c7",
+      "width": 1670,
+      "height": 941,
+      "provenance": "Static frame exported from the independent-layer browser renderer"
+    }
+  ],
+  "dynamicTextures": [
+    "environment.png",
+    "boat.png",
+    "character.png",
+    "bow.png"
+  ],
+  "characterPlacement": {
+    "scale": 0.94,
+    "x": 40,
+    "y": 50
+  },
+  "drawOrder": [
+    "independent environment",
+    "empty boat",
+    "animated character",
+    "independent native RGBA bow"
+  ],
+  "capabilities": [
+    "native RGBA compositing",
+    "relative parallax",
+    "rigid-head breathing",
+    "chest expansion independent of wind",
+    "fixed-step inertial 2D chains"
+  ],
+  "limits": [
+    "reference-guided regeneration can change face and clothing",
+    "2D mesh animation, not neural video or 3D cloth",
+    "no new pose or arbitrary camera orbit"
+  ],
+  "runtimeTextureBytes": 4309304,
+  "artAcceptance": "pending-user-review"
+}
