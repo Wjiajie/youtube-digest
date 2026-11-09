@@ -29,6 +29,14 @@ test("local preview accepts the binary GLB container used by environment assets"
   expect(() => validatePreviewAsset(glb({ asset: { version: "2.0" }, scenes: [{ nodes: [] }], scene: 0 }))).not.toThrow();
 });
 
+test("small compressed input cannot declare an unbounded decoded allocation", () => {
+  expect(() => validatePreviewAsset(glb({ asset:{version:"2.0"}, buffers:[{byteLength:128*1024*1024}] }))).toThrow("64 MB");
+});
+
+test("Meshopt count and stride cannot bypass the decoded buffer limit", () => {
+  expect(() => validatePreviewAsset(glb({asset:{version:"2.0"},buffers:[{byteLength:4}],bufferViews:[{buffer:0,byteLength:4,extensions:{EXT_meshopt_compression:{buffer:0,byteLength:4,count:128*1024*1024,byteStride:16,mode:"ATTRIBUTES"}}}]}))).toThrow("64 MB");
+});
+
 test("GLB cannot hide an external resource in a second JSON chunk", () => {
   const first = glb({ asset: { version: "2.0" } });
   const second = glb({ asset: { version: "2.0" }, images: [{ uri: "https://example.com/private.png" }] });

@@ -15,6 +15,22 @@ export function validatePreviewAsset(data: string | ArrayBuffer): void {
       if (entry && typeof entry === "object") pending.push(entry);
     }
   }
+  let decodedBytes = 0;
+  for (const buffer of document.buffers ?? []) {
+    if (buffer.byteLength === undefined) continue; // URI-only JSON remains subject to loader validation.
+    if (!Number.isSafeInteger(buffer.byteLength) || buffer.byteLength < 0) throw new Error("无效的解码缓冲区大小。");
+    decodedBytes += buffer.byteLength;
+    if (decodedBytes > 64 * 1024 * 1024) throw new Error("试装解码后的缓冲区不能超过 64 MB。");
+  }
+  let meshoptBytes = 0;
+  for (const view of document.bufferViews ?? []) {
+    const compressed = view.extensions?.EXT_meshopt_compression;
+    if (!compressed) continue;
+    const size = compressed.count * compressed.byteStride;
+    if (!Number.isSafeInteger(size) || size < 0) throw new Error("无效的 Meshopt 解码大小。");
+    meshoptBytes += size;
+    if (meshoptBytes > 64 * 1024 * 1024) throw new Error("试装解码后的缓冲区不能超过 64 MB。");
+  }
 }
 
 function glbJson(data: ArrayBuffer): string {

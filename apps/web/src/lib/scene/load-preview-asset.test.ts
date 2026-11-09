@@ -3,6 +3,24 @@ import { Raycaster, SkinnedMesh, Vector3 } from "three";
 import { loadPreviewAsset } from "./load-preview-asset";
 import { disposeAsset } from "./asset-resources";
 import { fiveJointFixture } from "./skin-fixture";
+import { NodeIO } from "@gltf-transform/core";
+import { EXTMeshoptCompression } from "@gltf-transform/extensions";
+import { MeshoptEncoder, MeshoptDecoder } from "meshoptimizer";
+
+test("lossless Meshopt decoding preserves additional skin influences", async () => {
+  await Promise.all([MeshoptEncoder.ready, MeshoptDecoder.ready]);
+  const io = new NodeIO().registerExtensions([EXTMeshoptCompression]).registerDependencies({ "meshopt.encoder": MeshoptEncoder, "meshopt.decoder": MeshoptDecoder });
+  const document = await io.readBinary(new Uint8Array(fiveJointFixture()));
+  document.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE });
+  const bytes = await io.writeBinary(document);
+  const asset = await loadPreviewAsset(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
+  try {
+    const mesh = asset.scene.children.find(o => o instanceof SkinnedMesh);
+    if (!(mesh instanceof SkinnedMesh)) throw new Error("compressed skin missing");
+    expect(mesh.getVertexPosition(0,new Vector3()).toArray()).toEqual([2,0,0]);
+    expect(mesh.getVertexPosition(1,new Vector3()).toArray()).toEqual([3,0,0]);
+  } finally { disposeAsset(asset); }
+});
 
 test("a fifth joint contributes its original weight to vertex positions and bounds", async () => {
   const asset = await loadPreviewAsset(fiveJointFixture());
