@@ -12,6 +12,10 @@
   "scripts": {
     "postinstall": "node scripts/patch-next-compression.mjs",
     "dev:web": "npm run dev --workspace @blueprint/web",
+    "dev:voice": "npm run dev --workspace @blueprint/voice-gateway",
+    "dev:companion": "npm run dev --workspace @blueprint/web -- --hostname 127.0.0.1",
+    "setup:companion": "node scripts/setup-companion.mjs",
+    "test:companion-db": "node scripts/test-companion-migration.mjs",
     "dev:extension": "npm run dev --workspace @blueprint/extension",
     "prebuild:web": "node scripts/patch-next-compression.mjs",
     "build:web": "npm run build --workspace @blueprint/web",

@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const path of ["/design", "/design/assets", "/design/environment"]) test(`internal specimen ${path} is not exposed by the production build`, async ({ page }) => {
+for (const path of ["/design", "/design/assets", "/design/environment", "/design/companion", "/design/companion?settings=1"]) test(`internal specimen ${path} is not exposed by the production build`, async ({ page }) => {
   const response = await page.goto(path);
   expect(response?.status()).toBe(404);
   await expect(page.getByText("BLUEPRINT / DESIGN LAB · 01")).toHaveCount(0);

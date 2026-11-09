@@ -6,6 +6,7 @@ import type { Actor } from "@blueprint/domain";
 
 import { extensionClientId, publicSupabaseConfig } from "../env";
 import { createServerSupabase } from "./server";
+import { localCompanionMode, loopbackHost } from "../companion/local-config";
 
 type RequestActorContext = {
   actor: Actor;
@@ -17,6 +18,13 @@ type RequestActorResult =
   | { ok: false; code: "unauthenticated" | "unavailable" };
 
 export async function resolveRequestActor(request?: NextRequest): Promise<RequestActorResult> {
+  if (localCompanionMode()) {
+    const incoming = request?.headers ?? await (await import("next/headers")).headers();
+    if (!loopbackHost(incoming.get("host")) || incoming.has("authorization"))
+      return { ok: false, code: "unauthenticated" };
+    const local = await (await import("../companion/local-database")).localDatabase();
+    return { ok: true, value: { actor: local.actor, client: local.client } };
+  }
   const authorization = request?.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) {
     const client = await createServerSupabase();

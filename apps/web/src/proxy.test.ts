@@ -5,7 +5,7 @@ import { config, proxy } from "./proxy";
 
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
-it.each(["/api/planning/runs", "/api/clarification/turns", "/api/resources/runs", "/api/v1/learning-notes",
+it.each(["/api/companion", "/api/planning/runs", "/api/clarification/turns", "/api/resources/runs", "/api/v1/learning-notes",
   "/api/translations/runs", "/api/translations/runs/a6000000-0000-4000-8000-000000000001",
   "/api/v1/translations/runs", "/api/v1/translations/runs/a6000000-0000-4000-8000-000000000001",
   "/api/translations/runs/A6000000-0000-4000-8000-000000000001",
@@ -13,7 +13,7 @@ it.each(["/api/planning/runs", "/api/clarification/turns", "/api/resources/runs"
   "/api/v1/explanations/runs", "/api/v1/explanations/runs/find", "/api/v1/explanations/runs/a6000000-0000-4000-8000-000000000001"])("lets the independently authenticated %s handler own its upload deadline", path => {
   for (const suffix of ["", "/", "?probe=1"]) expect(unstable_doesMiddlewareMatch({ config, url: `https://blueprint.example${path}${suffix}` })).toBe(false);
 });
-it.each(["/api/planning/runs/history", "/api/planning/runs-extra", "/api/clarification/turns/history", "/api/clarification/turns-extra",
+it.each(["/api/companion-extra", "/api/companion/assets", "/api/companion/history", "/api/planning/runs/history", "/api/planning/runs-extra", "/api/clarification/turns/history", "/api/clarification/turns-extra",
   "/api/resources/runs/history", "/api/resources/runs-extra", "/api/v1/learning-notes/history", "/api/v1/learning-notes-extra",
   "/api/translations/runs/history", "/api/translations/runs-extra", "/api/translations/runs/a6000000-0000-4000-8000-000000000001/history",
   "/api/v1/translations/runs/history", "/api/v1/translations/runs-extra", "/api/v1/translations/runs/a6000000-0000-4000-8000-000000000001/history",
@@ -26,7 +26,7 @@ it.each(["/api/planning/runs/history", "/api/planning/runs-extra", "/api/clarifi
   expect(unstable_doesMiddlewareMatch({ config, url: `https://blueprint.example${path}` })).toBe(true);
 });
 
-it.each(["/", "/paths", "/blueprint/edit", "/api/v1/blueprint", "/preview/private"])("does not expand the public exception to %s", async path => {
+it.each(["/", "/paths", "/blueprint/edit", "/api/v1/blueprint", "/preview/private", "/scenes/wuxia/private", "/scenes/wuxia-extra", "/scenes/avatar/private", "/scenes/avatar-extra"])("does not expand the public exception to %s", async path => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://proxy.example.com");
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "test-key");
   const accessToken = [Buffer.from(JSON.stringify({ alg: "HS256", typ: "JWT" })).toString("base64url"),
@@ -54,5 +54,29 @@ it("serves the public example without Auth configuration or touching stale cooki
   expect(response.status).toBe(200);
   expect(response.headers.get("x-middleware-next")).toBe("1");
   expect(response.headers.has("set-cookie")).toBe(false);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("serves the exact public artwork page without Auth or private data", async () => {
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
+  const fetch = vi.fn(() => { throw new Error("Artwork page must not contact Auth"); });
+  vi.stubGlobal("fetch", fetch);
+  const response = await proxy(new NextRequest("https://blueprint.example/scenes/wuxia?view=home"));
+  expect(response.headers.get("x-middleware-next")).toBe("1");
+  expect(response.headers.has("set-cookie")).toBe(false);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("serves the public avatar spike and its sample assets without Auth", async () => {
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "");
+  vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "");
+  const fetch = vi.fn(() => { throw new Error("Avatar spike must not contact Auth"); });
+  vi.stubGlobal("fetch", fetch);
+  for (const path of ["/scenes/avatar", "/vrm/avatar-sample.vrm", "/audio/avatar-p0.wav"]) {
+    const response = await proxy(new NextRequest("https://blueprint.example" + path));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.has("set-cookie")).toBe(false);
+  }
   expect(fetch).not.toHaveBeenCalled();
 });

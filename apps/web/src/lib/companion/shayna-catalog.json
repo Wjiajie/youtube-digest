@@ -1,0 +1,3495 @@
+{
+  "schemaVersion": 1,
+  "character": "Shayna",
+  "author": "まつりば",
+  "variants": [
+    {
+      "id": "shayna-vrm0-short",
+      "label": "去长袖版 · 0.x（精简表情）",
+      "file": "Shayna_VRM0.x 懗柍.vrm",
+      "sha256": "e08085100e87e8bcfad8164cedca6edcb204465be39f8490e69242a31047af84",
+      "url": "/api/companion/assets?id=shayna-vrm0-short"
+    },
+    {
+      "id": "shayna-vrm0",
+      "label": "兼容版 · 0.x（精简表情）",
+      "file": "Shayna_VRM0.x.vrm",
+      "sha256": "d0d3970e754c56dd4ec4443ba16b2d75ae96fe2960edefe4c5717a90b85d18a8",
+      "url": "/api/companion/assets?id=shayna-vrm0"
+    },
+    {
+      "id": "shayna-virtualcast",
+      "label": "Virtual Cast 版 · 1.0",
+      "file": "Shayna_VRM1.0 Virtual Cast.vrm",
+      "sha256": "d8085f1668480a3e6cbc4c0b664bd63fb814911de408fa8840cb18cb486c20d9",
+      "url": "/api/companion/assets?id=shayna-virtualcast"
+    },
+    {
+      "id": "shayna-short",
+      "label": "去长袖版 · 1.0",
+      "file": "Shayna_VRM1.0 懗柍.vrm",
+      "sha256": "526943657c281d9686c6de9d7f65c59eb72ca17405669f4fa49360664f7854aa",
+      "url": "/api/companion/assets?id=shayna-short"
+    },
+    {
+      "id": "shayna-vrm1",
+      "label": "完整形象 · 1.0",
+      "file": "Shayna_VRM1.0.vrm",
+      "sha256": "cff1ac3a06b2136f2635a414039efcecb3eaa5c69a7bca813a58513d63a44473",
+      "url": "/api/companion/assets?id=shayna-vrm1"
+    }
+  ],
+  "summary": {
+    "unityAnimationFiles": 81,
+    "facialClips": 61,
+    "costumeSwitches": 6,
+    "hairControls": 5,
+    "nativeFullBodyAnimations": 0,
+    "vrmFiles": 5,
+    "uniqueVrmFiles": 5,
+    "outfitSets": 1
+  },
+  "groups": [
+    {
+      "id": "combined",
+      "label": "手势联动表情"
+    },
+    {
+      "id": "eyes1",
+      "label": "眼型 · 基础"
+    },
+    {
+      "id": "eyes2",
+      "label": "眼型 · 特效"
+    },
+    {
+      "id": "mouth1",
+      "label": "嘴型 · 基础"
+    },
+    {
+      "id": "mouth2",
+      "label": "嘴型 · 趣味"
+    },
+    {
+      "id": "brows",
+      "label": "眉毛与面部"
+    },
+    {
+      "id": "legacy",
+      "label": "其他组合与旧版片段"
+    }
+  ],
+  "clips": [
+    {
+      "id": "0271c8809dea9ed49a8d850386340a2d",
+      "path": "Assets/Shayna/Animation/Facial/Mouth1/▲.anim",
+      "name": "▲",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.▲",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth1",
+      "label": "三角嘴",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "049c661cdfa34d947b0e87ead79b7445",
+      "path": "Assets/Shayna/Animation/Facial/Mouth2/ぺろっ.anim",
+      "name": "ぺろっ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.ぺろっ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth2",
+      "label": "舔嘴",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "08b9e2b1d130f5743b1be49409758af9",
+      "path": "Assets/Shayna/Animation/Facial/Eye1/まばたき.anim",
+      "name": "まばたき",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.瞬き",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes1",
+      "label": "眨眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "08f95d2fe50a49d4081ac80bc1a8eac1",
+      "path": "Assets/Shayna/Animation/Facial_Hand/ガーン.anim",
+      "name": "ガーン",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.びっくり",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.瞳小",
+          "keys": [
+            {
+              "time": 0,
+              "value": 25
+            },
+            {
+              "time": 0.016666668,
+              "value": 25
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.はわわ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.悲しい",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.青ざめ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.汗1",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.汗2",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "震惊",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "09f168ccf8417294f95e4537051f0d07",
+      "path": "Assets/Shayna/Animation/Hair/Bangs.anim",
+      "name": "Bangs",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Hair Shadow",
+          "attribute": "blendShape.Hair Shadow2",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Hair",
+          "attribute": "blendShape.前髪　長さ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "hair",
+      "label": "Bangs",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "0abd5e43754381d4a946c55b037a741f",
+      "path": "Assets/Shayna/Animation/Hair/WingEar 拡大.anim",
+      "name": "WingEar 拡大",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Hair",
+          "attribute": "blendShape.翼耳　拡大",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "hair",
+      "label": "WingEar 拡大",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "0efd57c8e859e2f46a696fa25a1973d3",
+      "path": "Assets/Shayna/Animation/Facial/Mouth1/はわ.anim",
+      "name": "はわ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.はわ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth1",
+      "label": "小惊讶嘴",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "1ecc6e6a6f3df254a97739177bf5be70",
+      "path": "Assets/Shayna/Animation/Facial/照れ　ハート目.anim",
+      "name": "照れ　ハート目",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Face",
+          "attribute": "blendShape.照れ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.口　あわわ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.赤面",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.ハート",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.ハート",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.赤面",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.驚き",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.口　あわわ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [
+        "Face:blendShape.照れ",
+        "Face:blendShape.口　あわわ",
+        "Face:blendShape.赤面",
+        "Face:blendShape.ハート",
+        "Body:blendShape.赤面",
+        "Body:blendShape.驚き",
+        "Body:blendShape.口　あわわ"
+      ],
+      "reset": false,
+      "group": "legacy",
+      "label": "害羞爱心眼（旧版组合）",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "27337b04f2bb7ef489facc0b56459c07",
+      "path": "Assets/Shayna/Animation/Facial/Eye1/怒り目.anim",
+      "name": "怒り目",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.怒り目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes1",
+      "label": "生气眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "28d2cdd3079272d489ae6a6e5d94a3f9",
+      "path": "Assets/Shayna/Animation/Facial/Eye2/しいたけ.anim",
+      "name": "しいたけ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.しいたけ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes2",
+      "label": "星星眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "2b2d525d568293a4089cf30c8e8cf225",
+      "path": "Assets/Shayna/Animation/Facial/Mouth2/おちょぼ口.anim",
+      "name": "おちょぼ口",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.おちょぽ口",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth2",
+      "label": "嘟嘴",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "32203d098b1642f42bd047e2798c680e",
+      "path": "Assets/Shayna/Animation/Facial/Brows＆Other/困る.anim",
+      "name": "困る",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.困る",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "brows",
+      "label": "困扰眉",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "323e90c9660fbdc4b842d660db82d254",
+      "path": "Assets/Shayna/Animation/Facial/泣き.anim",
+      "name": "泣き",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Face",
+          "attribute": "blendShape.口　ぐぬぬ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.泣き",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.赤面",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.口　∧",
+          "keys": [
+            {
+              "time": 0,
+              "value": 20
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.口　ぐぬぬ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.泣き",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.つり目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 55
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.目上",
+          "keys": [
+            {
+              "time": 0,
+              "value": 21
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.眉下",
+          "keys": [
+            {
+              "time": 0,
+              "value": 23
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.叫ぶ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 47
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.横幅　拡大",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.頬染め",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [
+        "Face:blendShape.口　ぐぬぬ",
+        "Face:blendShape.泣き",
+        "Face:blendShape.赤面",
+        "Body:blendShape.口　∧",
+        "Body:blendShape.口　ぐぬぬ",
+        "Body:blendShape.泣き",
+        "Body:blendShape.目上",
+        "Body:blendShape.眉下"
+      ],
+      "reset": false,
+      "group": "legacy",
+      "label": "哭泣",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "40f0efafab6d70b4d955d03ba79c1466",
+      "path": "Assets/Shayna/Animation/Costume/Jacket ON.anim",
+      "name": "Jacket ON",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Jacket",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Jacket ON",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "475b09d02e11cd440bac98c27e6fcd03",
+      "path": "Assets/Shayna/Animation/Costume/Furisode OFF.anim",
+      "name": "Furisode OFF",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Furisode",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Furisode OFF",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "49585ed03033cb34490a663c0bfff984",
+      "path": "Assets/Shayna/Animation/Facial/笑顔.anim",
+      "name": "笑顔",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Face",
+          "attribute": "blendShape.笑顔",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.口　にこっ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.笑い",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.口　にこっ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 66
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.つり目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 70
+            }
+          ]
+        }
+      ],
+      "missing": [
+        "Face:blendShape.笑顔",
+        "Face:blendShape.口　にこっ",
+        "Body:blendShape.口　にこっ"
+      ],
+      "reset": false,
+      "group": "legacy",
+      "label": "笑脸",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "49fbdd3d1fdb4054bbd49b3dfae59eed",
+      "path": "Assets/Shayna/Animation/Hair/Sidehair.anim",
+      "name": "Sidehair",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Hair",
+          "attribute": "blendShape.横髪　長さ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "hair",
+      "label": "Sidehair",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "50dd7287c5e8cf2469da67760dbbb2a2",
+      "path": "Assets/Shayna/Animation/Costume/Hat ON.anim",
+      "name": "Hat ON",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Hat",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Hat ON",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "53ac6d3c17b47934c881c03348d133cb",
+      "path": "Assets/Shayna/Animation/None.anim",
+      "name": "None",
+      "duration": 1,
+      "curves": [],
+      "missing": [],
+      "reset": false,
+      "group": "setup",
+      "label": "空片段",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "53bb58198d72a1949aa3bf8833a09fb4",
+      "path": "Assets/Shayna/Animation/Facial/Mouth1/ぐぬぬ.anim",
+      "name": "ぐぬぬ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.ぐぬぬ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth1",
+      "label": "咬牙",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "56337af8a556c1f4d8a71cb951aef570",
+      "path": "Assets/Shayna/Animation/Facial/None.anim",
+      "name": "None",
+      "duration": 1,
+      "curves": [],
+      "missing": [],
+      "reset": false,
+      "group": "legacy",
+      "label": "空片段",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "56db786c560bd2e4cb125b600f14570b",
+      "path": "Assets/Shayna/Animation/Hair/WingEar 非表示.anim",
+      "name": "WingEar 非表示",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Hair",
+          "attribute": "blendShape.翼耳　非表示",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "hair",
+      "label": "WingEar 非表示",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "579c248c0bbadf84ea97821aabb3988f",
+      "path": "Assets/Shayna/Animation/Facial/ぐるぐる目2.anim",
+      "name": "ぐるぐる目2",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Face",
+          "attribute": "blendShape.ぐるぐる2",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.口　あわわ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.困り",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [
+        "Face:blendShape.ぐるぐる2",
+        "Face:blendShape.口　あわわ",
+        "Face:blendShape.困り"
+      ],
+      "reset": false,
+      "group": "legacy",
+      "label": "晕眩（旧版组合）",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "57e07b1d57697d846a4f34de7d46a405",
+      "path": "Assets/Shayna/Animation/Costume/Jacket OFF.anim",
+      "name": "Jacket OFF",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Jacket",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Jacket OFF",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "5c371c8309a838b49b14f6ac5af87735",
+      "path": "Assets/Shayna/Animation/Facial/Eye1/じと目.anim",
+      "name": "じと目",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.じと目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes1",
+      "label": "嫌弃眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "5d3dc647f6dda1a46b157f941a6ef531",
+      "path": "Assets/Shayna/Animation/Blink.anim",
+      "name": "Blink",
+      "duration": 9.666667,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.Blink",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            },
+            {
+              "time": 0.016666668,
+              "value": 0
+            },
+            {
+              "time": 3,
+              "value": 0
+            },
+            {
+              "time": 3.1666667,
+              "value": 100
+            },
+            {
+              "time": 3.3333333,
+              "value": 0
+            },
+            {
+              "time": 6,
+              "value": 0
+            },
+            {
+              "time": 6.1666665,
+              "value": 100
+            },
+            {
+              "time": 6.3333335,
+              "value": 0
+            },
+            {
+              "time": 9,
+              "value": 0
+            },
+            {
+              "time": 9.166667,
+              "value": 100
+            },
+            {
+              "time": 9.333333,
+              "value": 0
+            },
+            {
+              "time": 9.5,
+              "value": 100
+            },
+            {
+              "time": 9.666667,
+              "value": 0
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "setup",
+      "label": "Blink",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "5e68c46b0ee631e4d9abd3eb2404d3bc",
+      "path": "Assets/Shayna/Animation/Facial/Mouth1/ワ.anim",
+      "name": "ワ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.ワ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth1",
+      "label": "张嘴笑",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "61cdff2e33bfe8846aa9d2c7db1b209f",
+      "path": "Assets/Shayna/Animation/Costume/Accessories ON.anim",
+      "name": "Accessories ON",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Accessories",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "path": "Flask",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "path": "Test tube1",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "path": "Test tube2",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Accessories ON",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "64748ef479d9fd34fbd09e97b2dac736",
+      "path": "Assets/Shayna/Animation/Facial/Brows＆Other/頬染め.anim",
+      "name": "頬染め",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.頬染め",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "brows",
+      "label": "脸红",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "67b5c05066115bf428ec6b794dce2f00",
+      "path": "Assets/Shayna/Animation/Facial/DefaultFace.anim",
+      "name": "DefaultFace",
+      "duration": 0,
+      "curves": [],
+      "missing": [],
+      "reset": true,
+      "group": "legacy",
+      "label": "重置脸部",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "67ecc3067f2ab424fb372f06353f72ea",
+      "path": "Assets/Shayna/Animation/Facial_Hand/泣き2.anim",
+      "name": "泣き2",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.半目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.瞳小",
+          "keys": [
+            {
+              "time": 0,
+              "value": 2
+            },
+            {
+              "time": 0.016666668,
+              "value": 2
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.ハイライト拡大",
+          "keys": [
+            {
+              "time": 0,
+              "value": 200
+            },
+            {
+              "time": 0.016666668,
+              "value": 200
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.ぐぬぬ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.困る",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.頬染め",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.涙　半目用",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "哭泣 2",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "733424e754d665645add7da0df3f401c",
+      "path": "Assets/Shayna/Animation/Facial/Eye2/なごみ.anim",
+      "name": "なごみ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.なごみ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes2",
+      "label": "温柔眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "747bc64599e2bbd49a6728f67f1d870e",
+      "path": "Assets/Shayna/Animation/Costume/Boots ON.anim",
+      "name": "Boots ON",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Boots",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Boots ON",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "7612dcf18a1667845b88fd7acd6b67ae",
+      "path": "Assets/Shayna/Animation/Costume/Sleeves OFF.anim",
+      "name": "Sleeves OFF",
+      "duration": 1,
+      "curves": [
+        {
+          "path": "Sleeve",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            },
+            {
+              "time": 1,
+              "value": 0
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Sleeves OFF",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "78137498da3ee5d4994fc5fb49937042",
+      "path": "Assets/Shayna/Animation/Costume/Boots OFF.anim",
+      "name": "Boots OFF",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Boots",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Boots OFF",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "807c9fc1c4209d34c81c7061abee0651",
+      "path": "Assets/Shayna/Animation/Facial/Brows＆Other/真面目.anim",
+      "name": "真面目",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.真面目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "brows",
+      "label": "认真眉",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "816a9c39b64daa944b739e4666eee87f",
+      "path": "Assets/Shayna/Animation/VRC/Setting Animation/LipSync_Viseme.anim",
+      "name": "LipSync_Viseme",
+      "duration": 0,
+      "curves": [],
+      "missing": [],
+      "reset": false,
+      "group": "setup",
+      "label": "LipSync_Viseme",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "8925fd82a7c6b334ba4a08f26fab4723",
+      "path": "Assets/Shayna/Animation/Facial/Mouth2/にっこり.anim",
+      "name": "にっこり",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.にっこり",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth2",
+      "label": "微笑嘴",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "8a84c0860379c8f4db39b599301797dd",
+      "path": "Assets/Shayna/Animation/Facial/Mouth2/てへぺろ.anim",
+      "name": "てへぺろ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.てへぺろ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth2",
+      "label": "俏皮吐舌",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "8af334159f668e44d857522da2228ed4",
+      "path": "Assets/Shayna/Animation/Facial/酸っぱい.anim",
+      "name": "酸っぱい",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Face",
+          "attribute": "blendShape.糸つり目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.口　ぐぬぬ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": ["Face:blendShape.糸つり目", "Face:blendShape.口　ぐぬぬ"],
+      "reset": false,
+      "group": "legacy",
+      "label": "酸涩脸（旧版组合）",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "8c00512ab8280e24e86cbfba4b6afa5d",
+      "path": "Assets/Shayna/Animation/Facial/Eye2/ぐるぐる2.anim",
+      "name": "ぐるぐる2",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.ぐるぐる2",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes2",
+      "label": "晕眩眼 2",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "8f036e2741de8c34d8773b9689634a13",
+      "path": "Assets/Shayna/Animation/Facial/Eye1/びっくり.anim",
+      "name": "びっくり",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.びっくり",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes1",
+      "label": "吃惊眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "91a69b9d3fac5684089456e4986c43c6",
+      "path": "Assets/Shayna/Animation/Facial/Eye2/ハート.anim",
+      "name": "ハート",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.ハート",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes2",
+      "label": "爱心眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "91a97b23f31b2ee49bba6dfc4decd445",
+      "path": "Assets/Shayna/Animation/Facial/Mouth2/べー2.anim",
+      "name": "べー2",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.べー2",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth2",
+      "label": "吐舌 2",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "96569b0724d1b994c97527723cf65721",
+      "path": "Assets/Shayna/Animation/Costume/Hat OFF.anim",
+      "name": "Hat OFF",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Hat",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Hat OFF",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "983e889de518c3e4d9f6645ef75198f5",
+      "path": "Assets/Shayna/Animation/Facial/Mouth1/はわわ.anim",
+      "name": "はわわ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.はわわ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth1",
+      "label": "慌张嘴",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "98991d8e77ccc2e499ee1b3317522dd1",
+      "path": "Assets/Shayna/Animation/Facial_Hand/笑顔.anim",
+      "name": "笑顔",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.笑い",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.あ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.にこり",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "笑脸",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "9995293f69eaf18438342413488df536",
+      "path": "Assets/Shayna/Animation/Facial/Brows＆Other/青ざめ.anim",
+      "name": "青ざめ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.青ざめ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "brows",
+      "label": "脸色发青",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "9c520ad934c14be40aa45fcd2c0c02fc",
+      "path": "Assets/Shayna/Animation/Facial/Mouth1/叫ぶ.anim",
+      "name": "叫ぶ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.叫ぶ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth1",
+      "label": "大喊",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "9cc626fe56f6f9248b93570ba73c905d",
+      "path": "Assets/Shayna/Animation/Costume/Accessories OFF.anim",
+      "name": "Accessories OFF",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Accessories",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "path": "Flask",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "path": "Test tube1",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        },
+        {
+          "path": "Test tube2",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Accessories OFF",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "9cdd72243e3786a4da844c4b15f7fd46",
+      "path": "Assets/Shayna/Animation/Facial/Mouth2/べー1.anim",
+      "name": "べー1",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.べー1",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth2",
+      "label": "吐舌 1",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "9f8b9bb578299a6429cfe2cb361cbf70",
+      "path": "Assets/Shayna/Animation/Facial/Eye2/つり糸目.anim",
+      "name": "つり糸目",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.糸つり目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes2",
+      "label": "眯眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "a78981b4ed39fee4bac805ceb0c4900a",
+      "path": "Assets/Shayna/Animation/Facial_Hand/デフォルト.anim",
+      "name": "デフォルト",
+      "duration": 0.016666668,
+      "curves": [],
+      "missing": [],
+      "reset": true,
+      "group": "combined",
+      "label": "默认脸",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "a9ee33966383b4c4b84608d23d889744",
+      "path": "Assets/Shayna/Animation/Facial/Mouth2/にやり.anim",
+      "name": "にやり",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.にやり",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth2",
+      "label": "坏笑嘴",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "ace29ccc9fd302041a9471fe4e385b04",
+      "path": "Assets/Shayna/Animation/Facial_Hand/ハート🅼目.anim",
+      "name": "ハート🅼目",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.半目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.ハート",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.ω",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.にこり",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "爱心眼笑脸",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "adae2316f7dcb124da3513984e6e6733",
+      "path": "Assets/Shayna/Animation/Facial_Hand/はぅ.anim",
+      "name": "はぅ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.はぅ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.はわ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.怒り",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "委屈眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "af9caa04f7994db4c81cfc18508d4847",
+      "path": "Assets/Shayna/Animation/Facial/Eye1/笑い.anim",
+      "name": "笑い",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.笑い",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes1",
+      "label": "笑眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "b51138285de9408418340ca74068affc",
+      "path": "Assets/Shayna/Animation/Facial/Mouth1/へ.anim",
+      "name": "へ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.へ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth1",
+      "label": "撇嘴",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "b7b9e79b2cd5a7f419e4c00d53eff521",
+      "path": "Assets/Shayna/Animation/Facial/キリっ　しいたけ.anim",
+      "name": "キリっ　しいたけ",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Face",
+          "attribute": "blendShape.しいたけ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.口　３",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.呆れ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.しいたけ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.口　３",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.つり目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 80
+            }
+          ]
+        }
+      ],
+      "missing": [
+        "Face:blendShape.しいたけ",
+        "Face:blendShape.口　３",
+        "Face:blendShape.呆れ",
+        "Body:blendShape.口　３"
+      ],
+      "reset": false,
+      "group": "legacy",
+      "label": "认真星星眼（旧版组合）",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "b8db1238a0e41504a809b5036ff39de2",
+      "path": "Assets/Shayna/Animation/Costume/Furisode ON.anim",
+      "name": "Furisode ON",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Furisode",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Furisode ON",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "b8e82d9c428b7044abfdbdc98e2f249a",
+      "path": "Assets/Shayna/Animation/Facial/焦り.anim",
+      "name": "焦り",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Face",
+          "attribute": "blendShape.驚き",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.口　あわわ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.困り",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.汗1",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.汗2",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.青ざめ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Face",
+          "attribute": "blendShape.瞳　縮小",
+          "keys": [
+            {
+              "time": 0,
+              "value": 20
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.困り",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.驚き",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.口　あわわ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.つり目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 75
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.汗1",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.汗2",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.びっくり",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.はわわ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.困る",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.瞳小",
+          "keys": [
+            {
+              "time": 0,
+              "value": 50
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.ジト目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 55
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.目元　下げ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 70
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.頬染め",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [
+        "Face:blendShape.驚き",
+        "Face:blendShape.口　あわわ",
+        "Face:blendShape.困り",
+        "Face:blendShape.汗1",
+        "Face:blendShape.汗2",
+        "Face:blendShape.青ざめ",
+        "Face:blendShape.瞳　縮小",
+        "Body:blendShape.困り",
+        "Body:blendShape.驚き",
+        "Body:blendShape.口　あわわ",
+        "Body:blendShape.ジト目"
+      ],
+      "reset": false,
+      "group": "legacy",
+      "label": "慌张（旧版组合）",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "bf00780ae4f94e644abd60f132eae064",
+      "path": "Assets/Shayna/Animation/Facial_Hand/泣き.anim",
+      "name": "泣き",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.半目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.ぐぬぬ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.困る",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.頬染め",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.涙　半目用",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "哭泣",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "bf83b87dd09c4064bb0eb93b832369a0",
+      "path": "Assets/Shayna/Animation/Facial/Eye1/ウィンク.anim",
+      "name": "ウィンク",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.ウィンク右",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes1",
+      "label": "单眼眨眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "c6e860aa313722f47906751357ef0509",
+      "path": "Assets/Shayna/Animation/Facial/Brows＆Other/怒り.anim",
+      "name": "怒り",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.怒り",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "brows",
+      "label": "生气眉",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "c96abe7d3b414344cbc6f710acdc1f41",
+      "path": "Assets/Shayna/Animation/Facial_Hand/ドヤっぽい.anim",
+      "name": "ドヤっぽい",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.怒り目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.にやり",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.キリッ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "得意",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "cab03d786d6986742ab1e149cfabe2df",
+      "path": "Assets/Shayna/Animation/Facial/Mouth2/ムフフ.anim",
+      "name": "ムフフ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.ムフフ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth2",
+      "label": "抿嘴笑",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "cd0533e89d70a784c9d19e8504fde94e",
+      "path": "Assets/Shayna/Animation/Facial/Brows＆Other/八.anim",
+      "name": "八",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.八",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "brows",
+      "label": "八字眉",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "cdd39373e53cc394cb3193926f946ceb",
+      "path": "Assets/Shayna/Animation/Costume/Sleeves ON.anim",
+      "name": "Sleeves ON",
+      "duration": 1,
+      "curves": [
+        {
+          "path": "Armature/Hips/Spine/Chest/Shoulder.L/Upper Arm.L/Lower Arm.L/Hand.L",
+          "attribute": "m_Active",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            },
+            {
+              "time": 1,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "path": "Armature/Hips/Spine/Chest/Shoulder.R/Upper Arm.R/Lower Arm.R/Hand.R",
+          "attribute": "m_Active",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            },
+            {
+              "time": 1,
+              "value": 1
+            }
+          ]
+        },
+        {
+          "path": "Sleeve",
+          "attribute": "m_IsActive",
+          "keys": [
+            {
+              "time": 0,
+              "value": 1
+            },
+            {
+              "time": 1,
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "costume",
+      "label": "Sleeves ON",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "d12192f522b118f47b0cf8bdc638a0d3",
+      "path": "Assets/Shayna/Animation/Facial_Hand/糸つり目.anim",
+      "name": "糸つり目",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.糸つり目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.ぐぬぬ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.怒り",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "眯眼笑脸",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "d5c86d33e9af1a546b1aa7f67a928f62",
+      "path": "Assets/Shayna/Animation/Facial/Eye1/初期目.anim",
+      "name": "初期目",
+      "duration": 0.016666668,
+      "curves": [],
+      "missing": [],
+      "reset": true,
+      "group": "eyes1",
+      "label": "默认眼型",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "d993c1bee51b3eb448cb48a1af23f723",
+      "path": "Assets/Shayna/Animation/Facial/Brows＆Other/にこり.anim",
+      "name": "にこり",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.にこり",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "brows",
+      "label": "笑眉",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "e06aeab517dc9764db16e12b06fc1427",
+      "path": "Assets/Shayna/Animation/Hair/Ahoge.anim",
+      "name": "Ahoge",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Hair",
+          "attribute": "blendShape.アホ毛　大きさ&非表示",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "hair",
+      "label": "Ahoge",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "e0c4d47d6afff2f4a8539eb6f3366784",
+      "path": "Assets/Shayna/Animation/Facial_Hand/しいたけ.anim",
+      "name": "しいたけ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.しいたけ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.ワ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "星星眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "e14a11c265e4a3547b4f3729543e7e42",
+      "path": "Assets/Shayna/Animation/Facial_Hand/Blink_a.anim",
+      "name": "Blink_a",
+      "duration": 0,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.瞬き",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "闭眼（手势联动）",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "e183405f185f7a64aa33a2d11f2c0828",
+      "path": "Assets/Shayna/Animation/Facial/Eye1/半目.anim",
+      "name": "半目",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.半目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes1",
+      "label": "半睁眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "e98c25651ff51e1488194790af5511e0",
+      "path": "Assets/Shayna/Animation/Facial/Eye2/はぅ.anim",
+      "name": "はぅ",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.はぅ",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes2",
+      "label": "委屈眼",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "eb3f4bb63e7fcab4198e3199c8d79e60",
+      "path": "Assets/Shayna/Animation/Facial/Eye2/ぐるぐる1.anim",
+      "name": "ぐるぐる1",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.ぐるぐる1",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes2",
+      "label": "晕眩眼 1",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "edc1a20a31127f54e8aa5a2243e743ea",
+      "path": "Assets/Shayna/Animation/Facial_Hand/呆れ目.anim",
+      "name": "呆れ目",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.じと目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.▲",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        },
+        {
+          "path": "Body",
+          "attribute": "blendShape.真面目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "combined",
+      "label": "无语",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "f808aa612326fff4093d2e3f0fe39548",
+      "path": "Assets/Shayna/Animation/Facial/Brows＆Other/瞳　大きさ.anim",
+      "name": "瞳　大きさ",
+      "duration": 0.083333336,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.瞳小",
+          "keys": [
+            {
+              "time": 0,
+              "value": 0
+            },
+            {
+              "time": 0.083333336,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "brows",
+      "label": "瞳孔大小",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "f8633c3e300b6084bbaadee6e47c3f21",
+      "path": "Assets/Shayna/Animation/Facial/Mouth1/ω.anim",
+      "name": "ω",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.ω",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "mouth1",
+      "label": "猫嘴",
+      "origin": "unitypackage"
+    },
+    {
+      "id": "fd5d80218a210b24f8482976c3f0deb9",
+      "path": "Assets/Shayna/Animation/Facial/Eye2/はちゅ目.anim",
+      "name": "はちゅ目",
+      "duration": 0.016666668,
+      "curves": [
+        {
+          "path": "Body",
+          "attribute": "blendShape.白丸目",
+          "keys": [
+            {
+              "time": 0,
+              "value": 100
+            },
+            {
+              "time": 0.016666668,
+              "value": 100
+            }
+          ]
+        }
+      ],
+      "missing": [],
+      "reset": false,
+      "group": "eyes2",
+      "label": "爬虫眼",
+      "origin": "unitypackage"
+    }
+  ],
+  "costumes": [
+    {
+      "id": "Sleeves",
+      "label": "手腕宽袖",
+      "meshes": ["Sleeve"]
+    },
+    {
+      "id": "Furisode",
+      "label": "肩部长袖",
+      "meshes": ["Furisode"]
+    },
+    {
+      "id": "Hat",
+      "label": "帽子与风镜",
+      "meshes": ["Hat"]
+    },
+    {
+      "id": "Jacket",
+      "label": "外套",
+      "meshes": ["Jacket"]
+    },
+    {
+      "id": "Accessories",
+      "label": "挂饰与药瓶",
+      "meshes": ["Accessories", "Flask", "Test tube1", "Test tube2"]
+    },
+    {
+      "id": "Boots",
+      "label": "长靴",
+      "meshes": ["Boots"]
+    }
+  ],
+  "hair": [
+    {
+      "id": "bangs",
+      "label": "刘海长度",
+      "clip": "Bangs"
+    },
+    {
+      "id": "sidehair",
+      "label": "侧发长度",
+      "clip": "Sidehair"
+    },
+    {
+      "id": "wing-size",
+      "label": "耳羽放大",
+      "clip": "WingEar 拡大"
+    },
+    {
+      "id": "wing-hidden",
+      "label": "隐藏耳羽",
+      "clip": "WingEar 非表示"
+    },
+    {
+      "id": "ahoge",
+      "label": "呆毛大小／隐藏",
+      "clip": "Ahoge"
+    }
+  ],
+  "sourceFiles": [
+    {
+      "package": "Shayna.unitypackage",
+      "extensions": {
+        ".png": 24,
+        ".anim": 81,
+        ".shader": 69,
+        ".cginc": 20,
+        ".cs": 13,
+        ".mat": 16,
+        ".fbx": 8,
+        "": 36,
+        ".asset": 21,
+        ".txt": 2,
+        ".bmp": 3,
+        ".controller": 4,
+        ".prefab": 10,
+        ".hdr": 2,
+        ".unity": 1,
+        ".json": 1
+      },
+      "animations": [
+        "Assets/Shayna/Animation/Facial/Mouth1/▲.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/ぺろっ.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/まばたき.anim",
+        "Assets/Shayna/Animation/Facial_Hand/ガーン.anim",
+        "Assets/Shayna/Animation/Hair/Bangs.anim",
+        "Assets/Shayna/Animation/Hair/WingEar 拡大.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/はわ.anim",
+        "Assets/Shayna/Animation/Facial/照れ　ハート目.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/怒り目.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/しいたけ.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/おちょぼ口.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/困る.anim",
+        "Assets/Shayna/Animation/Facial/泣き.anim",
+        "Assets/Shayna/Animation/Costume/Jacket ON.anim",
+        "Assets/Shayna/Animation/Costume/Furisode OFF.anim",
+        "Assets/Shayna/Animation/Facial/笑顔.anim",
+        "Assets/Shayna/Animation/Hair/Sidehair.anim",
+        "Assets/Shayna/Animation/Costume/Hat ON.anim",
+        "Assets/Shayna/Animation/None.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/ぐぬぬ.anim",
+        "Assets/Shayna/Animation/Facial/None.anim",
+        "Assets/Shayna/Animation/Hair/WingEar 非表示.anim",
+        "Assets/Shayna/Animation/Facial/ぐるぐる目2.anim",
+        "Assets/Shayna/Animation/Costume/Jacket OFF.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/じと目.anim",
+        "Assets/Shayna/Animation/Blink.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/ワ.anim",
+        "Assets/Shayna/Animation/Costume/Accessories ON.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/頬染め.anim",
+        "Assets/Shayna/Animation/Facial/DefaultFace.anim",
+        "Assets/Shayna/Animation/Facial_Hand/泣き2.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/なごみ.anim",
+        "Assets/Shayna/Animation/Costume/Boots ON.anim",
+        "Assets/Shayna/Animation/Costume/Sleeves OFF.anim",
+        "Assets/Shayna/Animation/Costume/Boots OFF.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/真面目.anim",
+        "Assets/Shayna/Animation/VRC/Setting Animation/LipSync_Viseme.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/にっこり.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/てへぺろ.anim",
+        "Assets/Shayna/Animation/Facial/酸っぱい.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/ぐるぐる2.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/びっくり.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/ハート.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/べー2.anim",
+        "Assets/Shayna/Animation/Costume/Hat OFF.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/はわわ.anim",
+        "Assets/Shayna/Animation/Facial_Hand/笑顔.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/青ざめ.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/叫ぶ.anim",
+        "Assets/Shayna/Animation/Costume/Accessories OFF.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/べー1.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/つり糸目.anim",
+        "Assets/Shayna/Animation/Facial_Hand/デフォルト.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/にやり.anim",
+        "Assets/Shayna/Animation/Facial_Hand/ハート🅼目.anim",
+        "Assets/Shayna/Animation/Facial_Hand/はぅ.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/笑い.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/へ.anim",
+        "Assets/Shayna/Animation/Facial/キリっ　しいたけ.anim",
+        "Assets/Shayna/Animation/Costume/Furisode ON.anim",
+        "Assets/Shayna/Animation/Facial/焦り.anim",
+        "Assets/Shayna/Animation/Facial_Hand/泣き.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/ウィンク.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/怒り.anim",
+        "Assets/Shayna/Animation/Facial_Hand/ドヤっぽい.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/ムフフ.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/八.anim",
+        "Assets/Shayna/Animation/Costume/Sleeves ON.anim",
+        "Assets/Shayna/Animation/Facial_Hand/糸つり目.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/初期目.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/にこり.anim",
+        "Assets/Shayna/Animation/Hair/Ahoge.anim",
+        "Assets/Shayna/Animation/Facial_Hand/しいたけ.anim",
+        "Assets/Shayna/Animation/Facial_Hand/Blink_a.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/半目.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/はぅ.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/ぐるぐる1.anim",
+        "Assets/Shayna/Animation/Facial_Hand/呆れ目.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/瞳　大きさ.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/ω.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/はちゅ目.anim"
+      ],
+      "prefabs": [
+        "Assets/Shayna/Prefab/Shayna_2.prefab",
+        "Assets/Shayna/Prefab/Shayna.prefab",
+        "Assets/Shayna/Prefab/Shayna_nude.prefab",
+        "Assets/Shayna/Prefab/Shayna_barefoot.prefab",
+        "Assets/Shayna/Prefab/Shayna_body_2.prefab",
+        "Assets/Shayna/Oyasumisan/GlassSphereShader/Sample_prefab/oy_GlassSphere_Forward_Sample.prefab",
+        "Assets/Shayna/Prefab/Shayna_nude_2.prefab",
+        "Assets/Shayna/Prefab/Shayna_body.prefab",
+        "Assets/Shayna/Prefab/Shayna_barefoot_2.prefab",
+        "Assets/Shayna/Oyasumisan/GlassSphereShader/Sample_prefab/oy_GlassSphere_Sample.prefab"
+      ]
+    },
+    {
+      "package": "Shayna_Quset.unitypackage",
+      "extensions": {
+        ".anim": 81,
+        ".png": 8,
+        "": 17,
+        ".asset": 9,
+        ".mat": 9,
+        ".prefab": 2,
+        ".controller": 3,
+        ".fbx": 2
+      },
+      "animations": [
+        "Assets/Shayna/Animation/Facial_Hand/はぅ_Quest.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/▲.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/ぺろっ.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/まばたき.anim",
+        "Assets/Shayna/Animation/Hair/Bangs.anim",
+        "Assets/Shayna/Animation/Hair/WingEar 拡大.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/はわ.anim",
+        "Assets/Shayna/Animation/Facial/照れ　ハート目.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/怒り目.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/しいたけ.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/おちょぼ口.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/困る.anim",
+        "Assets/Shayna/Animation/Facial/泣き.anim",
+        "Assets/Shayna/Animation/Facial_Hand/泣き_Quest.anim",
+        "Assets/Shayna/Animation/Costume/Jacket ON.anim",
+        "Assets/Shayna/Animation/Costume/Furisode OFF.anim",
+        "Assets/Shayna/Animation/Facial/笑顔.anim",
+        "Assets/Shayna/Animation/Hair/Sidehair.anim",
+        "Assets/Shayna/Animation/Costume/Hat ON.anim",
+        "Assets/Shayna/Animation/None.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/ぐぬぬ.anim",
+        "Assets/Shayna/Animation/Facial/None.anim",
+        "Assets/Shayna/Animation/Hair/WingEar 非表示.anim",
+        "Assets/Shayna/Animation/Facial/ぐるぐる目2.anim",
+        "Assets/Shayna/Animation/Costume/Jacket OFF.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/じと目.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/ワ.anim",
+        "Assets/Shayna/Animation/Costume/Accessories ON.anim",
+        "Assets/Shayna/Animation/Facial/DefaultFace.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/なごみ.anim",
+        "Assets/Shayna/Animation/Costume/Boots ON.anim",
+        "Assets/Shayna/Animation/Costume/SleevesGrabbing OFF.anim",
+        "Assets/Shayna/Animation/Costume/Boots OFF.anim",
+        "Assets/Shayna/Animation/Costume/Sleeves_Quest ON.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/真面目.anim",
+        "Assets/Shayna/Animation/VRC/Setting Animation/LipSync_Viseme.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/にっこり.anim",
+        "Assets/Shayna/Animation/Facial_Hand/呆れ目_Quest.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/てへぺろ.anim",
+        "Assets/Shayna/Animation/Facial/酸っぱい.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/びっくり.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/ハート.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/べー2.anim",
+        "Assets/Shayna/Animation/Facial_Hand/ガーン_Quest.anim",
+        "Assets/Shayna/Animation/Costume/Hat OFF.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/はわわ.anim",
+        "Assets/Shayna/Animation/Facial_Hand/笑顔.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/叫ぶ.anim",
+        "Assets/Shayna/Animation/Costume/Accessories OFF.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/べー1.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/つり糸目.anim",
+        "Assets/Shayna/Animation/Costume/Sleeves_Quest OFF.anim",
+        "Assets/Shayna/Animation/Facial_Hand/デフォルト.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/にやり.anim",
+        "Assets/Shayna/Animation/Costume/SleevesGrabbing ON.anim",
+        "Assets/Shayna/Animation/Facial_Hand/ハート🅼目.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/笑い.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/へ.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/頬染め_Quest.anim",
+        "Assets/Shayna/Animation/Facial/キリっ　しいたけ.anim",
+        "Assets/Shayna/Animation/Costume/Furisode ON.anim",
+        "Assets/Shayna/Animation/Facial/焦り.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/ウィンク.anim",
+        "Assets/Shayna/Animation/Facial_Hand/ドヤっぽい_Quest.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/怒り.anim",
+        "Assets/Shayna/Animation/Facial/Mouth2/ムフフ.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/八.anim",
+        "Assets/Shayna/Animation/Facial_Hand/糸つり目.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/初期目.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/にこり.anim",
+        "Assets/Shayna/Animation/Blink_Quest.anim",
+        "Assets/Shayna/Animation/Hair/Ahoge.anim",
+        "Assets/Shayna/Animation/Facial_Hand/しいたけ.anim",
+        "Assets/Shayna/Animation/Facial_Hand/Blink_a.anim",
+        "Assets/Shayna/Animation/Facial/Eye1/半目.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/はぅ.anim",
+        "Assets/Shayna/Animation/Facial/Eye2/ぐるぐる1.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/瞳　大きさ.anim",
+        "Assets/Shayna/Animation/Facial/Mouth1/ω.anim",
+        "Assets/Shayna/Animation/Facial_Hand/泣き_Quest2.anim",
+        "Assets/Shayna/Animation/Facial/Brows＆Other/青ざめ_Quest.anim"
+      ],
+      "prefabs": [
+        "Assets/Shayna/Prefab/Shayna_2_Quest.prefab",
+        "Assets/Shayna/Prefab/Shayna_Quest.prefab"
+      ]
+    }
+  ],
+  "notes": [
+    "81 是 Unity 动画片段文件数，主要驱动表情、服装开关、发型与配置；全身动作库为 0。",
+    "原包是一套可拆分服装，6 个服装开关；没有发现另一套成衣。",
+    "VRM 1.0 具有 131 个脸部形变槽，0.x 只保留 21 个。原始槽位含分类占位，面板按实际可调项列出。",
+    "部分早期组合片段引用已不存在的 Face 节点或旧形变名；列出原文件与缺失原因，不伪装成可播放。",
+    "FBX 含基础体、赤脚、裸体制作源文件以及头部比例版本；这是制作素材，不视为新增服装。Quest 包为平台适配，不重复计数。"
+  ]
+}

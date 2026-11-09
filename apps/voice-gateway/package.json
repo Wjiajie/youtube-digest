@@ -1,0 +1,1 @@
+{"name":"@blueprint/voice-gateway","version":"3.0.0","private":true,"type":"module","scripts":{"dev":"node --env-file-if-exists=../web/.env.local --experimental-strip-types src/server.ts","typecheck":"tsc --noEmit"},"dependencies":{"ws":"^8.18.3"},"devDependencies":{"@types/ws":"^8.18.1","@types/node":"24.10.1","typescript":"7.0.2"}}
