@@ -236,10 +236,17 @@ test("a timed-out translation lookup aborts persistence and returns no material"
   const originalFetch = globalThis.fetch;
   let requested = false;
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
-    const request = input instanceof Request ? input : new Request(input, init);
-    if (!request.url.includes("/rpc/find_translation_run")) return originalFetch(input, init);
+    const url = input instanceof Request ? input.url : String(input);
+    if (!url.includes("/rpc/find_translation_run")) return originalFetch(input, init);
+    // Observe the actual fetch signal. A temporary Request clone creates a
+    // dependent signal that Node can collect before this pending mock settles.
+    const signal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+    expect(signal).toBeDefined(); expect(signal).not.toBeNull();
     requested = true;
-    return new Promise<Response>((_resolve, reject) => request.signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true }));
+    return new Promise<Response>((_resolve, reject) => {
+      const abort = () => reject(new DOMException("Aborted", "AbortError"));
+      if (signal!.aborted) abort(); else signal!.addEventListener("abort", abort, { once: true });
+    });
   });
   let settled = false;
   const pending = GET(extensionRequest()).then(response => { settled = true; return response; });
