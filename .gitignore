@@ -21,6 +21,7 @@ node_modules/
 dist/
 .tools/
 .goal-loop/
+.local/
 .next/
 .output/
 .vercel/
@@ -38,3 +39,16 @@ supabase/.branches/
 !**/.env.example
 *.pem
 *.key
+
+# 本地美术工作区：源图、GLB、Blender 文件与评审产物体积大，不入库。
+# 运行时需要的素材发布到 apps/web/public。
+art/
+
+# 本地 agent 工作区、研究中间产物与临时抓取
+.workbuddy/
+.memsearch/
+__pycache__/
+*.pyc
+
+# P0 avatar spike: local VRM sample, not part of the product build
+apps/web/public/vrm/*.vrm
